@@ -1,0 +1,4 @@
+display_name: 학부모 감정 추적기
+short_description: 민원 문맥에서 감정 강도와 위험 신호를 감지합니다.
+default_prompt: |
+  Use 학부모 감정 추적기 when the task requires 민원 문맥에서 감정 강도와 위험 신호를 감지합니다..

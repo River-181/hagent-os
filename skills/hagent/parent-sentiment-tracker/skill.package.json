@@ -1,0 +1,42 @@
+{
+  "id": "hagent/parent-sentiment-tracker",
+  "slug": "parent-sentiment-tracker",
+  "namespace": "hagent",
+  "displayName": "학부모 감정 추적기",
+  "version": "0.1.0",
+  "summary": "민원 문맥에서 감정 강도와 위험 신호를 감지합니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "path": "/Users/river/workspace/active/2026 제1회 KEG 바이브코딩 콘테스트/03_제품/app/skills/hagent/parent-sentiment-tracker",
+    "importedAt": "2026-04-10T15:47:15.886Z"
+  },
+  "compatibility": {
+    "agentTypes": [
+      "complaint",
+      "retention"
+    ],
+    "adapters": [
+      "claude_local"
+    ],
+    "locales": [
+      "ko-KR"
+    ]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": [
+      "codex",
+      "claude-code",
+      "cursor"
+    ],
+    "editable": true,
+    "publishable": true
+  }
+}

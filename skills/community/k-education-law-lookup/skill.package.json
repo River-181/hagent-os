@@ -1,0 +1,46 @@
+{
+  "id": "community/k-education-law-lookup",
+  "slug": "k-education-law-lookup",
+  "namespace": "community",
+  "displayName": "교육 법령 조회",
+  "version": "0.1.0",
+  "summary": "학원 운영 관련 법령과 행정 규정을 조회하도록 래핑합니다.",
+  "packageType": "wrapper",
+  "source": {
+    "kind": "github_repo",
+    "repo": "https://github.com/chrisryugj/korean-law-mcp",
+    "license": "MIT",
+    "importedAt": "2026-04-10T15:47:15.889Z"
+  },
+  "compatibility": {
+    "agentTypes": [
+      "compliance",
+      "finance",
+      "staff"
+    ],
+    "adapters": [
+      "claude_local"
+    ],
+    "locales": [
+      "ko-KR"
+    ]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [
+      "korean-law-mcp"
+    ],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": [
+      "codex",
+      "claude-code",
+      "cursor"
+    ],
+    "editable": false,
+    "publishable": true
+  }
+}

@@ -1,0 +1,4 @@
+display_name: 교육 법령 조회
+short_description: 학원 운영 관련 법령과 행정 규정을 조회하도록 래핑합니다.
+default_prompt: |
+  Use 교육 법령 조회 when the task requires 학원 운영 관련 법령과 행정 규정을 조회하도록 래핑합니다..

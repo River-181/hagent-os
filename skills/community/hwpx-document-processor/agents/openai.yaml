@@ -1,0 +1,4 @@
+display_name: HWPX 문서 처리
+short_description: 한글 문서 템플릿과 문서 읽기/쓰기 절차를 제공합니다.
+default_prompt: |
+  Use HWPX 문서 처리 when the task requires 한글 문서 템플릿과 문서 읽기/쓰기 절차를 제공합니다..

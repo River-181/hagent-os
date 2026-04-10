@@ -1,0 +1,4 @@
+display_name: 휴머니저
+short_description: 딱딱한 초안을 사람 친화적인 한국어로 다듬습니다.
+default_prompt: |
+  Use 휴머니저 when the task requires 딱딱한 초안을 사람 친화적인 한국어로 다듬습니다..

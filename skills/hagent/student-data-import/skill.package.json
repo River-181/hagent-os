@@ -1,0 +1,30 @@
+{
+  "id": "hagent/student-data-import",
+  "slug": "student-data-import",
+  "namespace": "hagent",
+  "displayName": "학생 데이터 가져오기",
+  "version": "0.1.0",
+  "summary": "엑셀, CSV, 상담 목록 형태의 학생 데이터를 정규화하여 가져옵니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "importedAt": "2026-04-11T00:00:00.000Z"
+  },
+  "compatibility": {
+    "agentTypes": ["orchestrator", "intake", "analytics"],
+    "adapters": ["claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  }
+}

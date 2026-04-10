@@ -1,0 +1,41 @@
+{
+  "id": "hagent/churn-signal-detector",
+  "slug": "churn-signal-detector",
+  "namespace": "hagent",
+  "displayName": "이탈 신호 감지기",
+  "version": "0.1.0",
+  "summary": "출결·결제·상담 기록으로 이탈 위험을 계산합니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "path": "/Users/river/workspace/active/2026 제1회 KEG 바이브코딩 콘테스트/03_제품/app/skills/hagent/churn-signal-detector",
+    "importedAt": "2026-04-10T15:47:15.886Z"
+  },
+  "compatibility": {
+    "agentTypes": [
+      "retention"
+    ],
+    "adapters": [
+      "claude_local"
+    ],
+    "locales": [
+      "ko-KR"
+    ]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": [
+      "codex",
+      "claude-code",
+      "cursor"
+    ],
+    "editable": true,
+    "publishable": true
+  }
+}

@@ -1,0 +1,4 @@
+display_name: 일정 최적화기
+short_description: 보강·대체·시험 일정을 조율하기 위한 제안을 생성합니다.
+default_prompt: |
+  Use 일정 최적화기 when the task requires 보강·대체·시험 일정을 조율하기 위한 제안을 생성합니다..

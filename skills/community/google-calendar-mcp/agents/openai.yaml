@@ -1,0 +1,4 @@
+display_name: Google Calendar MCP
+short_description: 일정 생성과 동기화를 위한 캘린더 wrapper skill입니다.
+default_prompt: |
+  Use Google Calendar MCP when the task needs to create, move, or sync academy schedules.

@@ -1,0 +1,4 @@
+display_name: 학부모 응대 톤 가이드
+short_description: 민원과 안내 메시지의 한국어 톤앤매너를 정리합니다.
+default_prompt: |
+  Use 학부모 응대 톤 가이드 when writing Korean parent-facing messages.

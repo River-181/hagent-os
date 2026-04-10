@@ -1,0 +1,4 @@
+display_name: 문장 다듬기
+short_description: 한국어 문장을 교정하고 더 자연스러운 표현을 제안합니다.
+default_prompt: |
+  Use 문장 다듬기 when the task requires 한국어 문장을 교정하고 더 자연스러운 표현을 제안합니다..

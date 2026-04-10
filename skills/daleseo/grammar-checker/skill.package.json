@@ -1,0 +1,43 @@
+{
+  "id": "daleseo/grammar-checker",
+  "slug": "grammar-checker",
+  "namespace": "daleseo",
+  "displayName": "문장 다듬기",
+  "version": "0.1.0",
+  "summary": "한국어 문장을 교정하고 더 자연스러운 표현을 제안합니다.",
+  "packageType": "imported",
+  "source": {
+    "kind": "github_repo",
+    "repo": "https://github.com/DaleSeo/korean-skills",
+    "importedAt": "2026-04-10T15:47:15.894Z"
+  },
+  "compatibility": {
+    "agentTypes": [
+      "complaint",
+      "notification",
+      "analytics"
+    ],
+    "adapters": [
+      "claude_local"
+    ],
+    "locales": [
+      "ko-KR"
+    ]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": [
+      "codex",
+      "claude-code",
+      "cursor"
+    ],
+    "editable": false,
+    "publishable": true
+  }
+}

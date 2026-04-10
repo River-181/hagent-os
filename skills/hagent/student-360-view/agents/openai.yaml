@@ -1,0 +1,4 @@
+display_name: 학생 360 뷰
+short_description: 학생의 수강·상담·결제 맥락을 한 번에 정리합니다.
+default_prompt: |
+  Use 학생 360 뷰 when the task requires 학생의 수강·상담·결제 맥락을 한 번에 정리합니다..

@@ -1,0 +1,4 @@
+display_name: 민원 분류기
+short_description: 학부모 민원을 유형과 긴급도로 분류합니다.
+default_prompt: |
+  Use 민원 분류기 when the task requires 학부모 민원을 유형과 긴급도로 분류합니다..

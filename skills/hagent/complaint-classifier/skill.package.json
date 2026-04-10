@@ -1,0 +1,42 @@
+{
+  "id": "hagent/complaint-classifier",
+  "slug": "complaint-classifier",
+  "namespace": "hagent",
+  "displayName": "민원 분류기",
+  "version": "0.1.0",
+  "summary": "학부모 민원을 유형과 긴급도로 분류합니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "path": "/Users/river/workspace/active/2026 제1회 KEG 바이브코딩 콘테스트/03_제품/app/skills/hagent/complaint-classifier",
+    "importedAt": "2026-04-10T15:47:15.883Z"
+  },
+  "compatibility": {
+    "agentTypes": [
+      "complaint",
+      "orchestrator"
+    ],
+    "adapters": [
+      "claude_local"
+    ],
+    "locales": [
+      "ko-KR"
+    ]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": [
+      "codex",
+      "claude-code",
+      "cursor"
+    ],
+    "editable": true,
+    "publishable": true
+  }
+}

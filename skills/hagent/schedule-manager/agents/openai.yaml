@@ -1,0 +1,4 @@
+display_name: 일정 관리 스킬
+short_description: 수업과 상담, 보강 일정의 CRUD와 충돌 확인을 돕습니다.
+default_prompt: |
+  Use 일정 관리 스킬 when managing academy schedules, makeup sessions, and 상담 reservations.

@@ -1,0 +1,4 @@
+display_name: SMS 자동화
+short_description: 학부모 안내와 결석/일정 안내 문자 발송을 연결합니다.
+default_prompt: |
+  Use SMS 자동화 when the task requires 학부모 안내와 결석/일정 안내 문자 발송을 연결합니다..

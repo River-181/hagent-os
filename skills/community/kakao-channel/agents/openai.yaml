@@ -1,0 +1,4 @@
+display_name: 카카오 채널 연동
+short_description: 카카오 채널 문의를 HagentOS 흐름에 연결합니다.
+default_prompt: |
+  Use 카카오 채널 연동 when handling inbound Kakao channel messages and routing them into the academy workflow.

@@ -1,0 +1,4 @@
+display_name: Solapi SMS
+short_description: 문자 안내와 알림 발송을 위한 외부 SMS wrapper입니다.
+default_prompt: |
+  Use Solapi SMS when the task needs to prepare or send short parent-facing notifications.
