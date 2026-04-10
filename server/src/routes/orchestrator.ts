@@ -40,6 +40,15 @@ export function orchestratorRoutes(db: Db): Router {
         .from(schema.agents)
         .where(eq(schema.agents.organizationId, organizationId))
 
+      if (agents.length === 0) {
+        res.status(400).json({
+          error: "에이전트가 없습니다. 먼저 온보딩에서 에이전트를 생성해 주세요.",
+          plan: "에이전트가 없어 작업을 배정할 수 없습니다.",
+          runs: [],
+        })
+        return
+      }
+
       // Load pending cases for context
       const pendingCases = await db
         .select()
@@ -108,7 +117,7 @@ export function orchestratorRoutes(db: Db): Router {
             .values({
               organizationId,
               identifier,
-              title: `[자동생성] ${assignment.reason}`,
+              title: assignment.reason.slice(0, 100),
               description: instruction,
               type: caseType,
               severity: "normal",

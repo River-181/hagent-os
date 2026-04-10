@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { eq } from "drizzle-orm"
+import { desc, eq } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import {
@@ -14,7 +14,7 @@ export function organizationRoutes(db: Db): Router {
 
   router.get("/", async (_req, res) => {
     try {
-      const orgs = await db.select().from(schema.organizations)
+      const orgs = await db.select().from(schema.organizations).orderBy(desc(schema.organizations.createdAt))
       res.json(orgs)
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch organizations" })

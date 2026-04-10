@@ -5,6 +5,7 @@ import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { agentsApi } from "@/api/agents"
 import { orchestratorApi } from "@/api/orchestrator"
+import { projectsApi } from "@/api/projects"
 import { api } from "@/api/client"
 import { skillsApi } from "@/api/skills"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
@@ -61,6 +62,12 @@ interface CreatedOrg {
 
 interface CreatedAgent {
   id: string
+  name: string
+}
+
+interface StarterAgentRecord {
+  id: string
+  slug: string
   name: string
 }
 
@@ -147,6 +154,7 @@ export function OnboardingPage() {
 
       let ceoAgent: any = null
       let ceoId: string | null = null
+      const createdAgents: StarterAgentRecord[] = []
 
       // 에이전트 4종 순차 생성 (CEO 먼저, 나머지는 reportsTo CEO)
       for (const agentDef of starterAgents) {
@@ -161,6 +169,11 @@ export function OnboardingPage() {
           ceoAgent = created
           ceoId = created.id
         }
+        createdAgents.push({
+          id: created.id,
+          slug: agentDef.slug,
+          name: created.name,
+        })
       }
 
       // 스킬 설치 (실패해도 무시)
@@ -168,6 +181,31 @@ export function OnboardingPage() {
       for (const skillSlug of uniqueSkills) {
         await skillsApi.install(createdOrg.id, skillSlug).catch(() => undefined)
       }
+
+      // 각 에이전트에 starter skills 장착
+      for (const agent of createdAgents) {
+        const skillSlugs = STARTER_AGENT_SKILLS[agent.slug] ?? []
+        if (skillSlugs.length === 0) continue
+        await agentsApi
+          .updateSkills(
+            agent.id,
+            skillSlugs.map((slug, index) => ({
+              slug,
+              enabled: true,
+              mountOrder: index,
+            })),
+          )
+          .catch(() => undefined)
+      }
+
+      // 기본 프로젝트 1개 생성
+      await projectsApi
+        .create(createdOrg.id, {
+          name: "운영 시작",
+          description: "온보딩 직후 기본 운영 계획과 초기 케이스를 정리하는 프로젝트",
+          color: "#14b8a6",
+        })
+        .catch(() => undefined)
 
       return {
         id: ceoAgent?.id ?? "",

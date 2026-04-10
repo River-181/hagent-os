@@ -1,6 +1,10 @@
+import { config as dotenvConfig } from "dotenv"
 import { eq } from "drizzle-orm"
+import path from "node:path"
 import { createDb } from "./client.js"
 import * as schema from "./schema/index.js"
+
+dotenvConfig({ path: path.resolve(import.meta.dirname, "../../../.env") })
 
 async function seed() {
   const connectionString =
