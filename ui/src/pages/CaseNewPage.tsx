@@ -1,9 +1,11 @@
 import { useEffect, useContext, useRef, useState } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { useMutation } from "@tanstack/react-query"
+import { useMutation, useQuery } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { casesApi } from "@/api/cases"
+import { studentsApi } from "@/api/students"
+import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -35,14 +37,6 @@ const urgencyOptions = [
   { value: "today", label: "당일" },
   { value: "normal", label: "일반" },
   { value: "low", label: "낮음" },
-]
-
-const DEMO_STUDENTS = [
-  { id: "stu-001", name: "홍길동", grade: "중2" },
-  { id: "stu-002", name: "이수아", grade: "중2" },
-  { id: "stu-003", name: "김민준", grade: "고1" },
-  { id: "stu-004", name: "박지은", grade: "고2" },
-  { id: "stu-005", name: "최수민", grade: "중3" },
 ]
 
 // ─── field wrapper ─────────────────────────────────────────────────────────
@@ -104,6 +98,13 @@ export function CaseNewPage() {
 
   // ── validation errors ──────────────────────────────────────────────────
   const [errors, setErrors] = useState<{ type?: string; title?: string }>({})
+
+  // ── students ───────────────────────────────────────────────────────────
+  const { data: students = [] } = useQuery({
+    queryKey: queryKeys.students.list(selectedOrgId ?? ""),
+    queryFn: () => studentsApi.list(selectedOrgId!),
+    enabled: !!selectedOrgId,
+  })
 
   useEffect(() => {
     setBreadcrumbs([
@@ -233,7 +234,7 @@ export function CaseNewPage() {
               <Input
                 value={reporterName}
                 onChange={(e) => setReporterName(e.target.value)}
-                placeholder="예: 홍길동 어머니"
+                placeholder="신고자/보호자 이름"
               />
             </FieldGroup>
           </div>
@@ -245,7 +246,7 @@ export function CaseNewPage() {
                 <SelectValue placeholder="학생 선택 (선택사항)" />
               </SelectTrigger>
               <SelectContent>
-                {DEMO_STUDENTS.map((s) => (
+                {(students as any[]).map((s) => (
                   <SelectItem key={s.id} value={s.id}>
                     <span className="flex items-center gap-2">
                       {s.name}

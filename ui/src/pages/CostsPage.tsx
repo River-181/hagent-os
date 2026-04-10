@@ -6,18 +6,10 @@ import { useOrganization } from "@/context/OrganizationContext"
 import { agentsApi } from "@/api/agents"
 import { queryKeys } from "@/lib/queryKeys"
 import { MetricCard } from "@/components/MetricCard"
+import { EmptyState } from "@/components/EmptyState"
 import { Card, CardContent } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Coins, Bot, TrendingDown, PieChart } from "lucide-react"
-
-// ─── Fallback data ────────────────────────────────────────────────────────────
-
-const FALLBACK_TOKEN_DATA = [
-  { name: "오케스트레이터", tokens: 142000 },
-  { name: "민원 처리", tokens: 98500 },
-  { name: "이탈방지", tokens: 76200 },
-  { name: "신규 상담", tokens: 54300 },
-]
 
 // ─── HBar ────────────────────────────────────────────────────────────────────
 
@@ -67,17 +59,15 @@ export function CostsPage() {
     enabled: !!selectedOrgId,
   })
 
-  // Build token data from real agents, fall back if no data
-  const agentTokenData = (agents as any[]).length > 0
-    ? (agents as any[]).map((a: any) => ({
-        name: a.name,
-        tokens: a.tokensThisMonth ?? a.tokens_used ?? a.tokensUsed ?? Math.floor(Math.random() * 100000 + 10000),
-      })).sort((a, b) => b.tokens - a.tokens)
-    : FALLBACK_TOKEN_DATA
+  const agentTokenData = (agents as any[]).map((a: any) => ({
+    name: a.name,
+    tokens: a.tokensThisMonth ?? a.tokens_used ?? a.tokensUsed ?? 0,
+  })).sort((a, b) => b.tokens - a.tokens)
 
+  const hasData = agentTokenData.length > 0
   const totalTokens = agentTokenData.reduce((sum, a) => sum + a.tokens, 0)
-  const avgTokens = Math.round(totalTokens / agentTokenData.length)
-  const maxTokens = Math.max(...agentTokenData.map((a) => a.tokens))
+  const avgTokens = hasData ? Math.round(totalTokens / agentTokenData.length) : 0
+  const maxTokens = hasData ? Math.max(...agentTokenData.map((a) => a.tokens)) : 0
   const budgetLimit = 500000
   const budgetUtilization = Math.round((totalTokens / budgetLimit) * 100)
 
@@ -143,9 +133,17 @@ export function CostsPage() {
                 </p>
               </div>
             </div>
-            {agentTokenData.map((agent) => (
-              <HBar key={agent.name} label={agent.name} value={agent.tokens} max={maxTokens} />
-            ))}
+            {hasData ? (
+              agentTokenData.map((agent) => (
+                <HBar key={agent.name} label={agent.name} value={agent.tokens} max={maxTokens} />
+              ))
+            ) : (
+              <EmptyState
+                icon={<Bot size={22} />}
+                title="에이전트 데이터가 없습니다"
+                description="에이전트가 등록되면 토큰 사용량이 여기에 표시됩니다."
+              />
+            )}
           </CardContent>
         </Card>
 

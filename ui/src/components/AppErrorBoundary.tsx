@@ -34,8 +34,11 @@ export class AppErrorBoundary extends Component<AppErrorBoundaryProps, AppErrorB
 
   private handleGoDashboard = () => {
     const [, orgPrefix] = window.location.pathname.split("/")
-    const fallbackPrefix = orgPrefix || "tanzania"
-    window.location.assign(`/${fallbackPrefix}/dashboard`)
+    if (orgPrefix) {
+      window.location.assign(`/${orgPrefix}/dashboard`)
+    } else {
+      window.location.assign("/")
+    }
   }
 
   render() {

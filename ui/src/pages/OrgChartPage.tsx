@@ -5,6 +5,7 @@ import { useNavigate, useParams } from "react-router-dom"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { agentsApi } from "@/api/agents"
+import { instructorsApi } from "@/api/students"
 import { queryKeys } from "@/lib/queryKeys"
 import { Identity } from "@/components/Identity"
 import { Badge } from "@/components/ui/badge"
@@ -181,13 +182,6 @@ interface Instructor {
   subject: string
 }
 
-const DEFAULT_INSTRUCTORS: Instructor[] = [
-  { id: "inst-1", name: "김민수", subject: "영어회화" },
-  { id: "inst-2", name: "박서연", subject: "문법" },
-  { id: "inst-3", name: "이준호", subject: "독해" },
-  { id: "inst-4", name: "최하늘", subject: "토익" },
-]
-
 function InstructorCard({ instructor }: { instructor: Instructor }) {
   return (
     <div
@@ -359,6 +353,12 @@ export function OrgChartPage() {
     enabled: !!selectedOrgId,
   })
 
+  const { data: instructors = [] } = useQuery({
+    queryKey: queryKeys.instructors.list(selectedOrgId ?? ""),
+    queryFn: () => instructorsApi.list(selectedOrgId!),
+    enabled: !!selectedOrgId,
+  })
+
   const agentList = agents as any[]
 
   // Roots = agents with no reportsTo (or reportsTo === null/undefined/"")
@@ -507,7 +507,7 @@ export function OrgChartPage() {
               }}
             >
               <div className="flex flex-wrap gap-4">
-                {DEFAULT_INSTRUCTORS.map((instructor) => (
+                {(instructors as Instructor[]).map((instructor) => (
                   <InstructorCard key={instructor.id} instructor={instructor} />
                 ))}
               </div>

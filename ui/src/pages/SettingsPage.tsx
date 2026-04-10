@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
+import { useOrganization } from "@/context/OrganizationContext"
 import { useToast } from "@/components/ToastContext"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
@@ -127,12 +128,13 @@ const INITIAL_PACKAGES: PackageItem[] = [
 export function SettingsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { success, info } = useToast()
+  const { selectedOrgId, organizations } = useOrganization()
   const importInputRef = useRef<HTMLInputElement | null>(null)
 
-  const [orgName] = useState("탄자니아 영어학원")
-  const [orgDesc] = useState(
-    "대치동 영어 전문 학원. 수준별 맞춤 교육으로 입시 영어부터 회화까지 책임집니다."
-  )
+  const selectedOrg = organizations.find((org) => org.id === selectedOrgId) ?? null
+  const orgName = selectedOrg?.name ?? ""
+  const orgDesc = selectedOrg?.description ?? ""
+  const orgPrefix = selectedOrg?.prefix ?? selectedOrg?.slug ?? ""
 
   const [autoApproveLevel, setAutoApproveLevel] = useState("1")
   const [tokenLimit, setTokenLimit] = useState("500000")
@@ -268,7 +270,7 @@ export function SettingsPage() {
               </FieldLabel>
               <input
                 type="text"
-                value="tanzania"
+                value={orgPrefix}
                 readOnly
                 className="w-full rounded-lg px-3 py-2 text-sm font-mono"
                 style={{

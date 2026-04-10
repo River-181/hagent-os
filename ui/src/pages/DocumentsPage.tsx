@@ -34,37 +34,6 @@ interface CategoryOption {
   label: string
 }
 
-const FALLBACK_DOCS: Document[] = [
-  {
-    id: "d1",
-    title: "환불 정책",
-    category: "policy",
-    body: "## 환불 정책\n\n수강 시작 후 7일 이내에는 전액 환불이 가능합니다.\n\n- 1개월 이내: 잔여 수업료의 2/3 환불\n- 1개월 초과: 환불 불가\n\n단, 강사 사정에 의한 수업 취소는 전액 환불됩니다.",
-    updatedAt: "2026-04-01T10:00:00Z",
-  },
-  {
-    id: "d2",
-    title: "자주 묻는 질문 (FAQ)",
-    category: "faq",
-    body: "## FAQ\n\n**Q. 보강 수업은 어떻게 신청하나요?**\nA. 카카오톡 채널 또는 전화로 신청 가능합니다.\n\n**Q. 결석 처리는 어떻게 되나요?**\nA. 수업 2시간 전까지 연락 시 결석 처리됩니다.",
-    updatedAt: "2026-03-28T09:00:00Z",
-  },
-  {
-    id: "d3",
-    title: "신규 학생 등록 매뉴얼",
-    category: "manual",
-    body: "## 신규 학생 등록 절차\n\n1. 상담 예약\n2. 레벨 테스트 (40분)\n3. 수업 일정 협의\n4. 수강료 결제\n5. 반 배정 및 교재 지급",
-    updatedAt: "2026-03-20T14:00:00Z",
-  },
-  {
-    id: "d4",
-    title: "상담 전화 스크립트",
-    category: "script",
-    body: "## 인바운드 상담 스크립트\n\n**오프닝**\n'안녕하세요, 탄자니아 영어학원입니다. 어떻게 도와드릴까요?'\n\n**니즈 파악**\n- 학년 및 현재 수준 확인\n- 목표(수능, 내신, 회화 등) 확인\n- 희망 수업 시간 확인",
-    updatedAt: "2026-03-15T11:00:00Z",
-  },
-]
-
 const INITIAL_CATEGORIES: CategoryOption[] = [
   { value: "all", label: "전체" },
   { value: "policy", label: "정책" },
@@ -461,7 +430,7 @@ export function DocumentsPage() {
   useEffect(() => {
     const nextDocs = (apiDocs as Document[] | undefined)?.length
       ? (apiDocs as any[]).map(normalizeDocument)
-      : FALLBACK_DOCS.map(normalizeDocument)
+      : []
 
     setLocalDocs(nextDocs)
     setCategories((prev) => mergeCategories(prev, nextDocs))
@@ -834,8 +803,9 @@ export function DocumentsPage() {
           {filtered.length === 0 ? (
             <EmptyState
               icon={<FileText size={22} />}
-              title="등록된 문서가 없습니다"
-              description="학원 운영 정책, FAQ 등을 등록하면 에이전트가 활용합니다."
+              title="아직 문서가 없습니다"
+              description="첫 문서를 작성하세요. 운영 정책, FAQ 등을 등록하면 에이전트가 활용합니다."
+              action={{ label: "새 문서 작성", onClick: () => setShowNewDialog(true) }}
             />
           ) : (
             <div className="p-2 flex flex-col gap-2">

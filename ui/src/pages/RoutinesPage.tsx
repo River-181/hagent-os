@@ -66,75 +66,6 @@ interface RoutineData {
   history: RoutineRunHistory[]
 }
 
-const FALLBACK_AGENTS: AgentOption[] = [
-  { id: "agent-notify", name: "알림 에이전트" },
-  { id: "agent-retention", name: "이탈방지 에이전트" },
-  { id: "agent-ops", name: "운영 오케스트레이터" },
-]
-
-const FALLBACK_ROUTINES: RoutineData[] = [
-  {
-    id: "routine-1",
-    name: "일일 이탈 위험 스캔",
-    description: "재원 학생 행동 신호를 분석해 이탈 위험 학생을 식별합니다.",
-    triggerType: "매일",
-    triggerTime: "07:00",
-    triggerCondition: "매일 07:00 실행",
-    assignedAgentId: "agent-retention",
-    assignedAgentName: "이탈방지 에이전트",
-    isActive: true,
-    estimatedDuration: "약 8분",
-    averageCost: 420,
-    history: [
-      { id: "r1-h1", ranAt: "2026-04-10T07:00:00+09:00", status: "성공" },
-      { id: "r1-h2", ranAt: "2026-04-09T07:00:00+09:00", status: "성공" },
-      { id: "r1-h3", ranAt: "2026-04-08T07:00:00+09:00", status: "성공" },
-      { id: "r1-h4", ranAt: "2026-04-07T07:00:00+09:00", status: "성공" },
-      { id: "r1-h5", ranAt: "2026-04-06T07:00:00+09:00", status: "경고" },
-    ],
-  },
-  {
-    id: "routine-2",
-    name: "주간 학부모 리포트 발송",
-    description: "한 주간 학습 요약과 과제를 정리해 학부모에게 발송합니다.",
-    triggerType: "매주",
-    triggerTime: "09:00",
-    triggerCondition: "매주 월요일 09:00 실행",
-    assignedAgentId: "agent-notify",
-    assignedAgentName: "알림 에이전트",
-    isActive: true,
-    estimatedDuration: "약 15분",
-    averageCost: 880,
-    history: [
-      { id: "r2-h1", ranAt: "2026-04-07T09:00:00+09:00", status: "성공" },
-      { id: "r2-h2", ranAt: "2026-03-31T09:00:00+09:00", status: "성공" },
-      { id: "r2-h3", ranAt: "2026-03-24T09:00:00+09:00", status: "성공" },
-      { id: "r2-h4", ranAt: "2026-03-17T09:00:00+09:00", status: "성공" },
-      { id: "r2-h5", ranAt: "2026-03-10T09:00:00+09:00", status: "실패" },
-    ],
-  },
-  {
-    id: "routine-3",
-    name: "월말 정산 집계",
-    description: "수납, 환불, 미납 데이터를 월말 보고서 초안으로 정리합니다.",
-    triggerType: "매월",
-    triggerTime: "18:30",
-    triggerCondition: "매월 말일 18:30 실행",
-    assignedAgentId: "agent-ops",
-    assignedAgentName: "운영 오케스트레이터",
-    isActive: false,
-    estimatedDuration: "약 21분",
-    averageCost: 1430,
-    history: [
-      { id: "r3-h1", ranAt: "2026-03-31T18:30:00+09:00", status: "성공" },
-      { id: "r3-h2", ranAt: "2026-02-28T18:30:00+09:00", status: "성공" },
-      { id: "r3-h3", ranAt: "2026-01-31T18:30:00+09:00", status: "성공" },
-      { id: "r3-h4", ranAt: "2025-12-31T18:30:00+09:00", status: "성공" },
-      { id: "r3-h5", ranAt: "2025-11-30T18:30:00+09:00", status: "경고" },
-    ],
-  },
-]
-
 function parseCron(cron: string): string {
   if (!cron) return ""
   const parts = cron.trim().split(/\s+/)
@@ -369,7 +300,7 @@ export function RoutinesPage() {
   })
 
   const agents = useMemo<AgentOption[]>(() => {
-    const source = Array.isArray(apiAgents) && apiAgents.length > 0 ? apiAgents : FALLBACK_AGENTS
+    const source = Array.isArray(apiAgents) ? apiAgents : []
     return source.map((agent: any) => ({
       id: String(agent.id),
       name: String(agent.name ?? "이름 없는 에이전트"),
@@ -377,7 +308,7 @@ export function RoutinesPage() {
   }, [apiAgents])
 
   const baseRoutines = useMemo<RoutineData[]>(() => {
-    const source = Array.isArray(apiRoutines) && apiRoutines.length > 0 ? apiRoutines : FALLBACK_ROUTINES
+    const source = Array.isArray(apiRoutines) ? apiRoutines : []
     return source.map((routine: any) => normalizeRoutine(routine))
   }, [apiRoutines])
 
@@ -416,16 +347,15 @@ export function RoutinesPage() {
       history: [],
     })
 
-    const shouldMock = !(selectedOrgId && Array.isArray(apiRoutines) && apiRoutines.length > 0)
-    if (shouldMock) {
+    if (!selectedOrgId) {
       setCreatedRoutines((prev) => [localRoutine, ...prev])
-      success("루틴을 추가했습니다. 현재는 mock 저장입니다.")
+      success("루틴을 추가했습니다.")
       setSubmittingRoutine(false)
       return
     }
 
     try {
-      const created = await routinesApi.create(selectedOrgId!, {
+      const created = await routinesApi.create(selectedOrgId, {
         name: payload.name,
         description: payload.description,
         triggerType: payload.triggerType,
@@ -448,8 +378,7 @@ export function RoutinesPage() {
     setRoutineOverrides((prev) => ({ ...prev, [routine.id]: nextRoutine }))
     setUpdatingRoutineId(routine.id)
 
-    const shouldMock = !(Array.isArray(apiRoutines) && apiRoutines.length > 0 && selectedOrgId)
-    if (shouldMock) {
+    if (!selectedOrgId) {
       success("루틴 활성 상태를 반영했습니다.")
       setUpdatingRoutineId(null)
       return

@@ -75,72 +75,6 @@ interface AgentOption {
 
 const GOAL_CATEGORIES: GoalCategory[] = ["매출", "학생수", "만족도", "운영"]
 
-const FALLBACK_AGENTS: AgentOption[] = [
-  { id: "agent-sales", name: "매출 성장 에이전트" },
-  { id: "agent-student", name: "학생 관리 에이전트" },
-  { id: "agent-ops", name: "운영 최적화 에이전트" },
-]
-
-const FALLBACK_GOALS: GoalCardData[] = [
-  {
-    id: "goal-1",
-    title: "2026년 상반기 매출 목표 달성",
-    description: "신규 등록 확대와 재원율 개선으로 상반기 목표 매출을 달성합니다.",
-    status: "in_progress",
-    targetDate: "2026-06-30",
-    category: "매출",
-    agentId: "agent-sales",
-    agentName: "매출 성장 에이전트",
-    milestones: [
-      { id: "goal-1-m1", title: "체험 수업 문의 120건 확보", completed: true },
-      { id: "goal-1-m2", title: "신규 등록 50명 달성", completed: false },
-      { id: "goal-1-m3", title: "재등록률 82% 유지", completed: false },
-    ],
-    progress: 33,
-    linkedCases: [
-      { id: "case-101", title: "봄학기 체험수업 전환 캠페인", status: "진행중" },
-      { id: "case-102", title: "재등록 대상 학부모 리마인드", status: "대기" },
-    ],
-  },
-  {
-    id: "goal-2",
-    title: "학생 만족도 4.7점 유지",
-    description: "수업 피드백과 상담 응답 시간을 개선해 만족도 지표를 안정화합니다.",
-    status: "achieved",
-    targetDate: "2026-03-31",
-    category: "만족도",
-    agentId: "agent-student",
-    agentName: "학생 관리 에이전트",
-    milestones: [
-      { id: "goal-2-m1", title: "월간 만족도 설문 회수율 70% 확보", completed: true },
-      { id: "goal-2-m2", title: "상담 응답 SLA 24시간 이내", completed: true },
-    ],
-    progress: 100,
-    linkedCases: [{ id: "case-201", title: "만족도 저하 반 대응 플로우", status: "완료" }],
-  },
-  {
-    id: "goal-3",
-    title: "운영 자동화율 80% 확보",
-    description: "반복 행정 업무를 자동화해 원장 승인 업무만 남기는 것이 목표입니다.",
-    status: "delayed",
-    targetDate: "2026-03-20",
-    category: "운영",
-    agentId: "agent-ops",
-    agentName: "운영 최적화 에이전트",
-    milestones: [
-      { id: "goal-3-m1", title: "상담 예약 분류 자동화", completed: true },
-      { id: "goal-3-m2", title: "출결 이상 감지 자동화", completed: false },
-      { id: "goal-3-m3", title: "월말 정산 초안 자동 생성", completed: false },
-    ],
-    progress: 34,
-    linkedCases: [
-      { id: "case-301", title: "월말 정산 자동화 QA", status: "진행중" },
-      { id: "case-302", title: "출결 이상 감지 튜닝", status: "지연" },
-      { id: "case-303", title: "운영 대시보드 알림 연결", status: "대기" },
-    ],
-  },
-]
-
 const STATUS_CONFIG: Record<
   GoalStatus,
   { label: string; bg: string; color: string }
@@ -457,7 +391,7 @@ export function GoalsPage() {
   })
 
   const agentOptions = useMemo<AgentOption[]>(() => {
-    const list = Array.isArray(apiAgents) && apiAgents.length > 0 ? apiAgents : FALLBACK_AGENTS
+    const list = Array.isArray(apiAgents) ? apiAgents : []
     return list.map((agent: any) => ({
       id: String(agent.id),
       name: String(agent.name ?? agent.title ?? "이름 없는 에이전트"),
@@ -465,7 +399,7 @@ export function GoalsPage() {
   }, [apiAgents])
 
   const baseGoals = useMemo<GoalCardData[]>(() => {
-    const source = Array.isArray(apiGoals) && apiGoals.length > 0 ? apiGoals : FALLBACK_GOALS
+    const source = Array.isArray(apiGoals) ? apiGoals : []
     return source.map((goal: any) => normalizeGoal(goal))
   }, [apiGoals])
 
@@ -496,8 +430,7 @@ export function GoalsPage() {
     setGoalOverrides((prev) => ({ ...prev, [goal.id]: nextGoal }))
     setMilestoneUpdatingId(milestoneId)
 
-    const shouldMock = !(Array.isArray(apiGoals) && apiGoals.length > 0 && selectedOrgId)
-    if (shouldMock) {
+    if (!selectedOrgId) {
       setMilestoneUpdatingId(null)
       success("마일스톤 상태를 반영했습니다.")
       return
@@ -540,17 +473,15 @@ export function GoalsPage() {
       linkedCases: [],
     })
 
-    const shouldMock = !(selectedOrgId && Array.isArray(apiGoals) && apiGoals.length > 0)
-
-    if (shouldMock) {
+    if (!selectedOrgId) {
       setCreatedGoals((prev) => [localGoal, ...prev])
-      success("목표를 추가했습니다. 현재는 mock 저장입니다.")
+      success("목표를 추가했습니다.")
       setSubmittingGoal(false)
       return
     }
 
     try {
-      const created = await goalsApi.create(selectedOrgId!, {
+      const created = await goalsApi.create(selectedOrgId, {
         title: payload.title,
         description: payload.description,
         dueDate: payload.dueDate || undefined,

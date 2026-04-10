@@ -286,7 +286,7 @@ export function OnboardingPage() {
                   type="text"
                   value={orgName}
                   onChange={(e) => setOrgName(e.target.value)}
-                  placeholder="예: 탄자니아 영어학원"
+                  placeholder="학원 이름"
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none transition-colors"
                   style={{
                     backgroundColor: "var(--bg-secondary)",
@@ -303,7 +303,7 @@ export function OnboardingPage() {
                   value={orgDesc}
                   onChange={(e) => setOrgDesc(e.target.value)}
                   rows={2}
-                  placeholder="예: 대치동 영어 전문 학원. 수준별 맞춤 교육."
+                  placeholder="학원 소개를 입력하세요"
                   className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none transition-colors"
                   style={{
                     backgroundColor: "var(--bg-secondary)",

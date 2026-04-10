@@ -271,7 +271,7 @@ function InstructorDialog({
               이름 <span className="text-rose-500">*</span>
             </label>
             <Input
-              placeholder="홍길동"
+              placeholder="강사 이름"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               style={{
