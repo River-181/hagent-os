@@ -1,5 +1,9 @@
-import { callClaude } from "../claude.js"
+import { runWithAdapter } from "../runtime.js"
 import type { ComplaintAgentInput, ComplaintAgentOutput } from "./types.js"
+import {
+  buildComplaintLawQuery,
+  lookupKoreanLaw,
+} from "../../services/integrations/korean-law.js"
 
 const SYSTEM_PROMPT = `당신은 탄자니아 영어학원의 민원 처리 전담 AI입니다.
 
@@ -46,16 +50,31 @@ export async function runComplaintAgent(input: ComplaintAgentInput): Promise<Com
     ? `민원인 ID: ${input.reporterId}`
     : "민원인 정보 없음"
 
+  const legalQuery = buildComplaintLawQuery(input.title, input.description || "")
+  const legalContext = legalQuery ? await lookupKoreanLaw(legalQuery) : null
+  const legalContextBlock = legalContext
+    ? `
+법령 참고:
+- source: ${legalContext.source}
+- connected: ${legalContext.connected}
+- degraded: ${legalContext.degraded}
+- query: ${legalContext.query}
+- summary: ${legalContext.summary ?? legalContext.error ?? "없음"}`
+    : ""
+
   const userMessage = `다음 민원을 분석하고 처리 방안을 JSON으로 출력해주세요.
 
 민원 제목: ${input.title}
 민원 내용: ${input.description || "(내용 없음)"}
 ${reporterInfo}
 ${studentInfo}
+${legalContextBlock}
 
 위 민원을 분류하고, 학원 방침에 맞는 답변 초안을 작성해주세요.`
 
-  const response = await callClaude(SYSTEM_PROMPT, userMessage, {
+  const response = await runWithAdapter(SYSTEM_PROMPT, userMessage, {
+    adapterType: input.adapterType ?? undefined,
+    model: input.model ?? undefined,
     maxTokens: 2048,
   })
 
@@ -78,6 +97,15 @@ ${studentInfo}
         summary: parsed.summary,
         suggestedReply: parsed.suggestedReply,
         requiresApproval: parsed.requiresApproval ?? true,
+        legalBasis: legalContext
+          ? {
+              source: legalContext.source,
+              query: legalContext.query,
+              summary: legalContext.summary ?? legalContext.error ?? null,
+              connected: legalContext.connected,
+              degraded: legalContext.degraded,
+            }
+          : undefined,
       },
       tokensUsed: response.inputTokens + response.outputTokens,
     }
@@ -92,6 +120,15 @@ ${studentInfo}
         suggestedReply:
           "안녕하세요. 소중한 의견을 주셔서 감사합니다. 담당자가 검토 후 빠른 시일 내에 연락드리겠습니다.",
         requiresApproval: true,
+        legalBasis: legalContext
+          ? {
+              source: legalContext.source,
+              query: legalContext.query,
+              summary: legalContext.summary ?? legalContext.error ?? null,
+              connected: legalContext.connected,
+              degraded: legalContext.degraded,
+            }
+          : undefined,
       },
       tokensUsed: response.inputTokens + response.outputTokens,
     }

@@ -4,3 +4,8 @@ dist/
 *.tsbuildinfo
 .DS_Store
 hagent-data/
+.playwright-cli/
+output/
+server/data/agents/
+integrations/*/node_modules/
+integrations/*/.git/

@@ -25,13 +25,15 @@ import { scheduleRoutes } from "./routes/schedules.js"
 import { webhookRoutes } from "./routes/webhook.js"
 import { agentInstructionsRoutes } from "./routes/agent-instructions.js"
 import { agentHireRoutes } from "./routes/agent-hires.js"
+import { pluginRoutes } from "./routes/plugins.js"
+import { adapterRoutes } from "./routes/adapters.js"
 
 export function createApp(db: Db, config: Config): Express {
   const app = express()
 
   app.use(
     cors({
-      origin: "http://localhost:5173",
+      origin: ["http://localhost:5173", "http://localhost:5174"],
       credentials: true,
     }),
   )
@@ -58,6 +60,8 @@ export function createApp(db: Db, config: Config): Express {
   app.use("/api", projectRoutes(db))
   app.use("/api", studentRoutes(db))
   app.use("/api", scheduleRoutes(db))
+  app.use("/api/plugins", pluginRoutes())
+  app.use("/api/adapters", adapterRoutes())
   app.use("/api/webhook", webhookRoutes(db))
   app.use("/api", agentHireRoutes(db))
 

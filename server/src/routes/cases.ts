@@ -140,13 +140,46 @@ export function caseRoutes(db: Db): Router {
         .where(eq(schema.agentRuns.caseId, req.params.id))
         .orderBy(desc(schema.agentRuns.createdAt))
 
+      const approvals = await db
+        .select()
+        .from(schema.approvals)
+        .where(eq(schema.approvals.caseId, req.params.id))
+        .orderBy(desc(schema.approvals.createdAt))
+
+      const assignee = caseRecord.assigneeAgentId
+        ? (await db
+            .select()
+            .from(schema.agents)
+            .where(eq(schema.agents.id, caseRecord.assigneeAgentId)))[0] ?? null
+        : null
+
+      const runAgentMap = new Map<string, typeof schema.agents.$inferSelect>()
+      for (const run of runs) {
+        if (!runAgentMap.has(run.agentId)) {
+          const [agent] = await db
+            .select()
+            .from(schema.agents)
+            .where(eq(schema.agents.id, run.agentId))
+          if (agent) runAgentMap.set(run.agentId, agent)
+        }
+      }
+
       const comments = await db
         .select()
         .from(schema.caseComments)
         .where(eq(schema.caseComments.caseId, req.params.id))
         .orderBy(desc(schema.caseComments.createdAt))
 
-      res.json({ ...caseRecord, runs, comments })
+      res.json({
+        ...caseRecord,
+        assignee,
+        approvals,
+        runs: runs.map((run: typeof schema.agentRuns.$inferSelect) => ({
+          ...run,
+          agent: runAgentMap.get(run.agentId) ?? null,
+        })),
+        comments,
+      })
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch case" })
     }

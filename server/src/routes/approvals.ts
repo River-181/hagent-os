@@ -5,6 +5,7 @@ import { join } from "path"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { publishEvent } from "../services/live-events.js"
+import { syncGoogleCalendarEvent } from "../services/integrations/google-calendar.js"
 
 const AGENT_DATA_DIR = join(import.meta.dirname, "../../data/agents")
 
@@ -36,6 +37,201 @@ ${role}
 
 export function approvalRoutes(db: Db): Router {
   const router = Router()
+
+  async function processDecision(
+    approvalId: string,
+    decision: "approved" | "rejected" | "revision_requested",
+    comment?: string,
+  ) {
+    const [existing] = await db
+      .select()
+      .from(schema.approvals)
+      .where(eq(schema.approvals.id, approvalId))
+
+    if (!existing) {
+      throw new Error("Approval not found")
+    }
+
+    let decisionPayload: Record<string, unknown> = comment ? { comment } : {}
+
+    await db
+      .update(schema.approvals)
+      .set({
+        status: decision,
+        decidedBy: "board",
+        decidedAt: new Date(),
+        decision: decisionPayload,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.approvals.id, approvalId))
+      .returning()
+
+    let caseIdentifier: string | null = null
+    let caseRecord: typeof schema.cases.$inferSelect | null = null
+    if (existing.caseId) {
+      const [foundCase] = await db
+        .select()
+        .from(schema.cases)
+        .where(eq(schema.cases.id, existing.caseId))
+      caseRecord = foundCase ?? null
+      caseIdentifier = foundCase?.identifier ?? null
+    }
+
+    const payload = existing.payload as Record<string, unknown> | null
+    if (decision === "approved" && payload?.type === "agent_hire") {
+      const hireName = payload.name as string
+      const hireAgentType = payload.agentType as string
+      const hireReportsTo = payload.reportsTo as string | undefined
+      const hireSlug = hireName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
+
+      const [newAgent] = await db
+        .insert(schema.agents)
+        .values({
+          organizationId: existing.organizationId,
+          name: hireName,
+          slug: hireSlug,
+          agentType: hireAgentType as (typeof schema.agentTypeEnum.enumValues)[number],
+          ...(hireReportsTo ? { reportsTo: hireReportsTo } : {}),
+        })
+        .returning()
+
+      const agentDir = join(AGENT_DATA_DIR, newAgent.id)
+      mkdirSync(agentDir, { recursive: true })
+      writeFileSync(join(agentDir, "SOUL.md"), buildSoulMd(hireName, hireAgentType), "utf-8")
+
+      publishEvent(existing.organizationId, "agent.hired", {
+        agentId: newAgent.id,
+        name: hireName,
+        agentType: hireAgentType,
+        approvalId: existing.id,
+      })
+
+      decisionPayload = {
+        ...decisionPayload,
+        sideEffects: {
+          ...(decisionPayload.sideEffects as Record<string, unknown> | undefined),
+          agentHire: {
+            status: "created",
+            agentId: newAgent.id,
+          },
+        },
+      }
+    }
+
+    if (decision === "approved" && existing.caseId) {
+      if (caseRecord?.type === "schedule") {
+        const schedulePayload = payload?.suggestedSchedule as Record<string, unknown> | undefined
+        if (schedulePayload) {
+          const [createdSchedule] = await db
+            .insert(schema.schedules)
+            .values({
+              organizationId: existing.organizationId,
+              title: String(schedulePayload.title ?? caseRecord?.title ?? "상담 일정"),
+              type: String(schedulePayload.type ?? "special"),
+              dayOfWeek: Number(schedulePayload.dayOfWeek ?? 2),
+              startTime: String(schedulePayload.startTime ?? "18:30"),
+              endTime: String(schedulePayload.endTime ?? "19:00"),
+              room: schedulePayload.room ? String(schedulePayload.room) : "상담실",
+            })
+            .returning()
+
+          if (caseRecord?.studentId) {
+            await db.insert(schema.studentSchedules).values({
+              organizationId: existing.organizationId,
+              studentId: caseRecord.studentId,
+              scheduleId: createdSchedule.id,
+            })
+          }
+
+          const calendarSync = await syncGoogleCalendarEvent({
+            title: createdSchedule.title,
+            description: caseRecord?.description ?? null,
+            location: createdSchedule.room ?? null,
+            dayOfWeek: createdSchedule.dayOfWeek,
+            startTime: createdSchedule.startTime,
+            endTime: createdSchedule.endTime,
+          })
+
+          decisionPayload = {
+            ...decisionPayload,
+            sideEffects: {
+              ...(decisionPayload.sideEffects as Record<string, unknown> | undefined),
+              googleCalendar: {
+                ...calendarSync,
+                scheduleId: createdSchedule.id,
+              },
+            },
+          }
+
+          await db.insert(schema.activityEvents).values({
+            organizationId: existing.organizationId,
+            actorType: "system",
+            actorId: "google-calendar",
+            action: `integration.calendar_${calendarSync.status}`,
+            entityType: "schedule",
+            entityId: createdSchedule.id,
+            entityTitle: createdSchedule.title,
+            metadata: {
+              approvalId: existing.id,
+              caseId: existing.caseId,
+              ...calendarSync,
+            },
+          })
+        }
+      }
+
+      await db
+        .update(schema.cases)
+        .set({ status: "done", updatedAt: new Date() })
+        .where(eq(schema.cases.id, existing.caseId))
+    }
+
+    if (decision === "rejected" && existing.caseId) {
+      await db
+        .update(schema.cases)
+        .set({ status: "todo", updatedAt: new Date() })
+        .where(eq(schema.cases.id, existing.caseId))
+    }
+
+    const entityTitle = caseIdentifier
+      ? `approval ${decision} on case ${caseIdentifier}`
+      : `approval ${decision}`
+
+    if (Object.keys(decisionPayload).length > 0) {
+      await db
+        .update(schema.approvals)
+        .set({
+          decision: decisionPayload,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.approvals.id, approvalId))
+    }
+
+    await db.insert(schema.activityEvents).values({
+      organizationId: existing.organizationId,
+      actorType: "board",
+      actorId: "board",
+      action: `approval.${decision}`,
+      entityType: "approval",
+      entityId: existing.id,
+      entityTitle,
+      metadata: comment ? { comment } : {},
+    })
+
+    publishEvent(existing.organizationId, "approval.decided", {
+      approvalId: existing.id,
+      caseId: existing.caseId ?? null,
+      decision,
+      comment: comment ?? null,
+    })
+
+    const [latest] = await db
+      .select()
+      .from(schema.approvals)
+      .where(eq(schema.approvals.id, approvalId))
+
+    return latest
+  }
 
   router.get("/organizations/:orgId/approvals", async (req, res) => {
     try {
@@ -102,108 +298,33 @@ export function approvalRoutes(db: Db): Router {
         return
       }
 
-      const [existing] = await db
-        .select()
-        .from(schema.approvals)
-        .where(eq(schema.approvals.id, req.params.id))
-
-      if (!existing) {
-        res.status(404).json({ error: "Approval not found" })
-        return
-      }
-
-      const [updated] = await db
-        .update(schema.approvals)
-        .set({
-          status: decision,
-          decidedBy: "board",
-          decidedAt: new Date(),
-          decision: comment ? { comment } : {},
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.approvals.id, req.params.id))
-        .returning()
-
-      // Fetch case identifier for activity log title
-      let caseIdentifier: string | null = null
-      if (existing.caseId) {
-        const [caseRecord] = await db
-          .select({ identifier: schema.cases.identifier })
-          .from(schema.cases)
-          .where(eq(schema.cases.id, existing.caseId))
-        caseIdentifier = caseRecord?.identifier ?? null
-      }
-
-      // Handle agent_hire approval
-      const payload = existing.payload as Record<string, unknown> | null
-      if (decision === "approved" && payload?.type === "agent_hire") {
-        const hireName = payload.name as string
-        const hireAgentType = payload.agentType as string
-        const hireReportsTo = payload.reportsTo as string | undefined
-        const hireSlug = hireName.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")
-
-        const [newAgent] = await db
-          .insert(schema.agents)
-          .values({
-            organizationId: existing.organizationId,
-            name: hireName,
-            slug: hireSlug,
-            agentType: hireAgentType as (typeof schema.agentTypeEnum.enumValues)[number],
-            ...(hireReportsTo ? { reportsTo: hireReportsTo } : {}),
-          })
-          .returning()
-
-        const agentDir = join(AGENT_DATA_DIR, newAgent.id)
-        mkdirSync(agentDir, { recursive: true })
-        writeFileSync(join(agentDir, "SOUL.md"), buildSoulMd(hireName, hireAgentType), "utf-8")
-
-        publishEvent(existing.organizationId, "agent.hired", {
-          agentId: newAgent.id,
-          name: hireName,
-          agentType: hireAgentType,
-          approvalId: existing.id,
-        })
-      }
-
-      if (decision === "approved" && existing.caseId) {
-        await db
-          .update(schema.cases)
-          .set({ status: "done", updatedAt: new Date() })
-          .where(eq(schema.cases.id, existing.caseId))
-      }
-
-      if (decision === "rejected" && existing.caseId) {
-        await db
-          .update(schema.cases)
-          .set({ status: "todo", updatedAt: new Date() })
-          .where(eq(schema.cases.id, existing.caseId))
-      }
-
-      const entityTitle = caseIdentifier
-        ? `approval ${decision} on case ${caseIdentifier}`
-        : `approval ${decision}`
-
-      await db.insert(schema.activityEvents).values({
-        organizationId: existing.organizationId,
-        actorType: "board",
-        actorId: "board",
-        action: `approval.${decision}`,
-        entityType: "approval",
-        entityId: existing.id,
-        entityTitle,
-        metadata: comment ? { comment } : {},
-      })
-
-      publishEvent(existing.organizationId, "approval.decided", {
-        approvalId: existing.id,
-        caseId: existing.caseId ?? null,
-        decision,
-        comment: comment ?? null,
-      })
-
-      res.json(updated)
+      res.json(await processDecision(req.params.id, decision, comment))
     } catch (err) {
-      res.status(500).json({ error: "Failed to process decision" })
+      res.status(500).json({ error: err instanceof Error ? err.message : "Failed to process decision" })
+    }
+  })
+
+  router.post("/approvals/:id/approve", async (req, res) => {
+    try {
+      res.json(await processDecision(req.params.id, "approved", req.body?.comment))
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Failed to approve" })
+    }
+  })
+
+  router.post("/approvals/:id/reject", async (req, res) => {
+    try {
+      res.json(await processDecision(req.params.id, "rejected", req.body?.comment))
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Failed to reject" })
+    }
+  })
+
+  router.post("/approvals/:id/request-revision", async (req, res) => {
+    try {
+      res.json(await processDecision(req.params.id, "revision_requested", req.body?.comment))
+    } catch (err) {
+      res.status(500).json({ error: err instanceof Error ? err.message : "Failed to request revision" })
     }
   })
 

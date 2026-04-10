@@ -8,6 +8,7 @@ import * as schema from "@hagent/db"
 import { executeAgentRun } from "../services/execution.js"
 import { publishEvent } from "../services/live-events.js"
 import { getAgentMountedSkills, updateAgentSkillMounts } from "../services/skills.js"
+import { getApprovalLevelForAgentType, inferCaseType } from "../services/orchestration.js"
 
 const AGENT_DATA_DIR = join(import.meta.dirname, "../../data/agents")
 
@@ -203,7 +204,7 @@ export function agentRoutes(db: Db): Router {
     }
   })
 
-  router.post("/:id/wakeup", async (req, res) => {
+  router.post("/agents/:id/wakeup", async (req, res) => {
     try {
       const { reason: _reason, caseId: requestedCaseId } = req.body as {
         reason?: string
@@ -230,10 +231,12 @@ export function agentRoutes(db: Db): Router {
           .where(eq(schema.cases.organizationId, agent.organizationId))
 
         const openCase = pendingCases.find(
-          (c) =>
+          (c: typeof schema.cases.$inferSelect) =>
             c.status !== "done" &&
             c.status !== "in_review" &&
-            c.assigneeAgentId === null,
+            c.assigneeAgentId === null &&
+            (c.type === inferCaseType(agent.agentType) ||
+              (agent.agentType === "complaint" && (c.type === "refund" || c.type === "inquiry"))),
         )
 
         if (!openCase) {
@@ -247,9 +250,9 @@ export function agentRoutes(db: Db): Router {
       const { runId } = await executeAgentRun(db, {
         organizationId: agent.organizationId,
         agentId: agent.id,
-        caseId,
+        caseId: caseId!,
         agentType: agent.agentType,
-        approvalLevel: agent.agentType === "complaint" ? 1 : 0,
+        approvalLevel: getApprovalLevelForAgentType(agent.agentType),
       })
 
       res.status(202).json({ runId })
@@ -259,7 +262,7 @@ export function agentRoutes(db: Db): Router {
   })
 
   // POST /agents/:id/stop — stop a running agent
-  router.post("/:id/stop", async (req, res) => {
+  router.post("/agents/:id/stop", async (req, res) => {
     try {
       const [agent] = await db
         .select()
@@ -277,7 +280,9 @@ export function agentRoutes(db: Db): Router {
         .from(schema.agentRuns)
         .where(eq(schema.agentRuns.agentId, req.params.id))
 
-      const activeRun = allRuns.find((r) => r.status === "running" || r.status === "queued")
+      const activeRun = allRuns.find(
+        (r: typeof schema.agentRuns.$inferSelect) => r.status === "running" || r.status === "queued",
+      )
 
       if (!activeRun) {
         res.status(404).json({ error: "No active run found for this agent" })

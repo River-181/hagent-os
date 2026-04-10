@@ -1,9 +1,10 @@
 import { Router } from "express"
-import { eq } from "drizzle-orm"
+import { eq, desc } from "drizzle-orm"
 import pino from "pino"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { executeAgentRun } from "../services/execution.js"
+import { getApprovalLevelForAgentType, inferCaseType } from "../services/orchestration.js"
 
 const logger = pino({ level: "info" })
 
@@ -31,9 +32,10 @@ export function heartbeatRoutes(db: Db): Router {
         .select()
         .from(schema.cases)
         .where(eq(schema.cases.organizationId, organizationId))
+        .orderBy(desc(schema.cases.priority), desc(schema.cases.createdAt))
 
       const openCases = pendingCases.filter(
-        (c) =>
+        (c: typeof schema.cases.$inferSelect) =>
           c.status !== "done" &&
           c.status !== "in_review" &&
           c.assigneeAgentId === null,
@@ -42,9 +44,14 @@ export function heartbeatRoutes(db: Db): Router {
       const triggeredRunIds: string[] = []
 
       for (const agent of agents) {
-        if (openCases.length === 0) break
+        const matchingCaseIndex = openCases.findIndex(
+          (item: typeof schema.cases.$inferSelect) =>
+            item.type === inferCaseType(agent.agentType) ||
+            (agent.agentType === "complaint" && (item.type === "refund" || item.type === "inquiry")),
+        )
+        const openCase =
+          matchingCaseIndex >= 0 ? openCases.splice(matchingCaseIndex, 1)[0] : openCases.shift()
 
-        const openCase = openCases.shift()
         if (!openCase) break
 
         try {
@@ -53,7 +60,7 @@ export function heartbeatRoutes(db: Db): Router {
             agentId: agent.id,
             caseId: openCase.id,
             agentType: agent.agentType,
-            approvalLevel: agent.agentType === "complaint" ? 1 : 0,
+            approvalLevel: getApprovalLevelForAgentType(agent.agentType),
           })
           triggeredRunIds.push(runId)
         } catch (err) {

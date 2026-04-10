@@ -1,628 +1,750 @@
-import { useEffect, useRef, useState, type ChangeEvent, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { useToast } from "@/components/ToastContext"
+import { organizationsApi } from "@/api/organizations"
+import { adaptersApi } from "@/api/adapters"
+import { pluginsApi } from "@/api/plugins"
+import { skillsApi } from "@/api/skills"
+import { queryKeys } from "@/lib/queryKeys"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
 import {
-  Building2,
   Bot,
-  Bell,
-  AlertTriangle,
-  MessageCircle,
-  ExternalLink,
-  Calendar,
-  Package,
-  Database,
-  Download,
-  Upload,
-  FlaskConical,
+  Building2,
+  Cable,
+  CheckCircle2,
+  Copy,
+  Cpu,
+  Loader2,
+  ShieldCheck,
+  SlidersHorizontal,
+  TriangleAlert,
 } from "lucide-react"
 
-function SectionTitle({ icon, label }: { icon: ReactNode; label: string }) {
+function SectionCard({
+  id,
+  icon,
+  title,
+  description,
+  children,
+}: {
+  id: string
+  icon: ReactNode
+  title: string
+  description: string
+  children: ReactNode
+}) {
   return (
-    <div className="mb-4 flex items-center gap-2">
-      <span style={{ color: "var(--color-teal-500)" }}>{icon}</span>
-      <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-        {label}
-      </h2>
-    </div>
+    <section
+      id={id}
+      className="rounded-3xl border p-5"
+      style={{
+        backgroundColor: "var(--bg-elevated)",
+        borderColor: "var(--border-default)",
+        boxShadow: "var(--shadow-sm)",
+      }}
+    >
+      <div className="mb-5">
+        <div className="flex items-center gap-2">
+          <span style={{ color: "var(--color-teal-500)" }}>{icon}</span>
+          <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+            {title}
+          </h2>
+        </div>
+        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+          {description}
+        </p>
+      </div>
+      <div className="space-y-4">{children}</div>
+    </section>
   )
 }
 
-function FieldLabel({ children }: { children: ReactNode }) {
+function Field({
+  label,
+  hint,
+  children,
+}: {
+  label: string
+  hint?: string
+  children: ReactNode
+}) {
   return (
-    <label
-      className="mb-1.5 block text-xs font-medium"
-      style={{ color: "var(--text-secondary)" }}
-    >
+    <label className="block space-y-2">
+      <div className="space-y-1">
+        <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+          {label}
+        </div>
+        {hint ? (
+          <div className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+            {hint}
+          </div>
+        ) : null}
+      </div>
       {children}
     </label>
   )
 }
 
-function ReadonlyBadge({ children }: { children: ReactNode }) {
+function ToggleRow({
+  title,
+  description,
+  checked,
+  onCheckedChange,
+}: {
+  title: string
+  description: string
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+}) {
   return (
-    <span
-      className="ml-2 rounded px-2 py-0.5 text-xs"
-      style={{
-        backgroundColor: "var(--bg-tertiary)",
-        color: "var(--text-tertiary)",
-        border: "1px solid var(--border-default)",
-      }}
+    <div
+      className="flex items-start justify-between gap-4 rounded-2xl border px-4 py-4"
+      style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
     >
+      <div>
+        <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+          {title}
+        </div>
+        <div className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+          {description}
+        </div>
+      </div>
+      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+    </div>
+  )
+}
+
+function StatusPill({
+  tone,
+  children,
+}: {
+  tone: "good" | "warn" | "muted"
+  children: ReactNode
+}) {
+  const palette = {
+    good: {
+      backgroundColor: "rgba(34,197,94,0.12)",
+      color: "var(--color-success)",
+    },
+    warn: {
+      backgroundColor: "rgba(245,158,11,0.12)",
+      color: "#d97706",
+    },
+    muted: {
+      backgroundColor: "var(--bg-tertiary)",
+      color: "var(--text-secondary)",
+    },
+  } as const
+
+  return (
+    <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={palette[tone]}>
       {children}
     </span>
   )
 }
 
-interface ToggleRowProps {
-  label: string
-  description?: string
-  value: boolean
-  onChange: (value: boolean) => void
+type IntegrationPreference = {
+  enabled: boolean
+  preferredChannel?: string
+  notes?: string
 }
-
-function ToggleRow({ label, description, value, onChange }: ToggleRowProps) {
-  return (
-    <div className="flex items-center justify-between py-2">
-      <div>
-        <p className="text-sm" style={{ color: "var(--text-primary)" }}>
-          {label}
-        </p>
-        {description && (
-          <p className="mt-0.5 text-xs" style={{ color: "var(--text-tertiary)" }}>
-            {description}
-          </p>
-        )}
-      </div>
-      <Switch checked={value} onCheckedChange={onChange} />
-    </div>
-  )
-}
-
-interface PackageItem {
-  name: string
-  description: string
-  version: string
-  installed: boolean
-  base?: boolean
-}
-
-const INITIAL_PACKAGES: PackageItem[] = [
-  {
-    name: "hagent-base",
-    description: "기본 패키지",
-    version: "v1.0.0",
-    installed: true,
-    base: true,
-  },
-  {
-    name: "k-hagwon-pack",
-    description: "학원 특화",
-    version: "v0.9.2",
-    installed: true,
-  },
-  {
-    name: "kakao-integration",
-    description: "카카오 연동",
-    version: "v0.4.1",
-    installed: false,
-  },
-  {
-    name: "neis-connector",
-    description: "나이스 교육 데이터",
-    version: "v0.3.0",
-    installed: false,
-  },
-  {
-    name: "sms-gateway",
-    description: "문자 발송",
-    version: "v0.5.4",
-    installed: false,
-  },
-]
 
 export function SettingsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
-  const { success, info } = useToast()
   const { selectedOrgId, organizations } = useOrganization()
-  const importInputRef = useRef<HTMLInputElement | null>(null)
+  const { success, error: toastError } = useToast()
+  const queryClient = useQueryClient()
 
-  const selectedOrg = organizations.find((org) => org.id === selectedOrgId) ?? null
-  const orgName = selectedOrg?.name ?? ""
-  const orgDesc = selectedOrg?.description ?? ""
-  const orgPrefix = selectedOrg?.prefix ?? selectedOrg?.slug ?? ""
+  const [companyName, setCompanyName] = useState("")
+  const [description, setDescription] = useState("")
+  const [institutionType, setInstitutionType] = useState("")
+  const [institutionSize, setInstitutionSize] = useState("")
+  const [topGoal, setTopGoal] = useState("")
+  const [principalName, setPrincipalName] = useState("")
 
-  const [autoApproveLevel, setAutoApproveLevel] = useState("1")
-  const [tokenLimit, setTokenLimit] = useState("500000")
-  const [heartbeat] = useState("매일 07:00")
+  const [primaryAdapterType, setPrimaryAdapterType] = useState("codex_local")
+  const [primaryModel, setPrimaryModel] = useState("gpt-5-codex")
+  const [fallbackAdapterType, setFallbackAdapterType] = useState("claude_local")
+  const [autoRun, setAutoRun] = useState(true)
+  const [allowDegradedMode, setAllowDegradedMode] = useState(true)
+  const [applyToExistingAgents, setApplyToExistingAgents] = useState(true)
 
-  const [notifyAgentDone, setNotifyAgentDone] = useState(true)
-  const [notifyApproval, setNotifyApproval] = useState(true)
-  const [notifyRisk, setNotifyRisk] = useState(true)
-
-  const [kakaoEnabled, setKakaoEnabled] = useState(true)
-  const [smsEnabled, setSmsEnabled] = useState(false)
-  const [scheduleEnabled, setScheduleEnabled] = useState(true)
-  const [packages, setPackages] = useState<PackageItem[]>(INITIAL_PACKAGES)
+  const [integrationPrefs, setIntegrationPrefs] = useState<Record<string, IntegrationPreference>>({})
+  const [censorLogs, setCensorLogs] = useState(false)
+  const [keyboardShortcuts, setKeyboardShortcuts] = useState(true)
+  const [feedbackSharing, setFeedbackSharing] = useState("prompt")
 
   useEffect(() => {
     setBreadcrumbs([{ label: "설정" }])
   }, [setBreadcrumbs])
 
-  const cardStyle = {
-    backgroundColor: "var(--bg-elevated)",
-    border: "1px solid var(--border-default)",
-    boxShadow: "var(--shadow-sm)",
-  }
+  const selectedOrg = organizations.find((org) => org.id === selectedOrgId) ?? null
 
-  const handlePackageToggle = (name: string) => {
-    setPackages((prev) =>
-      prev.map((pkg) =>
-        pkg.name === name && !pkg.base ? { ...pkg, installed: !pkg.installed } : pkg
-      )
-    )
-    const target = packages.find((pkg) => pkg.name === name)
-    if (target) {
-      success(target.installed ? `${name} 패키지를 제거했습니다.` : `${name} 패키지를 설치했습니다.`)
+  const adaptersQuery = useQuery({
+    queryKey: queryKeys.adapters.all,
+    queryFn: () => adaptersApi.list(),
+  })
+  const pluginsQuery = useQuery({
+    queryKey: queryKeys.plugins.all,
+    queryFn: () => pluginsApi.list(),
+  })
+  const skillsQuery = useQuery({
+    queryKey: [...queryKeys.skills.all, selectedOrgId, "settings"],
+    queryFn: () => skillsApi.list(selectedOrgId ?? undefined),
+    enabled: !!selectedOrgId,
+  })
+
+  const adapters = adaptersQuery.data?.adapters ?? []
+  const integrations = adaptersQuery.data?.integrations ?? []
+  const plugins = pluginsQuery.data ?? []
+  const skills = skillsQuery.data ?? []
+
+  useEffect(() => {
+    if (!selectedOrg) return
+    const config = (selectedOrg.agentTeamConfig ?? {}) as Record<string, any>
+    const bootstrap = (config.bootstrap ?? {}) as Record<string, any>
+    const general = (config.general ?? {}) as Record<string, any>
+    const aiPolicy = (config.aiPolicy ?? {}) as Record<string, any>
+    const integrationConfig = (config.integrations ?? {}) as Record<string, IntegrationPreference>
+    const instance = (config.instance ?? {}) as Record<string, any>
+
+    setCompanyName(selectedOrg.name ?? "")
+    setDescription(selectedOrg.description ?? "")
+    setInstitutionType((general.institutionType as string | undefined) ?? (bootstrap.institutionType as string | undefined) ?? "")
+    setInstitutionSize((general.institutionSize as string | undefined) ?? (bootstrap.institutionSize as string | undefined) ?? "")
+    setTopGoal((general.topGoal as string | undefined) ?? (bootstrap.topGoal as string | undefined) ?? "")
+    setPrincipalName((general.principalName as string | undefined) ?? "원장")
+
+    setPrimaryAdapterType((aiPolicy.primaryAdapterType as string | undefined) ?? (bootstrap.selectedAdapterType as string | undefined) ?? "codex_local")
+    setPrimaryModel((aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-5-codex")
+    setFallbackAdapterType((aiPolicy.fallbackAdapterType as string | undefined) ?? "claude_local")
+    setAutoRun((aiPolicy.autoRun as boolean | undefined) ?? true)
+    setAllowDegradedMode((aiPolicy.allowDegradedMode as boolean | undefined) ?? true)
+    setApplyToExistingAgents(true)
+
+    const nextIntegrationPrefs: Record<string, IntegrationPreference> = {}
+    for (const item of integrations) {
+      nextIntegrationPrefs[item.key] = {
+        enabled: integrationConfig[item.key]?.enabled ?? true,
+        preferredChannel: integrationConfig[item.key]?.preferredChannel ?? "",
+        notes: integrationConfig[item.key]?.notes ?? "",
+      }
     }
-  }
+    setIntegrationPrefs(nextIntegrationPrefs)
 
-  const handleConnectionTest = async () => {
-    await Promise.resolve()
-    success("카카오 채널 연결 테스트에 성공했습니다.")
-  }
+    setCensorLogs((instance.censorLogs as boolean | undefined) ?? false)
+    setKeyboardShortcuts((instance.keyboardShortcuts as boolean | undefined) ?? true)
+    setFeedbackSharing((instance.feedbackSharing as string | undefined) ?? "prompt")
+  }, [selectedOrg, integrations])
 
-  const handleExportData = () => {
-    const payload = {
-      organization: orgName,
-      exportedAt: new Date().toISOString(),
-      packages,
-      channels: {
-        kakaoEnabled,
-        smsEnabled,
-      },
+  const selectedAdapter = adapters.find((adapter: any) => adapter.key === primaryAdapterType) ?? adapters[0] ?? null
+  const installedSkills = skills.filter((item: any) => item.installed)
+  const actionRequiredSkills = skills.filter((item: any) => !item.ready)
+  const connectedIntegrations = integrations.filter((item: any) => item.connected)
+
+  const saveMutation = useMutation({
+    mutationFn: async ({
+      payload,
+      message,
+    }: {
+      payload: Record<string, unknown>
+      message: string
+    }) => {
+      if (!selectedOrgId) throw new Error("선택된 기관이 없습니다.")
+      await organizationsApi.update(selectedOrgId, payload)
+      return message
+    },
+    onSuccess: async (message) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.adapters.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.plugins.all }),
+      ])
+      success(message)
+    },
+    onError: (err) => {
+      toastError(err instanceof Error ? err.message : "설정 저장에 실패했습니다.")
+    },
+  })
+
+  const handleCopy = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      success(`${value} copied`)
+    } catch {
+      toastError("클립보드 복사에 실패했습니다.")
     }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], {
-      type: "application/json",
-    })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement("a")
-    link.href = url
-    link.download = "hagentos-export.json"
-    link.click()
-    URL.revokeObjectURL(url)
-    success("전체 데이터를 JSON으로 내보냈습니다.")
-  }
-
-  const handleImportClick = () => {
-    importInputRef.current?.click()
-  }
-
-  const handleImportChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-    await file.text()
-    success(`데이터 가져오기를 완료했습니다: ${file.name}`)
-    event.target.value = ""
-  }
-
-  const handleSeedReset = async () => {
-    await Promise.resolve()
-    info("시드 데이터 재실행 요청을 mock으로 처리했습니다.")
   }
 
   return (
-    <div className="mx-auto max-w-3xl p-6">
-      <h1 className="mb-1 text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
-        설정
-      </h1>
-      <p className="mb-8 text-sm" style={{ color: "var(--text-secondary)" }}>
-        기관 정보 및 AI 정책을 관리합니다.
-      </p>
-
-      <div className="flex flex-col gap-6">
-        <div className="rounded-xl p-5" style={cardStyle}>
-          <SectionTitle icon={<Building2 size={16} />} label="기관 정보" />
-
-          <div className="flex flex-col gap-4">
-            <div>
-              <FieldLabel>학원 이름</FieldLabel>
-              <input
-                type="text"
-                defaultValue={orgName}
-                disabled
-                className="w-full rounded-lg px-3 py-2 text-sm"
-                style={{
-                  backgroundColor: "var(--bg-secondary)",
-                  border: "1px solid var(--border-default)",
-                  color: "var(--text-primary)",
-                  opacity: 0.7,
-                  cursor: "not-allowed",
-                }}
-              />
-            </div>
-
-            <div>
-              <FieldLabel>학원 소개</FieldLabel>
-              <textarea
-                defaultValue={orgDesc}
-                disabled
-                rows={3}
-                className="w-full resize-none rounded-lg px-3 py-2 text-sm"
-                style={{
-                  backgroundColor: "var(--bg-secondary)",
-                  border: "1px solid var(--border-default)",
-                  color: "var(--text-primary)",
-                  opacity: 0.7,
-                  cursor: "not-allowed",
-                }}
-              />
-            </div>
-
-            <div>
-              <FieldLabel>
-                Prefix
-                <ReadonlyBadge>읽기 전용</ReadonlyBadge>
-              </FieldLabel>
-              <input
-                type="text"
-                value={orgPrefix}
-                readOnly
-                className="w-full rounded-lg px-3 py-2 text-sm font-mono"
-                style={{
-                  backgroundColor: "var(--bg-tertiary)",
-                  border: "1px solid var(--border-default)",
-                  color: "var(--text-tertiary)",
-                  cursor: "not-allowed",
-                }}
-              />
-            </div>
+    <div className="mx-auto flex w-full max-w-7xl gap-6 px-6 py-8">
+      <aside
+        className="sticky top-20 hidden h-fit w-72 shrink-0 rounded-3xl border p-4 xl:block"
+        style={{
+          backgroundColor: "var(--bg-elevated)",
+          borderColor: "var(--border-default)",
+          boxShadow: "var(--shadow-sm)",
+        }}
+      >
+        <div className="mb-4">
+          <div className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+            Settings
+          </div>
+          <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+            paperclip식 운영 설정 구조를 기준으로, 기관 정책과 AI 런타임을 바로 수정합니다.
           </div>
         </div>
-
-        <div className="rounded-xl p-5" style={cardStyle}>
-          <SectionTitle icon={<Bot size={16} />} label="AI 정책" />
-
-          <div className="flex flex-col gap-4">
-            <div>
-              <FieldLabel>자동 승인 레벨</FieldLabel>
-              <select
-                value={autoApproveLevel}
-                onChange={(event) => setAutoApproveLevel(event.target.value)}
-                className="w-full rounded-lg px-3 py-2 text-sm"
-                style={{
-                  backgroundColor: "var(--bg-secondary)",
-                  border: "1px solid var(--border-default)",
-                  color: "var(--text-primary)",
-                }}
-              >
-                <option value="0">0 — 모든 작업 수동 승인</option>
-                <option value="1">1 — 저위험 작업 자동 승인</option>
-                <option value="2">2 — 중위험 작업 자동 승인</option>
-                <option value="3">3 — 고위험 작업 자동 승인</option>
-                <option value="4">4 — 전체 자동 승인</option>
-              </select>
-            </div>
-
-            <div>
-              <FieldLabel>월간 토큰 한도</FieldLabel>
-              <input
-                type="number"
-                value={tokenLimit}
-                onChange={(event) => setTokenLimit(event.target.value)}
-                className="w-full rounded-lg px-3 py-2 text-sm"
-                style={{
-                  backgroundColor: "var(--bg-secondary)",
-                  border: "1px solid var(--border-default)",
-                  color: "var(--text-primary)",
-                }}
-              />
-            </div>
-
-            <div>
-              <FieldLabel>
-                Heartbeat 스케줄
-                <ReadonlyBadge>데모 고정</ReadonlyBadge>
-              </FieldLabel>
-              <input
-                type="text"
-                value={heartbeat}
-                readOnly
-                className="w-full rounded-lg px-3 py-2 text-sm"
-                style={{
-                  backgroundColor: "var(--bg-tertiary)",
-                  border: "1px solid var(--border-default)",
-                  color: "var(--text-secondary)",
-                  cursor: "not-allowed",
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-xl p-5" style={cardStyle}>
-          <SectionTitle icon={<Bell size={16} />} label="알림 설정" />
-
-          <div className="flex flex-col">
-            <ToggleRow
-              label="에이전트 완료 알림"
-              description="에이전트가 작업을 완료했을 때 알림"
-              value={notifyAgentDone}
-              onChange={setNotifyAgentDone}
-            />
-            <Separator style={{ backgroundColor: "var(--border-default)" }} />
-            <ToggleRow
-              label="승인 요청 알림"
-              description="에이전트가 승인을 요청했을 때 알림"
-              value={notifyApproval}
-              onChange={setNotifyApproval}
-            />
-            <Separator style={{ backgroundColor: "var(--border-default)" }} />
-            <ToggleRow
-              label="이탈 위험 알림"
-              description="학생 이탈 위험 점수가 임계값을 초과할 때 알림"
-              value={notifyRisk}
-              onChange={setNotifyRisk}
-            />
-          </div>
-        </div>
-
-        <div className="rounded-xl p-5" style={cardStyle}>
-          <SectionTitle icon={<MessageCircle size={16} />} label="외부 채널 연동" />
-          <p className="mb-4 text-xs" style={{ color: "var(--text-tertiary)" }}>
-            외부 채널에서 들어오는 문의가 자동으로 케이스로 변환됩니다. 소통 에이전트가 게이트 역할을 합니다.
-          </p>
-
-          <div className="flex flex-col gap-3">
-            <div
-              className="rounded-lg px-4 py-4"
-              style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
+        <div className="space-y-2">
+          {[
+            { href: "#company-settings", label: "Company Settings", icon: <Building2 size={15} /> },
+            { href: "#ai-policy", label: "AI Policy", icon: <Bot size={15} /> },
+            { href: "#integrations", label: "Integrations", icon: <Cable size={15} /> },
+            { href: "#instance", label: "Instance", icon: <SlidersHorizontal size={15} /> },
+          ].map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              className="flex items-center gap-2 rounded-2xl px-3 py-2 text-sm transition-colors"
+              style={{ color: "var(--text-secondary)", backgroundColor: "var(--bg-secondary)" }}
             >
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="flex items-center gap-3">
-                  <div
-                    className="flex h-9 w-9 items-center justify-center rounded-lg"
-                    style={{ backgroundColor: "#FEE500" }}
-                  >
-                    <MessageCircle size={18} style={{ color: "#3C1E1E" }} />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                      카카오톡 채널
-                    </p>
-                    <a
-                      href="http://pf.kakao.com/_raDdX"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs hover:underline"
-                      style={{ color: "var(--color-teal-500)" }}
-                    >
-                      pf.kakao.com/_raDdX <ExternalLink size={10} />
-                    </a>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span
-                    className="rounded-full px-2 py-0.5 text-xs"
-                    style={{
-                      backgroundColor: kakaoEnabled
-                        ? "rgba(20,184,166,0.1)"
-                        : "var(--bg-tertiary)",
-                      color: kakaoEnabled
-                        ? "var(--color-teal-500)"
-                        : "var(--text-tertiary)",
-                    }}
-                  >
-                    {kakaoEnabled ? "연결됨" : "비활성"}
-                  </span>
-                  <Switch checked={kakaoEnabled} onCheckedChange={setKakaoEnabled} />
-                </div>
-              </div>
+              {item.icon}
+              <span>{item.label}</span>
+            </a>
+          ))}
+        </div>
+        <Separator className="my-4" />
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2">
+            <StatusPill tone={selectedOrg ? "good" : "warn"}>
+              {selectedOrg ? "bootstrap 완료" : "조직 선택 필요"}
+            </StatusPill>
+            <StatusPill tone={selectedAdapter?.connected ? "good" : "warn"}>
+              {selectedAdapter?.label ?? "adapter 없음"}
+            </StatusPill>
+          </div>
+          <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+            connected integrations {connectedIntegrations.length} / {integrations.length}
+          </div>
+        </div>
+      </aside>
 
-              <div className="mt-4 grid gap-2 rounded-lg p-3" style={{ backgroundColor: "var(--bg-elevated)" }}>
-                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                  Channel ID: <code>pf.kakao.com/_raDdX</code>
-                </p>
-                <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                  Bot ID: <code>69d80717ce25e33033041230</code>
-                </p>
-                <div>
-                  <Button size="sm" variant="outline" onClick={handleConnectionTest}>
-                    연결 테스트
-                  </Button>
-                </div>
-              </div>
-            </div>
-
-            <div
-              className="flex items-center justify-between rounded-lg px-4 py-3"
-              style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className="flex h-9 w-9 items-center justify-center rounded-lg"
-                  style={{ backgroundColor: "rgba(59,130,246,0.1)" }}
-                >
-                  <MessageCircle size={18} style={{ color: "#3b82f6" }} />
-                </div>
-                <div>
-                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                    SMS / 알림톡 (Solapi)
-                  </p>
-                  <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                    학부모 알림 발송 + 수신 문의 자동 접수
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <span
-                  className="rounded-full px-2 py-0.5 text-xs"
-                  style={{
-                    backgroundColor: smsEnabled
-                      ? "rgba(20,184,166,0.1)"
-                      : "var(--bg-tertiary)",
-                    color: smsEnabled
-                      ? "var(--color-teal-500)"
-                      : "var(--text-tertiary)",
-                  }}
-                >
-                  {smsEnabled ? "연결됨" : "미설정"}
-                </span>
-                <Switch checked={smsEnabled} onCheckedChange={setSmsEnabled} />
-              </div>
-            </div>
-
-            <p className="mt-1 text-xs" style={{ color: "var(--text-disabled)" }}>
-              웹훅 URL: <code className="text-xs font-mono">/api/webhook/kakao</code>,{" "}
-              <code className="text-xs font-mono">/api/webhook/sms</code>
+      <div className="min-w-0 flex-1 space-y-6">
+        <div className="flex items-end justify-between gap-6">
+          <div>
+            <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
+              설정
+            </h1>
+            <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+              기관 정보, Codex-first 정책, 외부 연동 선호도와 운영 기본값을 한 화면에서 관리합니다.
             </p>
           </div>
+          {saveMutation.isPending ? (
+            <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+              <Loader2 size={14} className="animate-spin" />
+              저장 중
+            </div>
+          ) : null}
         </div>
 
-        <div className="rounded-xl p-5" style={cardStyle}>
-          <SectionTitle icon={<Package size={16} />} label="패키지 관리" />
-          <div className="grid gap-3">
-            {packages.map((pkg) => (
-              <div
-                key={pkg.name}
-                className="flex flex-col gap-3 rounded-xl p-4 md:flex-row md:items-center md:justify-between"
-                style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-              >
-                <div>
-                  <div className="mb-1 flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                      {pkg.name}
-                    </p>
-                    <Badge
-                      className="border-0 px-2 py-0.5 text-xs"
-                      style={{
-                        backgroundColor: pkg.installed
-                          ? "rgba(20,184,166,0.1)"
-                          : "var(--bg-tertiary)",
-                        color: pkg.installed
-                          ? "var(--color-teal-500)"
-                          : "var(--text-tertiary)",
-                      }}
-                    >
-                      {pkg.installed ? "installed" : "not installed"}
-                    </Badge>
-                  </div>
-                  <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-                    {pkg.description}
-                  </p>
-                  <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                    {pkg.version}
-                  </p>
-                </div>
-                <Button
-                  size="sm"
-                  variant={pkg.installed ? "outline" : "default"}
-                  onClick={() => handlePackageToggle(pkg.name)}
-                  disabled={pkg.base}
-                  className={!pkg.installed ? "border-0 text-white" : ""}
-                  style={
-                    !pkg.installed
-                      ? { backgroundColor: "var(--color-teal-500)" }
-                      : undefined
-                  }
-                >
-                  {pkg.base ? "기본 포함" : pkg.installed ? "제거" : "설치"}
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-xl p-5" style={cardStyle}>
-          <SectionTitle icon={<Calendar size={16} />} label="모듈 관리" />
-          <p className="mb-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
-            학원 운영에 맞게 기능 모듈을 활성화/비활성화합니다.
-          </p>
-
-          <div className="flex flex-col">
-            <ToggleRow
-              label="일정 관리"
-              description="수업, 상담, 이벤트, 법정기한 등 일정 캘린더 기능"
-              value={scheduleEnabled}
-              onChange={setScheduleEnabled}
-            />
-            <Separator style={{ backgroundColor: "var(--border-default)" }} />
-            <ToggleRow
-              label="출석/수납 관리"
-              description="학생 출석 및 수납 추적 (복잡할 수 있어 선택적 사용)"
-              value={false}
-              onChange={() => {}}
-            />
-          </div>
-        </div>
-
-        <div className="rounded-xl p-5" style={cardStyle}>
-          <SectionTitle icon={<Database size={16} />} label="데이터 관리" />
-          <div className="flex flex-col gap-3 md:flex-row">
-            <Button variant="outline" className="gap-1" onClick={handleExportData}>
-              <Download size={14} />
-              전체 데이터 내보내기
-            </Button>
-            <Button variant="outline" className="gap-1" onClick={handleImportClick}>
-              <Upload size={14} />
-              데이터 가져오기
-            </Button>
-            <Button variant="outline" className="gap-1" onClick={handleSeedReset}>
-              <FlaskConical size={14} />
-              시드 데이터 재실행
-            </Button>
-            <Badge
-              className="self-start border-0 px-2 py-1 text-xs"
-              style={{ backgroundColor: "rgba(245,158,11,0.12)", color: "#b45309" }}
-            >
-              dev only
-            </Badge>
-          </div>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={handleImportChange}
-          />
-        </div>
-
-        <div
-          className="rounded-xl p-5"
-          style={{ ...cardStyle, border: "1px solid var(--color-danger, #ef4444)" }}
+        <SectionCard
+          id="company-settings"
+          icon={<Building2 size={16} />}
+          title="Company Settings"
+          description="기관명과 운영 목표를 저장하고, 현재 bootstrap 상태를 확인합니다."
         >
-          <SectionTitle icon={<AlertTriangle size={16} />} label="위험 영역" />
-          <p className="mb-4 text-xs" style={{ color: "var(--text-tertiary)" }}>
-            아래 작업은 되돌릴 수 없습니다. 데모 모드에서는 비활성화되어 있습니다.
-          </p>
-          <div className="flex gap-3">
-            <button
-              disabled
-              className="cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold opacity-40"
-              style={{
-                border: "1px solid #ef4444",
-                color: "#ef4444",
-                backgroundColor: "transparent",
-              }}
-            >
-              데이터 초기화
-            </button>
-            <button
-              disabled
-              className="cursor-not-allowed rounded-lg px-4 py-2 text-sm font-semibold opacity-40"
-              style={{
-                backgroundColor: "#ef4444",
-                color: "#fff",
-              }}
-            >
-              기관 삭제
-            </button>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Field label="기관명">
+              <Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} />
+            </Field>
+            <Field label="대표 사용자">
+              <Input value={principalName} onChange={(e) => setPrincipalName(e.target.value)} />
+            </Field>
+            <Field label="기관 유형">
+              <Input value={institutionType} onChange={(e) => setInstitutionType(e.target.value)} placeholder="영어학원, 수학학원" />
+            </Field>
+            <Field label="기관 규모">
+              <Input value={institutionSize} onChange={(e) => setInstitutionSize(e.target.value)} placeholder="원생 120명, 강사 8명" />
+            </Field>
           </div>
-        </div>
+          <Field label="핵심 목표">
+            <Textarea value={topGoal} onChange={(e) => setTopGoal(e.target.value)} rows={3} />
+          </Field>
+          <Field label="기관 설명">
+            <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} />
+          </Field>
+
+          <div className="grid gap-3 lg:grid-cols-3">
+            <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+              <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
+                Skills
+              </div>
+              <div className="mt-2 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
+                {installedSkills.length}
+              </div>
+              <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+                installed starter skills
+              </div>
+            </div>
+            <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+              <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
+                Integrations
+              </div>
+              <div className="mt-2 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
+                {connectedIntegrations.length}
+              </div>
+              <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+                connected integrations
+              </div>
+            </div>
+            <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+              <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
+                Action Required
+              </div>
+              <div className="mt-2 text-xl font-semibold" style={{ color: actionRequiredSkills.length ? "#d97706" : "var(--text-primary)" }}>
+                {actionRequiredSkills.length}
+              </div>
+              <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+                runtime setup needed
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={() =>
+                saveMutation.mutate({
+                  message: "기관 설정을 저장했습니다.",
+                  payload: {
+                    name: companyName.trim(),
+                    description: description.trim() || null,
+                    settings: {
+                      general: {
+                        institutionType,
+                        institutionSize,
+                        topGoal,
+                        principalName,
+                      },
+                    },
+                  },
+                })
+              }
+              disabled={!selectedOrgId || saveMutation.isPending}
+            >
+              기관 설정 저장
+            </Button>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          id="ai-policy"
+          icon={<Bot size={16} />}
+          title="AI Policy"
+          description="Codex-first 기본 모델과 fallback 전략을 저장하고, 기존 에이전트에 즉시 반영할 수 있습니다."
+        >
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Field label="Primary Adapter">
+              <Select value={primaryAdapterType} onValueChange={setPrimaryAdapterType}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {adapters.map((adapter: any) => (
+                    <SelectItem key={adapter.key} value={adapter.key}>
+                      {adapter.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Primary Model">
+              <Select value={primaryModel} onValueChange={setPrimaryModel}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(selectedAdapter?.availableModels ?? ["gpt-5-codex"]).map((model: string) => (
+                    <SelectItem key={model} value={model}>
+                      {model}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Fallback Adapter">
+              <Select value={fallbackAdapterType} onValueChange={setFallbackAdapterType}>
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {adapters.map((adapter: any) => (
+                    <SelectItem key={adapter.key} value={adapter.key}>
+                      {adapter.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field
+              label="Current Runtime"
+              hint="현재 연결 상태는 env 기준이며, 저장은 조직 정책 기준입니다."
+            >
+              <div className="flex h-10 items-center gap-2 rounded-2xl border px-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                {selectedAdapter?.connected ? <CheckCircle2 size={15} style={{ color: "var(--color-success)" }} /> : <TriangleAlert size={15} style={{ color: "#d97706" }} />}
+                <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                  {selectedAdapter?.connected ? "live adapter connected" : "degraded path will be used"}
+                </span>
+              </div>
+            </Field>
+          </div>
+
+          <ToggleRow
+            title="Auto-run by default"
+            description="새로 생성되는 starter agent와 기존 에이전트의 기본 실행 모드를 자동 실행으로 둡니다."
+            checked={autoRun}
+            onCheckedChange={setAutoRun}
+          />
+          <ToggleRow
+            title="Allow degraded mode"
+            description="실연동 키가 없어도 mock fallback으로 orchestration과 approval surface를 유지합니다."
+            checked={allowDegradedMode}
+            onCheckedChange={setAllowDegradedMode}
+          />
+          <ToggleRow
+            title="Apply to existing agents"
+            description="저장 시 현재 기관의 에이전트 adapter/model 설정도 함께 갱신합니다."
+            checked={applyToExistingAgents}
+            onCheckedChange={setApplyToExistingAgents}
+          />
+
+          <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              <ShieldCheck size={14} style={{ color: "var(--color-teal-500)" }} />
+              Codex-first Runtime
+            </div>
+            <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+              현재 실사용 기본 경로는 `codex_local`입니다. `OPENAI_API_KEY`가 없으면 degraded mode 정책에 따라
+              `mock_local`로 내려가고, fallback adapter는 별도로 기록됩니다.
+            </p>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={() =>
+                saveMutation.mutate({
+                  message: "AI 정책을 저장했습니다.",
+                  payload: {
+                    settings: {
+                      aiPolicy: {
+                        primaryAdapterType,
+                        primaryModel,
+                        fallbackAdapterType,
+                        autoRun,
+                        allowDegradedMode,
+                        applyToExistingAgents,
+                      },
+                    },
+                  },
+                })
+              }
+              disabled={!selectedOrgId || saveMutation.isPending}
+            >
+              AI 정책 저장
+            </Button>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          id="integrations"
+          icon={<Cable size={16} />}
+          title="Integrations"
+          description="연동 readiness와 조직의 운영 선호 설정을 함께 저장합니다."
+        >
+          <div className="space-y-3">
+            {integrations.map((integration: any) => {
+              const preference = integrationPrefs[integration.key] ?? { enabled: true, preferredChannel: "", notes: "" }
+              return (
+                <div
+                  key={integration.key}
+                  className="rounded-2xl border p-4"
+                  style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                          {integration.label}
+                        </div>
+                        <StatusPill tone={integration.connected ? "good" : "warn"}>
+                          {integration.connected ? "connected" : "missing env"}
+                        </StatusPill>
+                      </div>
+                      <div className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                        {integration.description}
+                      </div>
+                    </div>
+                    <Switch
+                      checked={preference.enabled}
+                      onCheckedChange={(checked) =>
+                        setIntegrationPrefs((prev) => ({
+                          ...prev,
+                          [integration.key]: {
+                            ...prev[integration.key],
+                            enabled: checked,
+                          },
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <div className="mt-4 grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
+                    <Field label="Preferred Channel" hint="메시징 계열이면 default channel, 아니면 운영 메모로 사용합니다.">
+                      <Input
+                        value={preference.preferredChannel ?? ""}
+                        onChange={(e) =>
+                          setIntegrationPrefs((prev) => ({
+                            ...prev,
+                            [integration.key]: {
+                              ...prev[integration.key],
+                              preferredChannel: e.target.value,
+                            },
+                          }))
+                        }
+                        placeholder={integration.category === "messaging" ? "kakao, sms" : "default"}
+                      />
+                    </Field>
+                    <Field label="Ops Notes">
+                      <Input
+                        value={preference.notes ?? ""}
+                        onChange={(e) =>
+                          setIntegrationPrefs((prev) => ({
+                            ...prev,
+                            [integration.key]: {
+                              ...prev[integration.key],
+                              notes: e.target.value,
+                            },
+                          }))
+                        }
+                        placeholder="운영 메모"
+                      />
+                    </Field>
+                  </div>
+
+                  {integration.missingEnv?.length ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {integration.missingEnv.map((item: string) => (
+                        <button
+                          key={item}
+                          type="button"
+                          className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs"
+                          style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+                          onClick={() => handleCopy(item)}
+                        >
+                          <Copy size={12} />
+                          {item}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={() =>
+                saveMutation.mutate({
+                  message: "연동 선호 설정을 저장했습니다.",
+                  payload: {
+                    settings: {
+                      integrations: integrationPrefs,
+                    },
+                  },
+                })
+              }
+              disabled={!selectedOrgId || saveMutation.isPending}
+            >
+              연동 설정 저장
+            </Button>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          id="instance"
+          icon={<Cpu size={16} />}
+          title="Instance"
+          description="운영자가 보는 control plane 기본 동작을 저장합니다."
+        >
+          <ToggleRow
+            title="Censor username in logs"
+            description="운영 로그와 transcript에서 홈 디렉터리 사용자명을 감추는 정책을 저장합니다."
+            checked={censorLogs}
+            onCheckedChange={setCensorLogs}
+          />
+          <ToggleRow
+            title="Enable keyboard shortcuts"
+            description="operator 화면에서 keyboard shortcut을 기본 활성화 상태로 둡니다."
+            checked={keyboardShortcuts}
+            onCheckedChange={setKeyboardShortcuts}
+          />
+
+          <Field label="AI Feedback Sharing" hint="paperclip 캡처처럼 기본 투표 공유 정책을 저장합니다.">
+            <Select value={feedbackSharing} onValueChange={setFeedbackSharing}>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="prompt">Prompt on first use</SelectItem>
+                <SelectItem value="allow">Always allow</SelectItem>
+                <SelectItem value="deny">Don't allow</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+
+          <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              <Cpu size={14} style={{ color: "var(--color-teal-500)" }} />
+              Loaded Control Plane Modules
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {plugins.map((plugin: any) => (
+                <Badge key={plugin.key} className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+                  {plugin.label}
+                </Badge>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex justify-end">
+            <Button
+              onClick={() =>
+                saveMutation.mutate({
+                  message: "인스턴스 정책을 저장했습니다.",
+                  payload: {
+                    settings: {
+                      instance: {
+                        censorLogs,
+                        keyboardShortcuts,
+                        feedbackSharing,
+                      },
+                    },
+                  },
+                })
+              }
+              disabled={!selectedOrgId || saveMutation.isPending}
+            >
+              인스턴스 설정 저장
+            </Button>
+          </div>
+        </SectionCard>
       </div>
     </div>
   )

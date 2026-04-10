@@ -3,8 +3,10 @@ import { eq, desc } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { publishEvent } from "./live-events.js"
+import { runOrchestrator } from "../lib/agents/orchestrator.js"
 import { runComplaintAgent } from "../lib/agents/complaint.js"
 import { runRetentionAgent } from "../lib/agents/retention.js"
+import { runSchedulerAgent } from "../lib/agents/scheduler.js"
 
 const logger = pino({ level: "info" })
 
@@ -21,6 +23,14 @@ export async function executeAgentRun(
   opts: ExecuteAgentRunOpts,
 ): Promise<{ runId: string }> {
   const { organizationId, agentId, caseId, agentType, approvalLevel } = opts
+  const [agent] = await db
+    .select()
+    .from(schema.agents)
+    .where(eq(schema.agents.id, agentId))
+
+  if (!agent) {
+    throw new Error(`Agent not found: ${agentId}`)
+  }
 
   // 1. Create AgentRun (queued)
   const [run] = await db
@@ -31,6 +41,10 @@ export async function executeAgentRun(
       caseId,
       status: "queued",
       approvalLevel,
+      input: {
+        caseId,
+        agentType,
+      } as Record<string, unknown>,
     })
     .returning()
 
@@ -42,6 +56,16 @@ export async function executeAgentRun(
     agentId,
     caseId,
     agentType,
+  })
+  await db.insert(schema.activityEvents).values({
+    organizationId,
+    actorType: "system",
+    actorId: agentId,
+    action: "run.queued",
+    entityType: "agent_run",
+    entityId: runId,
+    entityTitle: `${agent.name} queued`,
+    metadata: { caseId, agentType } as Record<string, unknown>,
   })
 
   try {
@@ -56,6 +80,16 @@ export async function executeAgentRun(
       agentId,
       caseId,
       agentType,
+    })
+    await db.insert(schema.activityEvents).values({
+      organizationId,
+      actorType: "agent",
+      actorId: agentId,
+      action: "run.started",
+      entityType: "agent_run",
+      entityId: runId,
+      entityTitle: `${agent.name} started`,
+      metadata: { caseId, agentType } as Record<string, unknown>,
     })
 
     // 4. Load case + student + org context from DB
@@ -73,20 +107,77 @@ export async function executeAgentRun(
       .from(schema.organizations)
       .where(eq(schema.organizations.id, organizationId))
 
+    let linkedStudentId = caseRecord.studentId ?? null
+    if (!linkedStudentId && (agentType === "retention" || agentType === "scheduler")) {
+      const fallbackStudents = await db
+        .select()
+        .from(schema.students)
+        .where(eq(schema.students.organizationId, organizationId))
+        .orderBy(desc(schema.students.riskScore))
+
+      const fallbackStudent = fallbackStudents[0]
+      if (fallbackStudent) {
+        linkedStudentId = fallbackStudent.id
+        await db
+          .update(schema.cases)
+          .set({
+            studentId: fallbackStudent.id,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.cases.id, caseId))
+      }
+    }
+
     let studentRecord: typeof schema.students.$inferSelect | undefined
-    if (caseRecord.studentId) {
+    if (linkedStudentId) {
       const rows = await db
         .select()
         .from(schema.students)
-        .where(eq(schema.students.id, caseRecord.studentId))
+        .where(eq(schema.students.id, linkedStudentId))
       studentRecord = rows[0]
     }
 
     // 5. Call agent function with context
     let agentOutput: Record<string, unknown>
     let tokensUsed = 0
+    let inputTokens = 0
+    let outputTokens = 0
+    let reasoning: string | null = null
+    const selectedModel = (agent.adapterConfig as { model?: string } | null)?.model ?? null
+    const runtimeBinding = {
+      adapterType: agent.adapterType,
+      model: selectedModel,
+    }
 
-    if (agentType === "complaint") {
+    if (agentType === "orchestrator") {
+      const orgAgents = await db
+        .select()
+        .from(schema.agents)
+        .where(eq(schema.agents.organizationId, organizationId))
+      const pendingCases = await db
+        .select()
+        .from(schema.cases)
+        .where(eq(schema.cases.organizationId, organizationId))
+
+      const result = await runOrchestrator({
+        organizationId,
+        agents: orgAgents.map((item) => ({
+          id: item.id,
+          agentType: item.agentType,
+          name: item.name,
+        })),
+        context: JSON.stringify({
+          instruction: `${caseRecord.title}\n${caseRecord.description ?? ""}`.trim(),
+          orgName: org?.name ?? null,
+          pendingCases: pendingCases
+            .filter((item) => item.status !== "done" && item.status !== "closed")
+            .slice(0, 5),
+        }),
+        ...runtimeBinding,
+      })
+      agentOutput = result as unknown as Record<string, unknown>
+      reasoning = result.plan
+    } else if (agentType === "complaint") {
       const result = await runComplaintAgent({
         caseId,
         organizationId,
@@ -94,11 +185,15 @@ export async function executeAgentRun(
         description: caseRecord.description ?? "",
         reporterId: caseRecord.reporterId ?? undefined,
         studentId: caseRecord.studentId ?? undefined,
+        ...runtimeBinding,
       })
       agentOutput = result.analysis as unknown as Record<string, unknown>
       tokensUsed = result.tokensUsed
+      inputTokens = Math.floor(tokensUsed * 0.55)
+      outputTokens = tokensUsed - inputTokens
+      reasoning = `complaint:${result.analysis.category}:${result.analysis.urgency}`
     } else if (agentType === "retention") {
-      if (!caseRecord.studentId || !studentRecord) {
+      if (!linkedStudentId || !studentRecord) {
         throw new Error("Retention agent requires a student linked to the case")
       }
 
@@ -110,16 +205,50 @@ export async function executeAgentRun(
 
       const result = await runRetentionAgent({
         organizationId,
-        studentId: caseRecord.studentId,
+        studentId: linkedStudentId,
         studentName: studentRecord.name,
-        attendanceHistory: attendanceRows.map((r) => ({
+        attendanceHistory: attendanceRows.map((r: typeof schema.attendance.$inferSelect) => ({
           date: r.date,
           status: r.status,
         })),
         currentRiskScore: studentRecord.riskScore ?? 0,
+        ...runtimeBinding,
       })
       agentOutput = result.assessment as unknown as Record<string, unknown>
       tokensUsed = result.tokensUsed
+      inputTokens = Math.floor(tokensUsed * 0.55)
+      outputTokens = tokensUsed - inputTokens
+      reasoning = `retention:${result.assessment.riskLevel}:${result.assessment.riskScore}`
+    } else if (agentType === "scheduler") {
+      const currentSchedules = await db
+        .select()
+        .from(schema.schedules)
+        .where(eq(schema.schedules.organizationId, organizationId))
+
+      const result = await runSchedulerAgent({
+        organizationId,
+        caseId,
+        title: caseRecord.title,
+        description: caseRecord.description ?? "",
+        studentId: linkedStudentId ?? undefined,
+        reporterId: caseRecord.reporterId ?? undefined,
+        schedules: currentSchedules.map((schedule: typeof schema.schedules.$inferSelect) => ({
+          id: schedule.id,
+          title: schedule.title,
+          type: schedule.type,
+          dayOfWeek: schedule.dayOfWeek,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          room: schedule.room,
+        })),
+        adapterType: runtimeBinding.adapterType ?? undefined,
+        model: runtimeBinding.model ?? undefined,
+      })
+      agentOutput = result.plan as unknown as Record<string, unknown>
+      tokensUsed = result.tokensUsed
+      inputTokens = Math.floor(tokensUsed * 0.55)
+      outputTokens = tokensUsed - inputTokens
+      reasoning = `scheduler:${String(result.plan.calendarAction?.status ?? "pending_sync")}`
     } else {
       throw new Error(`Unsupported agentType: ${agentType}`)
     }
@@ -137,6 +266,16 @@ export async function executeAgentRun(
         status: "pending",
         payload: agentOutput,
       })
+      await db.insert(schema.activityEvents).values({
+        organizationId,
+        actorType: "system",
+        actorId: agentId,
+        action: "approval.created",
+        entityType: "agent_run",
+        entityId: runId,
+        entityTitle: `${agent.name} approval`,
+        metadata: { caseId, agentType, level: approvalLevel } as Record<string, unknown>,
+      })
 
       await db
         .update(schema.agentRuns)
@@ -144,6 +283,9 @@ export async function executeAgentRun(
           status: "pending_approval",
           output: agentOutput,
           tokensUsed,
+          inputTokens,
+          outputTokens,
+          reasoning,
           completedAt,
           updatedAt: new Date(),
         })
@@ -175,12 +317,27 @@ export async function executeAgentRun(
           suggestedReply?: string
         }
         pendingCommentContent = `[민원분석] 카테고리: ${output.category ?? "-"}, 심각도: ${output.severity ?? "-"}\n\n초안: ${output.suggestedReply ?? ""}`
+      } else if (agentType === "orchestrator") {
+        const output = agentOutput as {
+          plan?: string
+          assignments?: Array<{ agentId?: string; reason?: string }>
+        }
+        const assignments = Array.isArray(output.assignments)
+          ? output.assignments.map((item) => `- ${item.agentId ?? "unknown"}: ${item.reason ?? ""}`).join("\n")
+          : ""
+        pendingCommentContent = `[오케스트레이션 계획]\n${output.plan ?? "실행 계획을 정리했습니다."}${assignments ? `\n\n${assignments}` : ""}`
       } else if (agentType === "retention") {
         const output = agentOutput as {
           riskLevel?: string
           reasoning?: string
         }
         pendingCommentContent = `[이탈분석] 위험도: ${output.riskLevel ?? "-"}\n\n${output.reasoning ?? ""}`
+      } else if (agentType === "scheduler") {
+        const output = agentOutput as {
+          summary?: string
+          reasoning?: string
+        }
+        pendingCommentContent = `[일정제안] ${output.summary ?? "일정 초안을 작성했습니다."}\n\n${output.reasoning ?? ""}`
       } else {
         pendingCommentContent = JSON.stringify(agentOutput, null, 2)
       }
@@ -207,6 +364,9 @@ export async function executeAgentRun(
           status: "completed",
           output: agentOutput,
           tokensUsed,
+          inputTokens,
+          outputTokens,
+          reasoning,
           completedAt,
           updatedAt: new Date(),
         })
@@ -249,12 +409,27 @@ export async function executeAgentRun(
           draft?: string
         }
         commentContent = `[민원분석] 카테고리: ${output.category ?? "-"}, 심각도: ${output.severity ?? "-"}\n\n${output.draft ?? ""}`
+      } else if (agentType === "orchestrator") {
+        const output = agentOutput as {
+          plan?: string
+          assignments?: Array<{ agentId?: string; reason?: string }>
+        }
+        const assignments = Array.isArray(output.assignments)
+          ? output.assignments.map((item) => `- ${item.agentId ?? "unknown"}: ${item.reason ?? ""}`).join("\n")
+          : ""
+        commentContent = `[오케스트레이션 계획]\n${output.plan ?? "실행 계획을 정리했습니다."}${assignments ? `\n\n${assignments}` : ""}`
       } else if (agentType === "retention") {
         const output = agentOutput as {
           riskLevel?: string
           reasoning?: string
         }
         commentContent = `[이탈분석] 위험도: ${output.riskLevel ?? "-"}\n\n${output.reasoning ?? ""}`
+      } else if (agentType === "scheduler") {
+        const output = agentOutput as {
+          summary?: string
+          reasoning?: string
+        }
+        commentContent = `[일정제안] ${output.summary ?? "일정 초안을 생성했습니다."}\n\n${output.reasoning ?? ""}`
       } else {
         commentContent = JSON.stringify(agentOutput, null, 2)
       }
@@ -281,7 +456,7 @@ export async function executeAgentRun(
       organizationId,
       actorType: "agent",
       actorId: agentId,
-      action: "agent.run.completed",
+      action: "run.completed",
       entityType: "agent_run",
       entityId: runId,
       entityTitle: `${agentType} run on case ${caseRecord.identifier}`,
@@ -290,6 +465,8 @@ export async function executeAgentRun(
         caseId,
         approvalLevel,
         tokensUsed,
+        adapterType: agent.adapterType,
+        model: selectedModel,
       },
     })
 
@@ -317,6 +494,20 @@ export async function executeAgentRun(
       caseId,
       agentType,
       error: err instanceof Error ? err.message : String(err),
+    })
+    await db.insert(schema.activityEvents).values({
+      organizationId,
+      actorType: "agent",
+      actorId: agentId,
+      action: "run.failed",
+      entityType: "agent_run",
+      entityId: runId,
+      entityTitle: `${agent.name} failed`,
+      metadata: {
+        caseId,
+        agentType,
+        error: err instanceof Error ? err.message : String(err),
+      } as Record<string, unknown>,
     })
 
     throw err

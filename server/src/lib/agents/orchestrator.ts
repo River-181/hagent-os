@@ -1,4 +1,4 @@
-import { callClaude } from "../claude.js"
+import { runWithAdapter } from "../runtime.js"
 import type { OrchestratorInput, OrchestratorOutput, AgentAssignment } from "./types.js"
 
 const SYSTEM_PROMPT = `당신은 탄자니아 영어학원의 AI 오케스트레이터입니다.
@@ -8,6 +8,7 @@ const SYSTEM_PROMPT = `당신은 탄자니아 영어학원의 AI 오케스트레
 ## 사용 가능한 에이전트 유형
 - complaint: 학부모/학생 민원 처리, 답변 초안 작성
 - retention: 이탈 위험 학생 분석, 개입 조치 추천
+- scheduler: 보강/상담/대체수업/시간표 조정
 
 ## 출력 형식
 반드시 아래 JSON 형식만 출력하세요. 다른 텍스트는 포함하지 마세요.
@@ -26,7 +27,8 @@ const SYSTEM_PROMPT = `당신은 탄자니아 영어학원의 AI 오케스트레
 - 지시와 무관한 에이전트는 배정하지 마세요
 - 같은 에이전트를 중복 배정하지 마세요
 - 민원이 언급되면 complaint 에이전트를 배정하세요
-- 이탈/그만두기/결석이 언급되면 retention 에이전트를 배정하세요`
+- 이탈/그만두기/결석이 언급되면 retention 에이전트를 배정하세요
+- 일정/보강/상담/대체수업/시간표가 언급되면 scheduler 에이전트를 배정하세요`
 
 export async function runOrchestrator(input: OrchestratorInput): Promise<OrchestratorOutput> {
   let contextData: {
@@ -69,7 +71,9 @@ ${pendingCasesSummary}
 
 위 지시를 분석하여 실행 계획과 에이전트 배정을 JSON으로 출력하세요.`
 
-  const response = await callClaude(SYSTEM_PROMPT, userMessage, {
+  const response = await runWithAdapter(SYSTEM_PROMPT, userMessage, {
+    adapterType: input.adapterType ?? undefined,
+    model: input.model ?? undefined,
     maxTokens: 1024,
   })
 

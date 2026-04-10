@@ -1,4 +1,4 @@
-import { callClaude } from "../claude.js"
+import { runWithAdapter } from "../runtime.js"
 import type { RetentionAgentInput, RetentionAgentOutput } from "./types.js"
 
 const SYSTEM_PROMPT = `당신은 탄자니아 영어학원의 학생 이탈 방지 전담 AI입니다.
@@ -59,7 +59,9 @@ ${attendanceSummary || "  데이터 없음"}
 
 위 데이터를 바탕으로 이탈 위험도와 개입 방안을 JSON으로 출력해주세요.`
 
-  const response = await callClaude(SYSTEM_PROMPT, userMessage, {
+  const response = await runWithAdapter(SYSTEM_PROMPT, userMessage, {
+    adapterType: input.adapterType ?? undefined,
+    model: input.model ?? undefined,
     maxTokens: 1024,
   })
 

@@ -13,6 +13,8 @@ import { AgentDetailPage } from "@/pages/AgentDetailPage"
 import { SchedulePage } from "@/pages/SchedulePage"
 import { ActivityPage } from "@/pages/ActivityPage"
 import { SkillsPage } from "@/pages/SkillsPage"
+import { PluginsPage } from "@/pages/PluginsPage"
+import { AdaptersPage } from "@/pages/AdaptersPage"
 import { SettingsPage } from "@/pages/SettingsPage"
 import { OnboardingPage } from "@/pages/OnboardingPage"
 import { DesignGuidePage } from "@/pages/DesignGuidePage"
@@ -34,8 +36,13 @@ function RootRedirect() {
     // 학원이 없으면 온보딩 페이지로 — 기본 prefix "new"
     return <Navigate to="/new/onboarding" replace />
   }
-  const first = organizations[0]
-  return <Navigate to={`/${first.prefix}/dashboard`} replace />
+  const prioritized = [...organizations].sort((a, b) => {
+    const aTime = new Date(a.createdAt ?? 0).getTime()
+    const bTime = new Date(b.createdAt ?? 0).getTime()
+    return bTime - aTime
+  })
+  const preferred = prioritized.find((org) => Boolean(org.agentTeamConfig)) ?? prioritized[0]
+  return <Navigate to={`/${preferred.prefix}/dashboard`} replace />
 }
 
 export function App() {
@@ -58,6 +65,8 @@ export function App() {
         <Route path="activity" element={<ActivityPage />} />
         <Route path="skills" element={<SkillsPage />} />
         <Route path="skills/:slug" element={<SkillsPage />} />
+        <Route path="plugins" element={<PluginsPage />} />
+        <Route path="adapters" element={<AdaptersPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="onboarding" element={<OnboardingPage />} />
         <Route path="documents" element={<DocumentsPage />} />

@@ -4,7 +4,12 @@ export interface AgentRef {
   name: string
 }
 
-export interface OrchestratorInput {
+export interface RuntimeBinding {
+  adapterType?: string | null
+  model?: string | null
+}
+
+export interface OrchestratorInput extends RuntimeBinding {
   organizationId: string
   agents: AgentRef[]
   context?: string
@@ -25,7 +30,7 @@ export interface OrchestratorOutput {
   assignments: AgentAssignment[]
 }
 
-export interface ComplaintAgentInput {
+export interface ComplaintAgentInput extends RuntimeBinding {
   caseId: string
   organizationId: string
   title: string
@@ -40,6 +45,13 @@ export interface ComplaintAnalysis {
   summary: string
   suggestedReply: string
   requiresApproval: boolean
+  legalBasis?: {
+    source: string
+    query: string
+    summary?: string | null
+    connected: boolean
+    degraded: boolean
+  }
 }
 
 export interface ComplaintAgentOutput {
@@ -48,7 +60,7 @@ export interface ComplaintAgentOutput {
   tokensUsed: number
 }
 
-export interface RetentionAgentInput {
+export interface RetentionAgentInput extends RuntimeBinding {
   organizationId: string
   studentId: string
   studentName: string

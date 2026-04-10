@@ -2,12 +2,67 @@ import { Router } from "express"
 import { desc, eq } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
+import { z } from "zod"
 import {
   installSkillForOrganization,
   listSkills,
   uninstallSkillForOrganization,
   updateOrganizationSkillConfig,
 } from "../services/skills.js"
+import { bootstrapOrganization as runBootstrap } from "../services/bootstrap.js"
+
+const organizationPatchSchema = z.object({
+  name: z.string().min(2).optional(),
+  description: z.string().nullable().optional(),
+  settings: z
+    .object({
+      general: z
+        .object({
+          institutionType: z.string().optional(),
+          institutionSize: z.string().optional(),
+          topGoal: z.string().optional(),
+          principalName: z.string().optional(),
+        })
+        .partial()
+        .optional(),
+      aiPolicy: z
+        .object({
+          primaryAdapterType: z.enum(["codex_local", "claude_local", "mock_local"]).optional(),
+          primaryModel: z.string().optional(),
+          fallbackAdapterType: z.enum(["codex_local", "claude_local", "mock_local"]).optional(),
+          autoRun: z.boolean().optional(),
+          allowDegradedMode: z.boolean().optional(),
+          applyToExistingAgents: z.boolean().optional(),
+        })
+        .partial()
+        .optional(),
+      integrations: z.record(z.string(), z.record(z.string(), z.unknown())).optional(),
+      instance: z.record(z.string(), z.unknown()).optional(),
+    })
+    .partial()
+    .optional(),
+})
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function mergeJsonConfig(
+  base: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> {
+  const next = { ...base }
+
+  for (const [key, value] of Object.entries(patch)) {
+    if (isPlainObject(value) && isPlainObject(next[key])) {
+      next[key] = mergeJsonConfig(next[key] as Record<string, unknown>, value)
+      continue
+    }
+    next[key] = value
+  }
+
+  return next
+}
 
 export function organizationRoutes(db: Db): Router {
   const router = Router()
@@ -59,6 +114,15 @@ export function organizationRoutes(db: Db): Router {
     }
   })
 
+  router.post("/bootstrap", async (req, res) => {
+    try {
+      const result = await runBootstrap(db, req.body)
+      res.status(201).json(result)
+    } catch (err) {
+      res.status(400).json({ error: err instanceof Error ? err.message : "Failed to bootstrap organization" })
+    }
+  })
+
   router.get("/:id", async (req, res) => {
     try {
       const [org] = await db
@@ -74,6 +138,128 @@ export function organizationRoutes(db: Db): Router {
       res.json(org)
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch organization" })
+    }
+  })
+
+  router.patch("/:id", async (req, res) => {
+    try {
+      const input = organizationPatchSchema.parse(req.body ?? {})
+      const [organization] = await db
+        .select()
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, req.params.id))
+
+      if (!organization) {
+        res.status(404).json({ error: "Organization not found" })
+        return
+      }
+
+      const normalizedSettings = input.settings
+        ? {
+            ...input.settings,
+            ...(input.settings.aiPolicy
+              ? {
+                  aiPolicy: Object.fromEntries(
+                    Object.entries(input.settings.aiPolicy).filter(([key]) => key !== "applyToExistingAgents"),
+                  ),
+                }
+              : {}),
+          }
+        : undefined
+
+      const nextConfig = mergeJsonConfig(
+        isPlainObject(organization.agentTeamConfig) ? organization.agentTeamConfig : {},
+        normalizedSettings ?? {},
+      )
+      if (isPlainObject(nextConfig.aiPolicy) && "applyToExistingAgents" in nextConfig.aiPolicy) {
+        const { applyToExistingAgents: _discarded, ...rest } = nextConfig.aiPolicy
+        nextConfig.aiPolicy = rest
+      }
+
+      const [updated] = await db
+        .update(schema.organizations)
+        .set({
+          ...(input.name ? { name: input.name.trim() } : {}),
+          ...(Object.prototype.hasOwnProperty.call(input, "description")
+            ? { description: input.description ?? null }
+            : {}),
+          agentTeamConfig: nextConfig,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.organizations.id, organization.id))
+        .returning()
+
+      const aiPolicy = input.settings?.aiPolicy
+      if (aiPolicy?.primaryAdapterType || aiPolicy?.primaryModel || Object.prototype.hasOwnProperty.call(aiPolicy ?? {}, "autoRun")) {
+        const adapterType =
+          aiPolicy?.primaryAdapterType ??
+          ((nextConfig.aiPolicy as Record<string, unknown> | undefined)?.primaryAdapterType as string | undefined) ??
+          "codex_local"
+        const selectedModel =
+          aiPolicy?.primaryModel ??
+          ((nextConfig.aiPolicy as Record<string, unknown> | undefined)?.primaryModel as string | undefined) ??
+          null
+        const autoRun =
+          typeof aiPolicy?.autoRun === "boolean"
+            ? aiPolicy.autoRun
+            : ((nextConfig.aiPolicy as Record<string, unknown> | undefined)?.autoRun as boolean | undefined) ?? true
+
+        if (aiPolicy?.applyToExistingAgents !== false) {
+          const orgAgents = await db
+            .select()
+            .from(schema.agents)
+            .where(eq(schema.agents.organizationId, organization.id))
+
+          for (const agent of orgAgents) {
+            const currentConfig = isPlainObject(agent.adapterConfig) ? agent.adapterConfig : {}
+            await db
+              .update(schema.agents)
+              .set({
+                adapterType,
+                adapterConfig: {
+                  ...currentConfig,
+                  model: selectedModel ?? currentConfig.model ?? null,
+                  autoRun,
+                },
+                updatedAt: new Date(),
+              })
+              .where(eq(schema.agents.id, agent.id))
+          }
+        }
+      }
+
+      await db.insert(schema.activityEvents).values({
+        organizationId: organization.id,
+        actorType: "user",
+        actorId: "settings",
+        action: "organization.updated",
+        entityType: "organization",
+        entityId: organization.id,
+        entityTitle: updated.name,
+        metadata: {
+          fields: Object.keys(input),
+          settingsSections: Object.keys(normalizedSettings ?? {}),
+        } as Record<string, unknown>,
+      })
+
+      if (normalizedSettings?.integrations) {
+        await db.insert(schema.activityEvents).values({
+          organizationId: organization.id,
+          actorType: "user",
+          actorId: "settings",
+          action: "integration.checked",
+          entityType: "organization",
+          entityId: organization.id,
+          entityTitle: updated.name,
+          metadata: {
+            integrations: Object.keys(normalizedSettings.integrations),
+          } as Record<string, unknown>,
+        })
+      }
+
+      res.json(updated)
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update organization" })
     }
   })
 

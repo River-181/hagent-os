@@ -3,9 +3,9 @@ import { useParams, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
-import { usePanel } from "@/context/PanelContext"
 import { casesApi } from "@/api/cases"
 import { approvalsApi } from "@/api/approvals"
+import { activityApi } from "@/api/activity"
 import { queryKeys } from "@/lib/queryKeys"
 import { api } from "@/api/client"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
   SelectContent,
@@ -26,6 +27,7 @@ import { Identity } from "@/components/Identity"
 import { StatusBadge } from "@/components/StatusBadge"
 import { LiveRunWidget } from "@/components/LiveRunWidget"
 import { CaseProperties } from "@/components/CaseProperties"
+import { ApprovalCard } from "@/components/ApprovalCard"
 import { ToastContext } from "@/components/ToastContext"
 import {
   CheckCircle2,
@@ -35,6 +37,7 @@ import {
   AlertCircle,
   Play,
   FileText,
+  MessageSquare,
 } from "lucide-react"
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -184,6 +187,81 @@ function ActivityTimeline({ caseData, orgPrefix }: { caseData: any; orgPrefix?: 
           </div>
         ))}
       </div>
+    </div>
+  )
+}
+
+function filterCaseActivity(activity: any[], caseId: string, runIds: string[], approvalIds: string[]) {
+  const runIdSet = new Set(runIds)
+  const approvalIdSet = new Set(approvalIds)
+  return activity.filter((event) => {
+    if (event.entityType === "case" && event.entityId === caseId) return true
+    if (event.entityType === "agent_run" && runIdSet.has(event.entityId)) return true
+    if (event.entityType === "approval" && approvalIdSet.has(event.entityId)) return true
+    if (event.metadata?.caseId === caseId) return true
+    return false
+  })
+}
+
+function ActivityTab({
+  events,
+  orgPrefix,
+}: {
+  events: any[]
+  orgPrefix?: string
+}) {
+  if (events.length === 0) {
+    return (
+      <div className="rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}>
+        아직 연결된 activity가 없습니다.
+      </div>
+    )
+  }
+
+  const navigate = useNavigate()
+
+  return (
+    <div className="space-y-3">
+      {events.map((event) => {
+        const metadata = event.metadata ?? {}
+        const link =
+          event.entityType === "approval" && orgPrefix
+            ? `/${orgPrefix}/approvals/${event.entityId}`
+            : event.entityType === "agent_run" && metadata.agentId && orgPrefix
+            ? `/${orgPrefix}/agents/${metadata.agentId}`
+            : undefined
+
+        return (
+          <div
+            key={event.id}
+            className={link ? "rounded-xl border p-4 cursor-pointer" : "rounded-xl border p-4"}
+            style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+            onClick={() => link && navigate(link)}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                  {event.entityTitle ?? event.action}
+                </div>
+                <div className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  {event.action} · {timeAgo(event.createdAt ?? event.created_at)}
+                </div>
+              </div>
+              <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+                {event.entityType}
+              </Badge>
+            </div>
+            {metadata && Object.keys(metadata).length > 0 && (
+              <pre
+                className="mt-3 rounded-lg p-3 text-xs overflow-x-auto whitespace-pre-wrap"
+                style={{ backgroundColor: "var(--bg-base)", color: "var(--text-secondary)" }}
+              >
+                {JSON.stringify(metadata, null, 2)}
+              </pre>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }
@@ -430,7 +508,6 @@ function ChatThread({
 export function CaseDetailPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
-  const { setPanelContent } = usePanel()
   const { orgPrefix, id } = useParams<{ orgPrefix: string; id: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -445,6 +522,11 @@ export function CaseDetailPage() {
     queryKey: queryKeys.cases.detail(id!),
     queryFn: () => casesApi.get(id!),
     enabled: !!id,
+  })
+  const { data: orgActivity = [] } = useQuery({
+    queryKey: [...queryKeys.activity.list(selectedOrgId ?? ""), "case-detail", id],
+    queryFn: () => activityApi.list(selectedOrgId!),
+    enabled: !!selectedOrgId,
   })
 
   // ── breadcrumbs ────────────────────────────────────────────────────────────
@@ -486,28 +568,17 @@ export function CaseDetailPage() {
     onError: () => toast?.error("에이전트 배정에 실패했습니다."),
   })
 
-  // ── panel: CaseProperties ──────────────────────────────────────────────────
-  useEffect(() => {
-    if (!caseData) return
-    setPanelContent(
-      <CaseProperties
-        case={{
-          id: caseData.id,
-          status: caseData.status ?? "backlog",
-          priority: caseData.priority ?? 4,
-          type: caseData.type,
-          assigneeAgent: caseData.assigneeAgent ?? caseData.agent,
-          reporter: caseData.reporter ?? caseData.reporterName,
-          studentName:
-            caseData.studentName ?? caseData.student?.name,
-          createdAt: caseData.createdAt ?? caseData.created_at,
-          updatedAt: caseData.updatedAt ?? caseData.updated_at,
-          dueAt: caseData.dueAt ?? caseData.due_at,
-        }}
-        onUpdate={(field, value) => updateCase.mutate({ [field]: value })}
-      />
-    )
-  }, [caseData, setPanelContent])
+  const approvalDecision = useMutation({
+    mutationFn: ({ approvalId, decision }: { approvalId: string; decision: "approve" | "reject" }) =>
+      decision === "approve" ? approvalsApi.approve(approvalId) : approvalsApi.reject(approvalId),
+    onSuccess: () => {
+      toast?.success("승인 상태를 갱신했습니다.")
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cases.detail(id!) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(selectedOrgId ?? "") })
+    },
+    onError: () => toast?.error("승인 처리에 실패했습니다."),
+  })
 
   // ── loading / error states ─────────────────────────────────────────────────
   if (isLoading) {
@@ -547,6 +618,10 @@ export function CaseDetailPage() {
     (a: any) => a.status === "pending"
   )
   const comments = caseData.comments ?? []
+  const approvals = caseData.approvals ?? []
+  const runIds = (caseData.runs ?? []).map((run: any) => run.id)
+  const approvalIds = approvals.map((approval: any) => approval.id)
+  const relatedActivity = filterCaseActivity(orgActivity as any[], caseData.id, runIds, approvalIds)
   const status = (caseData.status ?? "backlog") as CaseStatus
   const identifier = caseData.identifier ?? caseData.id
   const typeLabel =
@@ -554,7 +629,9 @@ export function CaseDetailPage() {
 
   return (
     <ScrollArea className="flex-1 h-full">
-      <div className="p-6 max-w-3xl mx-auto space-y-5">
+      <div className="p-6 max-w-5xl mx-auto">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-5">
         {/* Case header */}
         <div className="space-y-2">
           <div className="flex items-start gap-3">
@@ -680,17 +757,116 @@ export function CaseDetailPage() {
           />
         )}
 
-        <Separator />
+            <Separator />
 
-        {/* Chat thread */}
-        <div>
-          <h2
-            className="text-sm font-semibold mb-3"
-            style={{ color: "var(--text-primary)" }}
-          >
-            대화 {comments.length > 0 && `(${comments.length})`}
-          </h2>
-          <ChatThread caseId={caseData.id} comments={comments} />
+            <Tabs defaultValue="approvals" className="space-y-4">
+              <TabsList variant="line" className="w-full justify-start bg-transparent p-0">
+                <TabsTrigger value="approvals">Approvals {approvals.length > 0 ? `(${approvals.length})` : ""}</TabsTrigger>
+                <TabsTrigger value="activity">Activity {relatedActivity.length > 0 ? `(${relatedActivity.length})` : ""}</TabsTrigger>
+                <TabsTrigger value="comments">Comments {comments.length > 0 ? `(${comments.length})` : ""}</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="approvals" className="space-y-3">
+                {approvals.length === 0 ? (
+                  <div className="rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}>
+                    아직 생성된 approval이 없습니다.
+                  </div>
+                ) : (
+                  approvals.map((approval: any) => (
+                    <ApprovalCard
+                      key={approval.id}
+                      approval={approval}
+                      caseHref={orgPrefix ? `/${orgPrefix}/cases/${caseData.id}` : undefined}
+                      onApprove={(approvalId) => approvalDecision.mutate({ approvalId, decision: "approve" })}
+                      onReject={(approvalId) => approvalDecision.mutate({ approvalId, decision: "reject" })}
+                      isPending={approvalDecision.isPending && approvalDecision.variables?.approvalId === approval.id}
+                      pendingAction={approvalDecision.variables?.decision}
+                    />
+                  ))
+                )}
+              </TabsContent>
+
+              <TabsContent value="activity">
+                <ActivityTab events={relatedActivity} orgPrefix={orgPrefix} />
+              </TabsContent>
+
+              <TabsContent value="comments">
+                <div>
+                  <h2
+                    className="text-sm font-semibold mb-3"
+                    style={{ color: "var(--text-primary)" }}
+                  >
+                    대화 {comments.length > 0 && `(${comments.length})`}
+                  </h2>
+                  <ChatThread caseId={caseData.id} comments={comments} />
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+
+          <aside className="space-y-4">
+            <div
+              className="rounded-2xl border p-4"
+              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}
+            >
+              <div className="mb-3 flex items-center gap-2">
+                <FileText size={14} style={{ color: "var(--color-teal-500)" }} />
+                <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  Case Properties
+                </h2>
+              </div>
+              <CaseProperties
+                case={{
+                  id: caseData.id,
+                  status: caseData.status ?? "backlog",
+                  priority: caseData.priority ?? 4,
+                  type: caseData.type,
+                  severity: caseData.severity,
+                  assigneeAgent: caseData.assignee ?? caseData.agent,
+                  reporter: caseData.reporter ?? caseData.reporterName ?? caseData.reporterId,
+                  studentName: caseData.studentName ?? caseData.student?.name,
+                  createdAt: caseData.createdAt ?? caseData.created_at,
+                  updatedAt: caseData.updatedAt ?? caseData.updated_at,
+                  dueAt: caseData.dueAt ?? caseData.due_at,
+                }}
+                onUpdate={(field, value) => updateCase.mutate({ [field]: value })}
+              />
+            </div>
+
+            <div
+              className="rounded-2xl border p-4"
+              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}
+            >
+              <div className="mb-3 flex items-center gap-2">
+                <MessageSquare size={14} style={{ color: "var(--color-teal-500)" }} />
+                <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  Linked Context
+                </h2>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <div style={{ color: "var(--text-tertiary)" }}>Student</div>
+                  <div style={{ color: "var(--text-primary)" }}>
+                    {caseData.student?.name ?? caseData.studentName ?? caseData.studentId ?? "미연결"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--text-tertiary)" }}>Reporter</div>
+                  <div style={{ color: "var(--text-primary)" }}>
+                    {caseData.reporterName ?? caseData.reporterId ?? "없음"}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--text-tertiary)" }}>Runs</div>
+                  <div style={{ color: "var(--text-primary)" }}>{(caseData.runs ?? []).length}</div>
+                </div>
+                <div>
+                  <div style={{ color: "var(--text-tertiary)" }}>Pending Approval</div>
+                  <div style={{ color: "var(--text-primary)" }}>{pendingApproval ? "있음" : "없음"}</div>
+                </div>
+              </div>
+            </div>
+          </aside>
         </div>
       </div>
     </ScrollArea>

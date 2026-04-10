@@ -267,6 +267,8 @@ export function Sidebar() {
         <NavItem to={`${base}/instructors`} icon={<GraduationCap size={16} />} label="강사 관리" />
         <NavItem to={`${base}/documents`} icon={<BookOpen size={16} />} label="문서" />
         <NavItem to={`${base}/skills`} icon={<Puzzle size={16} />} label="k-skill 레지스트리" />
+        <NavItem to={`${base}/plugins`} icon={<Cpu size={16} />} label="플러그인" />
+        <NavItem to={`${base}/adapters`} icon={<Cog size={16} />} label="어댑터" />
         <NavItem to={`${base}/costs`} icon={<Wallet size={16} />} label="비용" />
         <NavItem to={`${base}/schedule`} icon={<Calendar size={16} />} label="일정" />
         <NavItem to={`${base}/activity`} icon={<Activity size={16} />} label="처리 이력" />
