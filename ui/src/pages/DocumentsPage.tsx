@@ -499,13 +499,13 @@ function NewDocDialog({
 export function DocumentsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
-  const { setPanelContent } = usePanel()
+  const { setPanelContent, openPanel } = usePanel()
   const { addToast } = useToast()
   const { id: routeDocId, orgPrefix } = useParams<{ id?: string; orgPrefix: string }>()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [activeCategory, setActiveCategory] = useState("all")
-  const [activeScope, setActiveScope] = useState<ScopeOption["value"]>("all")
+  const [activeScope, setActiveScope] = useState<ScopeOption["value"]>("knowledge_base")
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
   const [showNewDialog, setShowNewDialog] = useState(false)
   const [localDocs, setLocalDocs] = useState<Document[]>([])
@@ -947,6 +947,10 @@ export function DocumentsPage() {
       }),
     [allDocs.length, caseId, categories.length, displayDoc?.id, projectId],
   )
+
+  useEffect(() => {
+    openPanel()
+  }, [openPanel])
 
   useEffect(() => {
     setPanelContent(panelContent)

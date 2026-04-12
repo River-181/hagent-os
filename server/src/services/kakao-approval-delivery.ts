@@ -2,6 +2,8 @@ import { eq } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { sendKakaoMessage } from "./integrations/kakao-outbound.js"
+import { buildOutboundReplyDraft, getExistingOutboundDelivery } from "./outbound-message-drafts.js"
+import { upsertOutboundDeliveryDocument } from "./outbound-delivery-artifacts.js"
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
@@ -17,19 +19,6 @@ function mergeJson(base: Record<string, unknown>, patch: Record<string, unknown>
     next[key] = value
   }
   return next
-}
-
-function resolveReplyDraft(approval: typeof schema.approvals.$inferSelect) {
-  const payload = isPlainObject(approval.payload) ? approval.payload : {}
-  const decision = isPlainObject(approval.decision) ? approval.decision : {}
-  const sideEffects = isPlainObject(decision.sideEffects) ? decision.sideEffects : {}
-  const kakaoMessage = isPlainObject(sideEffects.kakaoMessage) ? sideEffects.kakaoMessage : {}
-  return (
-    (typeof payload.suggestedReply === "string" && payload.suggestedReply) ||
-    (typeof payload.draft === "string" && payload.draft) ||
-    (typeof kakaoMessage.draft === "string" && kakaoMessage.draft) ||
-    null
-  )
 }
 
 async function recordDeliveryArtifacts(
@@ -79,8 +68,11 @@ async function recordDeliveryArtifacts(
           : `[카카오 회신] 운영자 발송 대기\n\n${input.delivery.draft}`,
   })
 
-  await db.insert(schema.documents).values({
+  await upsertOutboundDeliveryDocument(db, {
     organizationId: input.organizationId,
+    approvalId: input.approval.id,
+    caseId: input.caseRecord.id,
+    opsGroupId: input.caseRecord.opsGroupId,
     title: `${input.caseRecord.identifier} 카카오 회신`,
     body: [
       `# ${input.caseRecord.identifier} 카카오 회신`,
@@ -95,14 +87,8 @@ async function recordDeliveryArtifacts(
     ]
       .filter(Boolean)
       .join("\n"),
-    category: "artifact",
-    tags: [
-      `case:${input.caseRecord.id}`,
-      ...(input.caseRecord.opsGroupId ? [`project:${input.caseRecord.opsGroupId}`] : []),
-      `approval:${input.approval.id}`,
-      "artifact:kakao-reply",
-      `status:${input.delivery.status}`,
-    ],
+    artifactTag: "artifact:kakao-reply",
+    status: input.delivery.status,
   })
 }
 
@@ -123,8 +109,13 @@ export async function processKakaoApprovalDelivery(
   if (!caseRecord) throw new Error("Case not found")
   if (caseRecord.source !== "kakao") throw new Error("Only kakao cases are supported")
 
-  const draft = resolveReplyDraft(approval)
+  const draft = buildOutboundReplyDraft("kakao", approval)
   if (!draft) throw new Error("No Kakao reply draft available")
+
+  const existingDelivery = getExistingOutboundDelivery("kakao", approval)
+  if (existingDelivery?.status === "sent" && String(existingDelivery.draft ?? "") === draft) {
+    return approval
+  }
 
   const delivery = await sendKakaoMessage(db, {
     organizationId: approval.organizationId,

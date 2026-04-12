@@ -17,6 +17,7 @@ interface ApprovalCase {
 interface ApprovalAgent {
   id: string
   name: string
+  agentType?: string
   avatarUrl?: string
 }
 
@@ -111,6 +112,8 @@ export function ApprovalCard({
         : null
   const deliveryStatus = typeof deliveryMessage?.status === "string" ? deliveryMessage.status : null
   const bridge = typeof deliveryMessage?.bridge === "object" && deliveryMessage.bridge ? deliveryMessage.bridge : null
+  const deliveryProvider = typeof deliveryMessage?.provider === "string" ? deliveryMessage.provider : null
+  const automatedDelivery = deliveryMessage?.automated === true
   const replyDraft =
     (typeof deliveryMessage?.draft === "string" && deliveryMessage.draft) ||
     (typeof approval.payload?.draft === "string" && approval.payload.draft) ||
@@ -131,7 +134,11 @@ export function ApprovalCard({
 
   const outboundTone =
     deliveryStatus === "sent"
-      ? { bg: "rgba(34,197,94,0.12)", text: "var(--color-success)", label: "발송 완료" }
+      ? {
+          bg: "rgba(34,197,94,0.12)",
+          text: "var(--color-success)",
+          label: automatedDelivery ? "자동 발송 완료" : "운영자 발송 완료",
+        }
       : deliveryStatus === "failed"
         ? { bg: "rgba(239,68,68,0.12)", text: "var(--color-danger)", label: "발송 실패" }
         : deliveryStatus === "ready_to_send"
@@ -143,7 +150,9 @@ export function ApprovalCard({
       : deliveryStatus === "failed"
         ? `${channelLabel} 자동 발송이 실패했습니다. 채널에서 직접 보낸 뒤 전송 완료 처리로 마감하세요.`
         : deliveryStatus === "sent"
-          ? `${channelLabel} 회신 처리가 완료되었습니다.`
+          ? automatedDelivery
+            ? `${channelLabel} 회신이 자동 발송되었습니다.`
+            : `${channelLabel} 회신이 운영자 확인으로 발송 완료 처리되었습니다.`
           : null
 
   return (
@@ -174,6 +183,10 @@ export function ApprovalCard({
                 type="agent"
                 size="sm"
               />
+              <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                배정 에이전트
+                {approval.agent?.agentType ? ` · ${approval.agent.agentType}` : ""}
+              </p>
               {caseTitle && (
                 <p className="text-sm font-medium mt-2 truncate" style={{ color: "var(--text-primary)" }}>
                   {caseTitle}
@@ -199,7 +212,7 @@ export function ApprovalCard({
       </CardHeader>
 
       <CardContent className="px-4 pb-3">
-        <ApprovalPayloadRenderer payload={approval.payload} type={approval.level} />
+        <ApprovalPayloadRenderer payload={approval.payload} decision={approval.decision} type={approval.level} />
         {deliveryStatus ? (
           <div
             className="mt-3 rounded-2xl border px-3 py-3"
@@ -236,10 +249,13 @@ export function ApprovalCard({
                 {deliveryGuide}
               </p>
             ) : null}
-            {(bridge?.channelName || deliveryMessage?.provider || bridge?.chatUrl || bridge?.channelUrl) ? (
+            {(bridge?.channelName || deliveryProvider || bridge?.chatUrl || bridge?.channelUrl) ? (
               <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
                 {bridge?.channelName ? <span>채널: {bridge.channelName}</span> : null}
-                {deliveryMessage?.provider ? <span>경로: {deliveryMessage.provider}</span> : null}
+                {deliveryProvider ? <span>경로: {deliveryProvider}</span> : null}
+                {deliveryStatus === "sent" ? (
+                  <span>{automatedDelivery ? "자동 발송 성공" : "운영자 발송 확인됨"}</span>
+                ) : null}
                 {bridge?.chatUrl || bridge?.channelUrl ? <span>운영자 브리지 사용 가능</span> : null}
               </div>
             ) : null}

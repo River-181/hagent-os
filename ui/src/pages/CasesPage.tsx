@@ -168,7 +168,7 @@ function CaseRow({
           }}
           disabled={deleting}
           className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--bg-tertiary)]"
-          title="케이스 삭제"
+          title="케이스 숨기기"
         >
           <X size={14} style={{ color: "var(--text-tertiary)" }} />
         </button>
@@ -277,21 +277,23 @@ export function CasesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(selectedOrgId ?? "") })
       queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") })
-      toast?.success("케이스를 삭제했습니다.")
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.list(selectedOrgId ?? "") })
+      queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(selectedOrgId ?? "") })
+      toast?.success("케이스를 숨겼습니다.")
     },
     onError: (error) => {
       if (error instanceof ApiError) {
         const body = error.body as Record<string, unknown> | null
-        const message = typeof body?.error === "string" ? body.error : "케이스 삭제에 실패했습니다."
-        toast?.error(message === "Delete child cases first" ? "서브 케이스를 먼저 삭제해야 합니다." : message)
+        const message = typeof body?.error === "string" ? body.error : "케이스 숨기기에 실패했습니다."
+        toast?.error(message)
         return
       }
-      toast?.error("케이스 삭제에 실패했습니다.")
+      toast?.error("케이스 숨기기에 실패했습니다.")
     },
   })
 
   function handleDeleteCase(caseId: string) {
-    if (!window.confirm("이 케이스를 삭제하시겠습니까? 관련 초안과 승인 기록도 함께 제거됩니다.")) {
+    if (!window.confirm("이 케이스를 숨기시겠습니까? 데이터는 보관되며 목록에서만 제외됩니다.")) {
       return
     }
     deleteCaseMutation.mutate(caseId)

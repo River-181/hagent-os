@@ -14,6 +14,7 @@ import { AgentDetailPage } from "@/pages/AgentDetailPage"
 import { SchedulePage } from "@/pages/SchedulePage"
 import { ActivityPage } from "@/pages/ActivityPage"
 import { SkillsPage } from "@/pages/SkillsPage"
+import { CapabilitiesPage } from "@/pages/CapabilitiesPage"
 import { PluginsPage } from "@/pages/PluginsPage"
 import { AdaptersPage } from "@/pages/AdaptersPage"
 import { SettingsPage } from "@/pages/SettingsPage"
@@ -64,10 +65,13 @@ export function App() {
         <Route path="agents/new" element={<NewAgentPage />} />
         <Route path="agents/:id" element={<AgentDetailPage />} />
         <Route path="org" element={<OrgChartPage />} />
+        <Route path="org-chart" element={<OrgChartPage />} />
         <Route path="schedule" element={<SchedulePage />} />
         <Route path="activity" element={<ActivityPage />} />
         <Route path="skills" element={<SkillsPage />} />
         <Route path="skills/:slug" element={<SkillsPage />} />
+        <Route path="capabilities" element={<CapabilitiesPage />} />
+        <Route path="capabilities/:kind/:slug" element={<CapabilitiesPage />} />
         <Route path="plugins" element={<PluginsPage />} />
         <Route path="adapters" element={<AdaptersPage />} />
         <Route path="settings" element={<SettingsPage />} />

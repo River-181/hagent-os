@@ -16,6 +16,7 @@ export const opsGroups = pgTable("ops_groups", {
   name: text().notNull(),
   description: text(),
   color: text(),
+  archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })

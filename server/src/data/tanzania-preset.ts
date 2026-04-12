@@ -4,6 +4,8 @@ export const TANZANIA_PRESET = {
     { name: "박문법", subject: "중등부 (내신/문법)", phone: "010-2673-1002" },
     { name: "이수능", subject: "고등부 (수능영어/심화독해)", phone: "010-2673-1003" },
     { name: "정토익", subject: "성인부 (비즈니스영어/토익)", phone: "010-2673-1004" },
+    { name: "최상담", subject: "입학상담", phone: "010-2673-1101" },
+    { name: "한운영", subject: "운영", phone: "010-2673-1102" },
   ],
   students: [
     { name: "홍길동", grade: "초5", classGroup: "초등 파닉스", riskScore: 0.2, scheduleTitles: ["초등부 파닉스 기초반", "초등부 기초회화반"], parent: { name: "홍어머니", relation: "모", phone: "010-9000-0001", email: "hong.mom@example.com" } },

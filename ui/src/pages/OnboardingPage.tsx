@@ -97,6 +97,25 @@ const AGENT_PRESETS = [
   },
 ] as const
 
+const DEMO_ACADEMY_PRESET = {
+  institutionName: "Tanzania English Academy",
+  institutionType: "영어학원",
+  institutionSize: "중형",
+  topGoal: "민원 대응 속도와 재원 유지율을 동시에 높이기",
+  description: "탄자니아 영어학원 데모 preset",
+  principalName: "원장",
+  starterProjectName: "운영 시작",
+  setupProjectName: "Academy Setup",
+  initialInstruction: "오늘 들어온 민원과 상담 요청, 이번 주 일정 이슈를 우선순위대로 정리해줘.",
+  studentsImportMode: "preset" as const,
+  studentsCountHint: "48",
+  instructorsCountHint: "6",
+  faqNotes: "자주 묻는 질문은 보강 규정, 환불 정책, 레벨 테스트 예약입니다.",
+  counselingPolicy: "상담 요청은 24시간 이내 1차 답변, 필요시 3일 내 예약 확정",
+  refundPolicy: "환불 문의는 접수 후 법령/약관 기준으로 초안 작성 후 원장 승인",
+  attendancePolicy: "결석 2회 또는 지각 3회 이상 시 보호자 안내와 follow-up 생성",
+}
+
 type StepId = (typeof STEPS)[number]["id"]
 type Mode = "scratch" | "demo"
 
@@ -197,6 +216,36 @@ export function OnboardingPage() {
     })),
   )
 
+  function applyDemoPreset() {
+    setMode("demo")
+    setInstitutionName(DEMO_ACADEMY_PRESET.institutionName)
+    setInstitutionType(DEMO_ACADEMY_PRESET.institutionType)
+    setInstitutionSize(DEMO_ACADEMY_PRESET.institutionSize)
+    setTopGoal(DEMO_ACADEMY_PRESET.topGoal)
+    setDescription(DEMO_ACADEMY_PRESET.description)
+    setPrincipalName(DEMO_ACADEMY_PRESET.principalName)
+    setStarterProjectName(DEMO_ACADEMY_PRESET.starterProjectName)
+    setSetupProjectName(DEMO_ACADEMY_PRESET.setupProjectName)
+    setInitialInstruction(DEMO_ACADEMY_PRESET.initialInstruction)
+    setStudentsImportMode(DEMO_ACADEMY_PRESET.studentsImportMode)
+    setStudentsCountHint(DEMO_ACADEMY_PRESET.studentsCountHint)
+    setInstructorsCountHint(DEMO_ACADEMY_PRESET.instructorsCountHint)
+    setFaqNotes(DEMO_ACADEMY_PRESET.faqNotes)
+    setCounselingPolicy(DEMO_ACADEMY_PRESET.counselingPolicy)
+    setRefundPolicy(DEMO_ACADEMY_PRESET.refundPolicy)
+    setAttendancePolicy(DEMO_ACADEMY_PRESET.attendancePolicy)
+  }
+
+  function applyScratchMode() {
+    setMode("scratch")
+    if (institutionName === DEMO_ACADEMY_PRESET.institutionName) {
+      setInstitutionName("")
+    }
+    if (description === DEMO_ACADEMY_PRESET.description) {
+      setDescription("")
+    }
+  }
+
   const currentStep = STEPS[stepIndex]
   const selectedModel = useMemo(
     () => MODEL_OPTIONS.find((option) => option.value === selectedAdapterType)?.model ?? "gpt-5-codex",
@@ -220,6 +269,17 @@ export function OnboardingPage() {
         }),
     [selectedAdapterType, selectedModel, teamSelections],
   )
+  const selectedPacks = useMemo(() => {
+    const packs = new Set<string>()
+    if (kakaoEnabled || telegramEnabled || smsEnabled || naverEnabled) packs.add("channel-setup-pack")
+    if (kakaoEnabled || telegramEnabled) packs.add("kakao-complaint-pack")
+    if (refundPolicy.trim()) packs.add("compliance-setup-pack")
+    if (refundPolicy.trim()) packs.add("compliance-refund-pack")
+    if (attendancePolicy.trim()) packs.add("schedule-operations-pack")
+    packs.add("document-setup-pack")
+    packs.add("academy-bootstrap-pack")
+    return Array.from(packs)
+  }, [attendancePolicy, kakaoEnabled, naverEnabled, refundPolicy, smsEnabled, telegramEnabled])
 
 
   const bootstrapMutation = useMutation({
@@ -366,7 +426,13 @@ export function OnboardingPage() {
                 <button
                   key={option}
                   type="button"
-                  onClick={() => setMode(option)}
+                  onClick={() => {
+                    if (option === "demo") {
+                      applyDemoPreset()
+                      return
+                    }
+                    applyScratchMode()
+                  }}
                   className="rounded-2xl border px-4 py-4 text-left"
                   style={{
                     borderColor: mode === option ? "var(--color-teal-500)" : "var(--border-default)",
@@ -688,6 +754,21 @@ export function OnboardingPage() {
               <div>setup cases 5개+</div>
               <div>starter project: {starterProjectName}</div>
               <div>model: {selectedModel}</div>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>Capability Packs</div>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {selectedPacks.map((pack) => (
+                <span
+                  key={pack}
+                  className="inline-flex rounded-full px-3 py-1.5 text-xs"
+                  style={{ backgroundColor: "var(--bg-base)", color: "var(--text-secondary)", border: "1px solid var(--border-default)" }}
+                >
+                  {pack}
+                </span>
+              ))}
             </div>
           </div>
         </div>

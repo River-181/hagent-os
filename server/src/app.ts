@@ -10,6 +10,7 @@ import { agentRoutes } from "./routes/agents.js"
 import { approvalRoutes } from "./routes/approvals.js"
 import { activityRoutes } from "./routes/activity.js"
 import { skillRoutes } from "./routes/skills.js"
+import { capabilityRoutes } from "./routes/capabilities.js"
 import { runRoutes } from "./routes/runs.js"
 import { orchestratorRoutes } from "./routes/orchestrator.js"
 import { eventsRoutes } from "./routes/events.js"
@@ -29,6 +30,7 @@ import { agentHireRoutes } from "./routes/agent-hires.js"
 import { pluginRoutes } from "./routes/plugins.js"
 import { adapterRoutes } from "./routes/adapters.js"
 import { messageRoutes } from "./routes/messages.js"
+import { telegramRoutes } from "./routes/telegram.js"
 
 export function createApp(db: Db, config: Config): Express {
   const app = express()
@@ -50,6 +52,7 @@ export function createApp(db: Db, config: Config): Express {
   app.use("/api", approvalRoutes(db))
   app.use("/api", activityRoutes(db))
   app.use("/api/skills", skillRoutes(db))
+  app.use("/api/capabilities", capabilityRoutes(db))
   app.use("/api/runs", runRoutes(db))
   app.use("/api/orchestrator", orchestratorRoutes(db))
   app.use("/api", eventsRoutes(db))
@@ -66,6 +69,7 @@ export function createApp(db: Db, config: Config): Express {
   app.use("/api/plugins", pluginRoutes())
   app.use("/api/adapters", adapterRoutes(db))
   app.use("/api", messageRoutes(db))
+  app.use("/api", telegramRoutes(db))
   app.use("/api/webhook", webhookRoutes(db))
   app.use("/api/channels", webhookRoutes(db))
   app.use("/api", agentHireRoutes(db))

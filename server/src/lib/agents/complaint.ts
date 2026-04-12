@@ -59,10 +59,20 @@ const LEGAL_INQUIRY_SYSTEM_PROMPT = `당신은 학원 운영자의 질문을 정
   "requiresApproval": false,
   "reasoning": "이 답변을 구성한 이유",
   "suggestedActions": ["후속 조치 1", "후속 조치 2"]
-}`
+}
+
+## 추가 규칙
+- 입력이 너무 짧거나 의미가 불명확하면 추측하지 말고, 학원 관련 문의 내용을 다시 알려 달라고 짧게 안내합니다.
+- 학원 운영과 무관하거나 맥락이 어긋난 요청이면 정중히 범위를 안내하고, 수강/상담/일정/결제/환불 중 무엇을 원하는지 다시 묻습니다.
+- 답변은 3문장을 넘기지 말고, 과장된 추론이나 장황한 설명을 하지 마세요.`
 
 export async function runComplaintAgent(input: ComplaintAgentInput): Promise<ComplaintAgentOutput> {
   const isInquiry = input.caseType === "inquiry" || input.caseKind === "legal-inquiry" || input.caseKind === "quick-ask"
+  const shouldDefaultToApproval =
+    input.caseKind === "counseling"
+      || input.caseKind === "payment"
+      || input.caseKind === "campaign-request"
+      || !isInquiry
   const studentInfo = input.studentId
     ? `연관 학생 ID: ${input.studentId}`
     : "연관 학생 정보 없음"
@@ -135,7 +145,7 @@ ${legalContextBlock}
         urgency: parsed.urgency,
         summary: parsed.summary,
         suggestedReply: parsed.suggestedReply,
-        requiresApproval: parsed.requiresApproval ?? !isInquiry,
+        requiresApproval: shouldDefaultToApproval || parsed.requiresApproval === true,
         legalBasis: legalContext
           ? {
               source: legalContext.source,
@@ -159,7 +169,7 @@ ${legalContextBlock}
         suggestedReply: isInquiry
           ? "관련 운영 기준과 법령 근거를 확인한 뒤 핵심만 다시 정리해 드리겠습니다."
           : "안녕하세요. 소중한 의견을 주셔서 감사합니다. 담당자가 검토 후 빠른 시일 내에 연락드리겠습니다.",
-        requiresApproval: !isInquiry,
+        requiresApproval: shouldDefaultToApproval,
         legalBasis: legalContext
           ? {
               source: legalContext.source,

@@ -1,0 +1,51 @@
+{
+  "id": "hagent/academy-bootstrap-pack",
+  "slug": "academy-bootstrap-pack",
+  "namespace": "hagent",
+  "displayName": "학원 온보딩 Bootstrap Pack",
+  "version": "0.1.0",
+  "summary": "기관 기본 정보, 채널, 정책, 기본 팀, starter project와 setup case 생성을 한 번에 시작하는 onboarding pack입니다.",
+  "packageType": "composite",
+  "capabilityType": "system",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/academy-bootstrap-pack"
+  },
+  "compatibility": {
+    "agentTypes": ["orchestrator", "complaint", "scheduler", "retention"],
+    "adapters": ["codex_qauth", "codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "composite",
+    "requiredIntegrations": ["kakao-channel", "google-calendar-mcp"],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "packIncludes": {
+    "skills": [
+      "complaint-classifier",
+      "korean-tone-guide",
+      "schedule-manager",
+      "student-360-view",
+      "student-data-import"
+    ],
+    "integrations": [
+      "kakao-channel",
+      "google-calendar-mcp"
+    ],
+    "runtimes": [
+      "codex_qauth",
+      "codex_local",
+      "claude_local"
+    ]
+  },
+  "recommendedAgents": ["orchestrator", "complaint", "scheduler", "retention"],
+  "launchEntrypoints": ["onboarding", "project", "agent"]
+}

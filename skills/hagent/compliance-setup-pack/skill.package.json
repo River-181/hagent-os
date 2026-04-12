@@ -1,0 +1,38 @@
+{
+  "id": "hagent/compliance-setup-pack",
+  "slug": "compliance-setup-pack",
+  "namespace": "hagent",
+  "displayName": "법령/환불 Setup Pack",
+  "version": "0.1.0",
+  "summary": "환불 정책, 상담 정책, 학원 운영 규정과 법령 점검 경로를 초기 설정하는 setup pack입니다.",
+  "packageType": "composite",
+  "capabilityType": "system",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/compliance-setup-pack"
+  },
+  "compatibility": {
+    "agentTypes": ["orchestrator", "complaint", "finance"],
+    "adapters": ["codex_qauth", "codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "composite",
+    "requiredIntegrations": ["korean-law-mcp"],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "packIncludes": {
+    "skills": ["refund-calculator", "korean-tone-guide"],
+    "integrations": ["korean-law-mcp"],
+    "runtimes": ["codex_qauth", "codex_local", "claude_local"]
+  },
+  "recommendedAgents": ["orchestrator", "complaint", "finance"],
+  "launchEntrypoints": ["onboarding", "project", "case"]
+}

@@ -1,8 +1,8 @@
-import { X } from "lucide-react"
 import { usePanel } from "@/context/PanelContext"
+import { X } from "lucide-react"
 
 export function PropertiesPanel() {
-  const { panelContent, panelVisible, togglePanel } = usePanel()
+  const { panelContent, panelVisible, closePanel } = usePanel()
 
   if (!panelVisible) return null
 
@@ -25,14 +25,16 @@ export function PropertiesPanel() {
           className="text-sm font-semibold"
           style={{ color: "var(--text-primary)" }}
         >
-          운영 요약
+          Properties
         </span>
         <button
-          onClick={togglePanel}
-          className="p-1 rounded-md hover:bg-[var(--bg-tertiary)] transition-colors"
-          aria-label="패널 닫기"
+          type="button"
+          onClick={closePanel}
+          className="rounded-md p-1 transition-colors hover:bg-[var(--bg-secondary)]"
+          aria-label="Close properties panel"
+          style={{ color: "var(--text-tertiary)" }}
         >
-          <X size={16} style={{ color: "var(--text-tertiary)" }} />
+          <X size={16} />
         </button>
       </div>
 
@@ -44,7 +46,7 @@ export function PropertiesPanel() {
               아직 선택된 항목이 없습니다.
             </p>
             <p className="text-sm leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
-              학생, 일정, 케이스, 문서, AI 팀을 선택하면 운영 요약과 바로 실행할 작업이 여기에 표시됩니다.
+              케이스, 프로젝트, 학생, 일정, AI 팀을 선택하면 연결 속성과 바로 수정할 항목이 여기에 표시됩니다.
             </p>
           </div>
         )}

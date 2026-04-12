@@ -57,6 +57,7 @@ export const cases = pgTable("cases", {
   agentDraft: text("agent_draft"),
   source: text(), // "manual" | "kakao" | "sms" | "web" | null
   metadata: jsonb(),
+  archivedAt: timestamp("archived_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 })

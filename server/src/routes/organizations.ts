@@ -371,6 +371,10 @@ export function organizationRoutes(db: Db): Router {
       // FK 역순 삭제
       await db.delete(schema.activityEvents).where(eq(schema.activityEvents.organizationId, oid))
       await db.delete(schema.notifications).where(eq(schema.notifications.organizationId, oid))
+      await db.delete(schema.tokenUsageEvents).where(eq(schema.tokenUsageEvents.organizationId, oid))
+      await db.delete(schema.tokenBudgets).where(eq(schema.tokenBudgets.organizationId, oid))
+      await db.delete(schema.skillSyncJobs).where(eq(schema.skillSyncJobs.organizationId, oid))
+      await db.delete(schema.organizationSkills).where(eq(schema.organizationSkills.organizationId, oid))
       await db.delete(schema.approvals).where(eq(schema.approvals.organizationId, oid))
       await db.delete(schema.wakeupRequests).where(eq(schema.wakeupRequests.organizationId, oid))
       await db.delete(schema.agentRuns).where(eq(schema.agentRuns.organizationId, oid))
@@ -391,6 +395,10 @@ export function organizationRoutes(db: Db): Router {
       await db.delete(schema.opsGroups).where(eq(schema.opsGroups.organizationId, oid))
       await db.delete(schema.routines).where(eq(schema.routines.organizationId, oid))
       await db.delete(schema.documents).where(eq(schema.documents.organizationId, oid))
+      const orgAgents = await db.select({ id: schema.agents.id }).from(schema.agents).where(eq(schema.agents.organizationId, oid))
+      for (const agent of orgAgents) {
+        await db.delete(schema.agentSkills).where(eq(schema.agentSkills.agentId, agent.id))
+      }
       await db.delete(schema.agents).where(eq(schema.agents.organizationId, oid))
       await db.delete(schema.organizations).where(eq(schema.organizations.id, oid))
 

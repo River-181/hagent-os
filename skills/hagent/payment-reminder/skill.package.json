@@ -1,0 +1,32 @@
+{
+  "id": "hagent/payment-reminder",
+  "slug": "payment-reminder",
+  "namespace": "hagent",
+  "displayName": "결제 안내 및 리마인더",
+  "version": "0.1.0",
+  "summary": "결제 예정, 미납, 연체 상황에 맞는 안내 문구와 후속 조치를 만듭니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/payment-reminder"
+  },
+  "compatibility": {
+    "agentTypes": ["operations", "complaint", "finance"],
+    "adapters": ["codex_qauth", "codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": ["kakao-channel", "solapi"],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "recommendedAgents": ["operations", "finance"],
+  "launchEntrypoints": ["case", "project"]
+}

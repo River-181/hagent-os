@@ -53,6 +53,8 @@ export const instructors = pgTable("instructors", {
     .references(() => organizations.id),
   name: text().notNull(),
   subject: text().notNull(),
+  // role: "teacher" | "staff" | "hybrid"
+  role: text().notNull().default("teacher"),
   // status: "active" | "inactive" | "on_leave" — text for MVP flexibility
   status: text().notNull().default("active"),
   phone: text(),

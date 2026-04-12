@@ -1,5 +1,5 @@
 import { Router } from "express"
-import { eq, desc, inArray } from "drizzle-orm"
+import { and, desc, eq, inArray, isNull } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { createCaseWithRetry } from "../lib/case-create.js"
@@ -7,6 +7,7 @@ import { executeAgentRun } from "../services/execution.js"
 import { buildRunUsageSummary } from "../services/costs.js"
 import { enrichDocuments } from "../services/document-links.js"
 import { buildAgentSkillRuntimeContext } from "../services/skill-runtime.js"
+import { getApprovalLevelForAgentType, inferCaseType } from "../services/orchestration.js"
 
 function getCaseMetadata(caseRecord: typeof schema.cases.$inferSelect) {
   return caseRecord.metadata && typeof caseRecord.metadata === "object" && !Array.isArray(caseRecord.metadata)
@@ -116,6 +117,39 @@ async function pickQuickAskAgent(db: Db, organizationId: string, question: strin
   )
 }
 
+function agentAllowsAutoRun(agent: typeof schema.agents.$inferSelect) {
+  const config =
+    agent.adapterConfig && typeof agent.adapterConfig === "object" && !Array.isArray(agent.adapterConfig)
+      ? (agent.adapterConfig as Record<string, unknown>)
+      : {}
+  return config.autoRun !== false
+}
+
+async function resolveAutoRunAgent(
+  db: Db,
+  organizationId: string,
+  caseType: (typeof schema.caseTypeEnum.enumValues)[number],
+  assigneeAgentId?: string,
+) {
+  const agents = await db
+    .select()
+    .from(schema.agents)
+    .where(eq(schema.agents.organizationId, organizationId))
+
+  const byId = assigneeAgentId
+    ? agents.find((agent) => agent.id === assigneeAgentId) ?? null
+    : null
+  if (byId && agentAllowsAutoRun(byId)) {
+    return byId
+  }
+
+  return (
+    agents.find((agent) => agentAllowsAutoRun(agent) && agent.agentType === "complaint" && (caseType === "refund" || caseType === "inquiry"))
+    ?? agents.find((agent) => agentAllowsAutoRun(agent) && inferCaseType(agent.agentType) === caseType)
+    ?? null
+  )
+}
+
 export function caseRoutes(db: Db): Router {
   const router = Router()
 
@@ -124,7 +158,10 @@ export function caseRoutes(db: Db): Router {
       const cases = await db
         .select()
         .from(schema.cases)
-        .where(eq(schema.cases.organizationId, req.params.orgId))
+        .where(and(
+          eq(schema.cases.organizationId, req.params.orgId),
+          isNull(schema.cases.archivedAt),
+        ))
         .orderBy(desc(schema.cases.createdAt))
 
       if (cases.length === 0) {
@@ -227,7 +264,21 @@ export function caseRoutes(db: Db): Router {
         metadata: (metadata ?? {}) as Record<string, unknown>,
       })
 
-      res.status(201).json(created)
+      const autoRunAgent = await resolveAutoRunAgent(db, req.params.orgId, type, assigneeAgentId)
+      let runId: string | null = null
+
+      if (autoRunAgent) {
+        const execution = await executeAgentRun(db, {
+          organizationId: req.params.orgId,
+          agentId: autoRunAgent.id,
+          caseId: created.id,
+          agentType: autoRunAgent.agentType,
+          approvalLevel: getApprovalLevelForAgentType(autoRunAgent.agentType),
+        })
+        runId = execution.runId
+      }
+
+      res.status(201).json({ ...created, runId, autoRunAgentId: autoRunAgent?.id ?? null })
     } catch (err) {
       res.status(500).json({ error: "Failed to create case" })
     }
@@ -400,6 +451,7 @@ export function caseRoutes(db: Db): Router {
         "severity",
         "status",
         "priority",
+        "opsGroupId",
         "reporterId",
         "studentId",
         "assigneeAgentId",
@@ -452,63 +504,29 @@ export function caseRoutes(db: Db): Router {
         return
       }
 
-      const childCases = (await db
-        .select()
-        .from(schema.cases)
-        .where(eq(schema.cases.organizationId, caseRecord.organizationId)))
-        .filter((item: typeof schema.cases.$inferSelect) => String(getCaseMetadata(item).parentCaseId ?? "") === caseRecord.id)
-
-      if (childCases.length > 0) {
-        res.status(409).json({ error: "Delete child cases first", childCaseCount: childCases.length })
+      if (caseRecord.archivedAt) {
+        res.status(204).end()
         return
       }
 
-      const relatedRuns = await db
-        .select()
-        .from(schema.agentRuns)
-        .where(eq(schema.agentRuns.caseId, caseRecord.id))
-
-      const runIds = relatedRuns.map((item) => item.id)
-
-      if (runIds.length > 0) {
-        await db.delete(schema.tokenUsageEvents).where(inArray(schema.tokenUsageEvents.agentRunId, runIds))
-      }
-
-      await db.delete(schema.caseComments).where(eq(schema.caseComments.caseId, caseRecord.id))
-      await db.delete(schema.approvals).where(eq(schema.approvals.caseId, caseRecord.id))
-      await db.delete(schema.wakeupRequests).where(eq(schema.wakeupRequests.caseId, caseRecord.id))
-      await db.delete(schema.notifications).where(eq(schema.notifications.entityId, caseRecord.id))
-      await db.delete(schema.activityEvents).where(eq(schema.activityEvents.entityId, caseRecord.id))
-
-      const documents = (await db
-        .select()
-        .from(schema.documents)
-        .where(eq(schema.documents.organizationId, caseRecord.organizationId)))
-        .filter((item: typeof schema.documents.$inferSelect) => Array.isArray(item.tags) && item.tags.includes(`case:${caseRecord.id}`))
-
-      if (documents.length > 0) {
-        await db.delete(schema.documents).where(inArray(schema.documents.id, documents.map((item) => item.id)))
-      }
-
-      if (runIds.length > 0) {
-        await db.delete(schema.agentRuns).where(inArray(schema.agentRuns.id, runIds))
-      }
-
-      await db.delete(schema.cases).where(eq(schema.cases.id, caseRecord.id))
+      const archivedAt = new Date()
+      await db
+        .update(schema.cases)
+        .set({ archivedAt, updatedAt: archivedAt })
+        .where(eq(schema.cases.id, caseRecord.id))
 
       await db.insert(schema.activityEvents).values({
         organizationId: caseRecord.organizationId,
         actorType: "user",
         actorId: "cases",
-        action: "case.deleted",
+        action: "case.archived",
         entityType: "case",
         entityId: caseRecord.id,
         entityTitle: caseRecord.title,
         metadata: {
           identifier: caseRecord.identifier,
           type: caseRecord.type,
-          deletedRunCount: runIds.length,
-          deletedDocumentCount: documents.length,
+          archivedAt: archivedAt.toISOString(),
         } as Record<string, unknown>,
       })
 
@@ -525,7 +543,7 @@ export function caseRoutes(db: Db): Router {
         .from(schema.cases)
         .where(eq(schema.cases.id, req.params.id))
 
-      if (!caseRecord) {
+      if (!caseRecord || caseRecord.archivedAt) {
         res.status(404).json({ error: "Case not found" })
         return
       }
@@ -577,7 +595,8 @@ export function caseRoutes(db: Db): Router {
         .from(schema.cases)
         .where(eq(schema.cases.organizationId, caseRecord.organizationId))
         .orderBy(desc(schema.cases.createdAt)))
-        .filter((item: typeof schema.cases.$inferSelect) => String(getCaseMetadata(item).parentCaseId ?? "") === caseRecord.id)
+        .filter((item: typeof schema.cases.$inferSelect) =>
+          !item.archivedAt && String(getCaseMetadata(item).parentCaseId ?? "") === caseRecord.id)
 
       const documents = (await db
         .select()
@@ -741,7 +760,7 @@ export function caseRoutes(db: Db): Router {
   router.get("/cases/:id/child-cases", async (req, res) => {
     try {
       const [parentCase] = await db.select().from(schema.cases).where(eq(schema.cases.id, req.params.id))
-      if (!parentCase) {
+      if (!parentCase || parentCase.archivedAt) {
         res.status(404).json({ error: "Case not found" })
         return
       }
@@ -751,7 +770,8 @@ export function caseRoutes(db: Db): Router {
         .from(schema.cases)
         .where(eq(schema.cases.organizationId, parentCase.organizationId))
         .orderBy(desc(schema.cases.createdAt)))
-        .filter((item: typeof schema.cases.$inferSelect) => String(getCaseMetadata(item).parentCaseId ?? "") === parentCase.id)
+        .filter((item: typeof schema.cases.$inferSelect) =>
+          !item.archivedAt && String(getCaseMetadata(item).parentCaseId ?? "") === parentCase.id)
 
       res.json(childCases)
     } catch {

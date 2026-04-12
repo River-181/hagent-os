@@ -21,6 +21,10 @@ export const queryKeys = {
     all: ["skills"] as const,
     detail: (slug: string) => ["skills", slug] as const,
   },
+  capabilities: {
+    all: ["capabilities"] as const,
+    detail: (kind: string, slug: string) => ["capabilities", kind, slug] as const,
+  },
   plugins: {
     all: ["plugins"] as const,
   },

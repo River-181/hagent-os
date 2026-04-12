@@ -170,7 +170,7 @@ export function ApprovalDetailPage() {
         <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
           요청 내용
         </h2>
-        <ApprovalPayloadRenderer payload={approval.payload} type={level} />
+        <ApprovalPayloadRenderer payload={approval.payload} decision={approval.decision} type={level} />
 
         {/* Raw payload toggle */}
         <div>

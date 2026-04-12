@@ -1,6 +1,6 @@
 // v0.3.0
 import { Router } from "express"
-import { eq } from "drizzle-orm"
+import { and, eq, isNull } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { createCaseWithRetry } from "../lib/case-create.js"
@@ -57,21 +57,74 @@ function createProjectBreakdown(instruction: string) {
   }
 }
 
+function deriveProjectTrack(input: {
+  name?: string | null
+  description?: string | null
+  sourceInstruction?: string | null
+  scenarioKey?: string | null
+}) {
+  const name = String(input.name ?? "")
+  const description = String(input.description ?? "")
+  const sourceInstruction = String(input.sourceInstruction ?? "")
+  const scenarioKey = String(input.scenarioKey ?? "")
+  const normalized = `${name} ${description} ${sourceInstruction} ${scenarioKey}`.toLowerCase()
+
+  if (normalized.includes("policy") || normalized.includes("정책") || normalized.includes("환불")) {
+    return {
+      key: "policy",
+      label: "운영 정책 정비",
+      summary: "환불·상담·보강 기준을 직원용 플레이북과 안내문으로 정리하는 운영 묶음",
+    }
+  }
+
+  if (normalized.includes("promotion") || normalized.includes("프로모션") || normalized.includes("캠페인")) {
+    return {
+      key: "promotion",
+      label: "프로모션 실행",
+      summary: "학부모 안내, 메시지, 일정, 랜딩 카피를 묶어서 준비하는 마케팅 프로젝트",
+    }
+  }
+
+  if (normalized.includes("민원") || normalized.includes("complaint")) {
+    return {
+      key: "complaint-ops",
+      label: "민원 운영",
+      summary: "민원 응답, 승인, 후속 조치를 한 흐름으로 관리하는 운영 묶음",
+    }
+  }
+
+  return {
+    key: "general",
+    label: "일반 운영 프로젝트",
+    summary: "기관 운영 과제를 케이스와 산출물로 묶어 실행하는 기본 프로젝트",
+  }
+}
+
 export function projectRoutes(db: Db): Router {
   const router = Router()
 
   router.get("/organizations/:orgId/projects", async (req, res) => {
     try {
       const projects = await db.select().from(schema.opsGroups)
-        .where(eq(schema.opsGroups.organizationId, req.params.orgId))
+        .where(and(
+          eq(schema.opsGroups.organizationId, req.params.orgId),
+          isNull(schema.opsGroups.archivedAt),
+        ))
       // Get case counts per project
       const cases = await db.select().from(schema.cases)
-        .where(eq(schema.cases.organizationId, req.params.orgId))
+        .where(and(
+          eq(schema.cases.organizationId, req.params.orgId),
+          isNull(schema.cases.archivedAt),
+        ))
 
       const enriched = projects.map((p: typeof schema.opsGroups.$inferSelect) => ({
         ...p,
         caseCount: cases.filter((c: typeof schema.cases.$inferSelect) => c.opsGroupId === p.id).length,
         activeCases: cases.filter((c: typeof schema.cases.$inferSelect) => c.opsGroupId === p.id && c.status !== "done").length,
+        projectTrack: deriveProjectTrack({
+          name: p.name,
+          description: p.description,
+        }),
       }))
       res.json(enriched)
     } catch (err) {
@@ -83,10 +136,13 @@ export function projectRoutes(db: Db): Router {
     try {
       const [project] = await db.select().from(schema.opsGroups)
         .where(eq(schema.opsGroups.id, req.params.id))
-      if (!project) { res.status(404).json({ error: "Not found" }); return }
+      if (!project || project.archivedAt) { res.status(404).json({ error: "Not found" }); return }
 
       const cases = await db.select().from(schema.cases)
-        .where(eq(schema.cases.opsGroupId, req.params.id))
+        .where(and(
+          eq(schema.cases.opsGroupId, req.params.id),
+          isNull(schema.cases.archivedAt),
+        ))
 
       const documents = (await db.select().from(schema.documents)
         .where(eq(schema.documents.organizationId, project.organizationId)))
@@ -107,6 +163,14 @@ export function projectRoutes(db: Db): Router {
       const recommendedRoles = Array.isArray(creationMetadata.recommendedRoles)
         ? creationMetadata.recommendedRoles.filter((item: unknown): item is string => typeof item === "string")
         : []
+      const scenarioKey = typeof creationMetadata.scenarioKey === "string" ? creationMetadata.scenarioKey : null
+      const sourceInstruction = typeof creationMetadata.instruction === "string" ? creationMetadata.instruction : null
+      const projectTrack = deriveProjectTrack({
+        name: project.name,
+        description: project.description,
+        sourceInstruction,
+        scenarioKey,
+      })
 
       const goals = await db.select().from(schema.opsGoals)
         .where(eq(schema.opsGoals.opsGroupId, req.params.id))
@@ -117,7 +181,9 @@ export function projectRoutes(db: Db): Router {
         documents: enrichedDocuments,
         goals,
         recommendedRoles,
-        sourceInstruction: typeof creationMetadata.instruction === "string" ? creationMetadata.instruction : null,
+        sourceInstruction,
+        scenarioKey,
+        projectTrack,
       })
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch project" })
@@ -218,6 +284,51 @@ export function projectRoutes(db: Db): Router {
       })
     } catch {
       res.status(500).json({ error: "Failed to create project from instruction" })
+    }
+  })
+
+  router.post("/projects/:id/archive", async (req, res) => {
+    try {
+      const [project] = await db
+        .select()
+        .from(schema.opsGroups)
+        .where(eq(schema.opsGroups.id, req.params.id))
+
+      if (!project) {
+        res.status(404).json({ error: "Project not found" })
+        return
+      }
+
+      if (project.archivedAt) {
+        res.status(204).end()
+        return
+      }
+
+      const archivedAt = new Date()
+      await db
+        .update(schema.opsGroups)
+        .set({
+          archivedAt,
+          updatedAt: archivedAt,
+        })
+        .where(eq(schema.opsGroups.id, project.id))
+
+      await db.insert(schema.activityEvents).values({
+        organizationId: project.organizationId,
+        actorType: "user",
+        actorId: "projects",
+        action: "project.archived",
+        entityType: "project",
+        entityId: project.id,
+        entityTitle: project.name,
+        metadata: {
+          archivedAt: archivedAt.toISOString(),
+        } as Record<string, unknown>,
+      })
+
+      res.status(204).end()
+    } catch {
+      res.status(500).json({ error: "Failed to archive project" })
     }
   })
 

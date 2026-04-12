@@ -1,0 +1,33 @@
+{
+  "id": "hagent/approval-flow-designer",
+  "slug": "approval-flow-designer",
+  "namespace": "hagent",
+  "displayName": "승인 흐름 설계기",
+  "version": "0.1.0",
+  "summary": "민감한 발송, 환불, 정책 변경, 문서 승인 같은 업무의 승인 경로를 설계합니다.",
+  "packageType": "builtin",
+  "capabilityType": "system",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/approval-flow-designer"
+  },
+  "compatibility": {
+    "agentTypes": ["orchestrator", "complaint", "finance", "operations"],
+    "adapters": ["codex_qauth", "codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "recommendedAgents": ["orchestrator", "complaint", "finance"],
+  "launchEntrypoints": ["case", "project", "onboarding"]
+}

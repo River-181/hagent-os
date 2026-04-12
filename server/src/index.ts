@@ -6,6 +6,7 @@ import detectPort from "detect-port"
 import pino from "pino"
 import { loadConfig } from "./config.js"
 import { createApp } from "./app.js"
+import { startTelegramInboundPolling } from "./services/telegram-inbound-sync.js"
 
 const logger = pino({ level: "info" })
 
@@ -60,6 +61,8 @@ async function main() {
   const db = createDb(connectionString)
   logger.info("Database connection established")
 
+  const stopTelegramPolling = startTelegramInboundPolling(db)
+
   // Push schema to DB (create tables if they don't exist)
   try {
     const { default: postgres } = await import("postgres")
@@ -85,6 +88,7 @@ async function main() {
 
   const shutdown = () => {
     logger.info("Shutting down server...")
+    stopTelegramPolling()
     server.close(() => {
       process.exit(0)
     })

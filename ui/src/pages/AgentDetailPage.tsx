@@ -1837,7 +1837,7 @@ function BudgetTab({ agent }: { agent: any }) {
 export function AgentDetailPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
-  const { setPanelContent } = usePanel()
+  const { setPanelContent, openPanel } = usePanel()
   const { orgPrefix, id } = useParams<{ orgPrefix: string; id: string }>()
   const [activeTab, setActiveTab] = useState<"overview" | "instructions" | "skills" | "settings" | "history" | "budget">("overview")
 
@@ -1919,6 +1919,10 @@ export function AgentDetailPage() {
   const lastRunStartedAt = agentRuns[0]?.startedAt ?? agentRuns[0]?.createdAt ?? ""
   const budgetUsed = agent?.costUsed ?? agent?.cost_used ?? 0
   const budgetLimit = agent?.costLimit ?? agent?.cost_limit ?? 0
+
+  useEffect(() => {
+    openPanel()
+  }, [openPanel])
 
   useEffect(() => {
     if (!agentId) {

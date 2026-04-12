@@ -15,6 +15,48 @@
       "when": 1775809294428,
       "tag": "0001_serious_mojo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775810400000,
+      "tag": "0002_education_schema_v2",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775810500000,
+      "tag": "0003_skill_platform_v1",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775810600000,
+      "tag": "0004_agents_reports_to",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775810700000,
+      "tag": "0005_case_identifier_unique",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1775995200000,
+      "tag": "0006_instructor_roles",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1776000000000,
+      "tag": "0007_archive_fields",
+      "breakpoints": true
     }
   ]
 }

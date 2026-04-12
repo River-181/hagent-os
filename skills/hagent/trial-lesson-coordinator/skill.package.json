@@ -1,0 +1,32 @@
+{
+  "id": "hagent/trial-lesson-coordinator",
+  "slug": "trial-lesson-coordinator",
+  "namespace": "hagent",
+  "displayName": "체험수업 코디네이터",
+  "version": "0.1.0",
+  "summary": "체험수업 문의를 수집하고 일정, 안내, 후속 상담까지 연결합니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/trial-lesson-coordinator"
+  },
+  "compatibility": {
+    "agentTypes": ["counseling", "scheduler", "complaint"],
+    "adapters": ["codex_qauth", "codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": ["google-calendar-mcp", "kakao-channel"],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "recommendedAgents": ["counseling", "scheduler"],
+  "launchEntrypoints": ["case", "project"]
+}

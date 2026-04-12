@@ -1,0 +1,33 @@
+{
+  "id": "hagent/agent-runtime-checker",
+  "slug": "agent-runtime-checker",
+  "namespace": "hagent",
+  "displayName": "에이전트 런타임 점검기",
+  "version": "0.1.0",
+  "summary": "에이전트 실행 전 adapter, model, env, integration readiness를 점검합니다.",
+  "packageType": "builtin",
+  "capabilityType": "system",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/agent-runtime-checker"
+  },
+  "compatibility": {
+    "agentTypes": ["orchestrator"],
+    "adapters": ["codex_qauth", "codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "recommendedAgents": ["orchestrator"],
+  "launchEntrypoints": ["agent", "case", "onboarding"]
+}

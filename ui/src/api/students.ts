@@ -11,6 +11,7 @@ export const instructorsApi = {
   create: (orgId: string, data: {
     name: string
     subject: string
+    role?: string
     phone?: string
     email?: string
     status?: string
@@ -18,6 +19,7 @@ export const instructorsApi = {
   update: (id: string, data: {
     name?: string
     subject?: string
+    role?: string
     phone?: string
     email?: string
     status?: string

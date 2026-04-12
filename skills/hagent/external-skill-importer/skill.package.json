@@ -1,0 +1,33 @@
+{
+  "id": "hagent/external-skill-importer",
+  "slug": "external-skill-importer",
+  "namespace": "hagent",
+  "displayName": "외부 스킬 가져오기",
+  "version": "0.1.0",
+  "summary": "외부 GitHub 스킬과 MCP 소스를 curated upstream 자산으로 등록하고 포크 기준을 정리합니다.",
+  "packageType": "builtin",
+  "capabilityType": "system",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/external-skill-importer"
+  },
+  "compatibility": {
+    "agentTypes": ["orchestrator", "operations"],
+    "adapters": ["codex_qauth", "codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "recommendedAgents": ["orchestrator", "operations"],
+  "launchEntrypoints": ["onboarding", "project", "agent"]
+}

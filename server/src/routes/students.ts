@@ -3,6 +3,7 @@ import { Router } from "express"
 import { eq } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
+import { normalizeInstructorRole } from "../lib/instructor-roles.js"
 
 function maskPhone(phone: string | null | undefined): string {
   if (!phone) return ""
@@ -70,6 +71,13 @@ function buildStudentPayload(student: typeof schema.students.$inferSelect, paren
   }
 }
 
+function buildInstructorPayload(instructor: typeof schema.instructors.$inferSelect) {
+  return {
+    ...instructor,
+    role: normalizeInstructorRole(instructor.role, instructor.subject),
+  }
+}
+
 export function studentRoutes(db: Db): Router {
   const router = Router()
 
@@ -81,10 +89,10 @@ export function studentRoutes(db: Db): Router {
       const parents = await db.select().from(schema.parents)
         .where(eq(schema.parents.organizationId, req.params.orgId))
 
-      const enriched = students.map((student) =>
+      const enriched = students.map((student: typeof schema.students.$inferSelect) =>
         buildStudentPayload(
           student,
-          parents.filter((parent) => parent.studentId === student.id),
+          parents.filter((parent: typeof schema.parents.$inferSelect) => parent.studentId === student.id),
         ),
       )
       res.json(enriched)
@@ -173,7 +181,7 @@ export function studentRoutes(db: Db): Router {
     try {
       const instructors = await db.select().from(schema.instructors)
         .where(eq(schema.instructors.organizationId, req.params.orgId))
-      res.json(instructors)
+      res.json(instructors.map(buildInstructorPayload))
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch instructors" })
     }
@@ -295,7 +303,7 @@ export function studentRoutes(db: Db): Router {
   router.post("/organizations/:orgId/instructors", async (req, res) => {
     try {
       const { orgId } = req.params
-      const { name, subject, phone, email, status } = req.body
+      const { name, subject, phone, email, status, role } = req.body
 
       if (!name) {
         res.status(400).json({ error: "name required" })
@@ -312,13 +320,14 @@ export function studentRoutes(db: Db): Router {
           organizationId: orgId,
           name,
           subject,
+          role: normalizeInstructorRole(role, subject),
           phone: phone ?? null,
           email: email ?? null,
           status: status ?? "active",
         })
         .returning()
 
-      res.status(201).json(instructor)
+      res.status(201).json(buildInstructorPayload(instructor))
     } catch (err) {
       res.status(500).json({ error: "Failed to create instructor" })
     }
@@ -327,13 +336,26 @@ export function studentRoutes(db: Db): Router {
   // Update instructor
   router.patch("/instructors/:id", async (req, res) => {
     try {
-      const { name, subject, phone, email, status } = req.body
+      const { name, subject, phone, email, status, role } = req.body
+      const [existing] = await db
+        .select()
+        .from(schema.instructors)
+        .where(eq(schema.instructors.id, req.params.id))
+
+      if (!existing) {
+        res.status(404).json({ error: "Instructor not found" })
+        return
+      }
+
       const updateData: Record<string, unknown> = {}
       if (name !== undefined) updateData.name = name
       if (subject !== undefined) updateData.subject = subject
       if (phone !== undefined) updateData.phone = phone
       if (email !== undefined) updateData.email = email
       if (status !== undefined) updateData.status = status
+      if (role !== undefined || subject !== undefined) {
+        updateData.role = normalizeInstructorRole(role, subject ?? existing.subject)
+      }
 
       const [instructor] = await db
         .update(schema.instructors)
@@ -341,12 +363,7 @@ export function studentRoutes(db: Db): Router {
         .where(eq(schema.instructors.id, req.params.id))
         .returning()
 
-      if (!instructor) {
-        res.status(404).json({ error: "Instructor not found" })
-        return
-      }
-
-      res.json(instructor)
+      res.json(buildInstructorPayload(instructor))
     } catch (err) {
       res.status(500).json({ error: "Failed to update instructor" })
     }

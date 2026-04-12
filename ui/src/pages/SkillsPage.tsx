@@ -95,9 +95,9 @@ type FilterKey = "all" | "installed" | "owned" | "imported" | "issues"
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: "all", label: "전체" },
   { key: "installed", label: "설치됨" },
-  { key: "owned", label: "우리 소유" },
-  { key: "imported", label: "외부/래퍼" },
-  { key: "issues", label: "설정 필요" },
+  { key: "owned", label: "우리 스킬" },
+  { key: "imported", label: "외부 스킬" },
+  { key: "issues", label: "점검 필요" },
 ]
 
 function normalizeSkillListItem(item: any): SkillListItem {
@@ -346,7 +346,7 @@ function SkillStatusBadge({ item }: { item: SkillListItem }) {
           color: item.installed ? "var(--color-teal-500)" : "var(--text-tertiary)",
         }}
       >
-        {item.installed ? "Installed" : "Not Installed"}
+        {item.installed ? "설치됨" : "미설치"}
       </Badge>
       <Badge
         className="border-0 text-xs"
@@ -355,7 +355,7 @@ function SkillStatusBadge({ item }: { item: SkillListItem }) {
           color: item.ready ? "var(--color-success)" : "var(--color-warning, #f59e0b)",
         }}
       >
-        {item.ready ? "Ready" : "Config Needed"}
+        {item.ready ? "사용 가능" : "설정 필요"}
       </Badge>
       <Badge className="border-0 text-xs" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-tertiary)" }}>
         {item.sourceBadge}
@@ -720,34 +720,33 @@ export function SkillsPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div className="space-y-3">
               <Badge className="border-0 text-xs" style={{ backgroundColor: "rgba(20,184,166,0.12)", color: "var(--color-teal-500)" }}>
-                Paperclip-inspired Skill Library
+                운영용 업무 스킬
               </Badge>
               <div>
                 <h1 className="text-2xl md:text-3xl font-semibold" style={{ color: "var(--text-primary)" }}>
-                  HagentOS Skill Packages
+                  업무 스킬 라이브러리
                 </h1>
                 <p className="mt-2 max-w-3xl text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
-                  `repo-backed package registry`, `file tree browser`, `org install`, `agent mount`, `export bundle`
-                  를 한 곳에서 다룹니다. `SKILL.md` 본문과 `agents/openai.yaml`, source provenance, runtime
-                  dependency까지 함께 봅니다.
+                  업무 스킬은 에이전트가 실제 업무를 처리할 때 참고하는 규칙, 템플릿, 체크리스트, 자동화 묶음입니다.
+                  여기서 스킬 내용을 읽고, 어떤 에이전트에 장착되어 있으며, 실행에 필요한 연동이 무엇인지 함께 확인합니다.
                 </p>
               </div>
               <div className="flex items-center gap-3 flex-wrap text-xs" style={{ color: "var(--text-tertiary)" }}>
-                <span>{skillsQuery.data?.length ?? 0} packages</span>
+                <span>전체 {(skillsQuery.data?.length ?? 0)}개</span>
                 <span>•</span>
-                <span>{(skillsQuery.data ?? []).filter((item) => item.installed).length} installed</span>
+                <span>설치 {(skillsQuery.data ?? []).filter((item) => item.installed).length}개</span>
                 <span>•</span>
-                <span>{(skillsQuery.data ?? []).filter((item) => !item.ready).length} need config</span>
+                <span>설정 필요 {(skillsQuery.data ?? []).filter((item) => !item.ready).length}개</span>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
                 <Upload size={15} />
-                Import
+                가져오기
               </Button>
               <Button className="gap-2" onClick={() => setCreateOpen(true)}>
                 <PackagePlus size={15} />
-                Create Skill
+                스킬 만들기
               </Button>
             </div>
           </div>
@@ -767,7 +766,7 @@ export function SkillsPage() {
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search skills"
+                  placeholder="스킬 검색"
                   className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
                 />
               </div>
@@ -858,7 +857,7 @@ export function SkillsPage() {
                           onClick={() => uninstallMutation.mutate()}
                         >
                           {uninstallMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
-                          Uninstall
+                          설치 해제
                         </Button>
                       ) : (
                         <Button
@@ -867,18 +866,18 @@ export function SkillsPage() {
                           onClick={() => installMutation.mutate()}
                         >
                           {installMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Rocket size={15} />}
-                          Install to Org
+                          기관에 설치
                         </Button>
                       )}
                       {detail.readOnly && (
                         <Button variant="outline" className="gap-2" disabled={forkMutation.isPending} onClick={() => forkMutation.mutate()}>
                           {forkMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <GitBranch size={15} />}
-                          Fork as Local
+                          로컬 복제
                         </Button>
                       )}
                       <Button variant="outline" className="gap-2" disabled={syncMutation.isPending} onClick={() => syncMutation.mutate()}>
                         {syncMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <RefreshCcw size={15} />}
-                        Sync Check
+                        동기화 점검
                       </Button>
                     </div>
                   </div>
@@ -887,22 +886,22 @@ export function SkillsPage() {
                 <Tabs defaultValue="overview" className="min-h-[660px]">
                   <div className="px-6 pt-4 md:px-8">
                     <TabsList variant="line" className="w-full justify-start gap-2 overflow-x-auto">
-                      <TabsTrigger value="overview">Overview</TabsTrigger>
-                      <TabsTrigger value="files">Files</TabsTrigger>
+                      <TabsTrigger value="overview">개요</TabsTrigger>
+                      <TabsTrigger value="files">파일</TabsTrigger>
                       <TabsTrigger value="skillmd">SKILL.md</TabsTrigger>
-                      <TabsTrigger value="runtime">Runtime</TabsTrigger>
-                      <TabsTrigger value="agents">Agents</TabsTrigger>
-                      <TabsTrigger value="source">Source</TabsTrigger>
+                      <TabsTrigger value="runtime">실행</TabsTrigger>
+                      <TabsTrigger value="agents">에이전트</TabsTrigger>
+                      <TabsTrigger value="source">출처</TabsTrigger>
                     </TabsList>
                   </div>
 
                   <TabsContent value="overview" className="p-6 md:p-8 space-y-6">
                     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                       {[
-                        { label: "Version", value: `v${detail.version}`, icon: <FileText size={16} /> },
-                        { label: "Package Type", value: detail.packageType, icon: <Puzzle size={16} /> },
-                        { label: "Mounted Agents", value: String(detail.mountedAgents.length), icon: <Bot size={16} /> },
-                        { label: "Files", value: String(detail.fileTree.length), icon: <FolderTree size={16} /> },
+                        { label: "버전", value: `v${detail.version}`, icon: <FileText size={16} /> },
+                        { label: "스킬 유형", value: detail.packageType, icon: <Puzzle size={16} /> },
+                        { label: "장착 에이전트", value: String(detail.mountedAgents.length), icon: <Bot size={16} /> },
+                        { label: "파일 수", value: String(detail.fileTree.length), icon: <FolderTree size={16} /> },
                       ].map((card) => (
                         <div
                           key={card.label}
@@ -927,7 +926,7 @@ export function SkillsPage() {
                       >
                         <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                           <Sparkles size={16} />
-                          Skill Summary
+                          스킬 요약
                         </div>
                         <p className="mt-4 text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
                           {detail.summary}
@@ -943,7 +942,7 @@ export function SkillsPage() {
                               onClick={() => exportMutation.mutate(target as "codex" | "claude-code" | "cursor")}
                             >
                               {exportMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                              Export {target}
+                              {target} 내보내기
                             </Button>
                           ))}
                         </div>
@@ -955,7 +954,7 @@ export function SkillsPage() {
                       >
                         <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                           <ShieldCheck size={16} />
-                          Runtime Readiness
+                          실행 준비 상태
                         </div>
                         <div className="mt-4 space-y-3">
                           {detail.runtimeHealth.length === 0 ? (
@@ -977,7 +976,7 @@ export function SkillsPage() {
                                 </div>
                                 {item.missingEnv.length > 0 && (
                                   <p className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                                    missing env: {item.missingEnv.join(", ")}
+                                    필요한 환경 변수: {item.missingEnv.join(", ")}
                                   </p>
                                 )}
                               </div>
@@ -996,7 +995,7 @@ export function SkillsPage() {
                       >
                         <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                           <FolderTree size={16} />
-                          Package File Tree
+                          스킬 파일 트리
                         </div>
                         <div className="mt-4">
                           <FileTree nodes={detail.fileTree} selectedPath={selectedFilePath} onSelect={setSelectedFilePath} />
@@ -1023,7 +1022,7 @@ export function SkillsPage() {
                             onClick={() => navigator.clipboard.writeText(fileContentQuery.data?.content ?? "")}
                           >
                             <Copy size={14} />
-                            Copy
+                            복사
                           </Button>
                         </div>
                         <ScrollArea className="h-[480px]">
@@ -1043,7 +1042,7 @@ export function SkillsPage() {
                       >
                         <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                           <Zap size={16} />
-                          Heading Map
+                          문서 목차
                         </div>
                         <div className="mt-4 space-y-2">
                           {headings.map((heading) => (
@@ -1079,14 +1078,14 @@ export function SkillsPage() {
                         style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
                       >
                         <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          Declarative Contract
+                          실행 계약
                         </h3>
                         <div className="mt-4 space-y-3 text-sm" style={{ color: "var(--text-secondary)" }}>
-                          <p>injection mode: <strong>{detail.runtime.injectionMode}</strong></p>
-                          <p>required integrations: {detail.runtime.requiredIntegrations.join(", ") || "없음"}</p>
-                          <p>required secrets: {detail.runtime.requiredSecrets.join(", ") || "없음"}</p>
-                          <p>required env: {detail.runtime.requiredEnv.join(", ") || "없음"}</p>
-                          <p>required files: {detail.runtime.requiredFiles.join(", ") || "없음"}</p>
+                          <p>주입 방식: <strong>{detail.runtime.injectionMode}</strong></p>
+                          <p>필요 연동: {detail.runtime.requiredIntegrations.join(", ") || "없음"}</p>
+                          <p>필요 비밀값: {detail.runtime.requiredSecrets.join(", ") || "없음"}</p>
+                          <p>필요 환경 변수: {detail.runtime.requiredEnv.join(", ") || "없음"}</p>
+                          <p>필요 파일: {detail.runtime.requiredFiles.join(", ") || "없음"}</p>
                         </div>
                       </div>
                       <div
@@ -1094,7 +1093,7 @@ export function SkillsPage() {
                         style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
                       >
                         <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          Dependency Health
+                          의존성 상태
                         </h3>
                         <div className="mt-4 space-y-3">
                           {detail.runtimeHealth.map((item) => (
@@ -1110,7 +1109,7 @@ export function SkillsPage() {
                                 </span>
                               </div>
                               <p className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                                required env: {item.requiredEnv.join(", ") || "없음"}
+                                필요한 환경 변수: {item.requiredEnv.join(", ") || "없음"}
                               </p>
                             </div>
                           ))}
@@ -1126,7 +1125,7 @@ export function SkillsPage() {
                         style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
                       >
                         <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          Mounted Agents
+                          장착한 에이전트
                         </h3>
                         <div className="mt-4 space-y-3">
                           {detail.mountedAgents.length === 0 ? (
@@ -1142,12 +1141,12 @@ export function SkillsPage() {
                                       {agent.agentName}
                                     </p>
                                     <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                                      mount order {agent.mountOrder} · {agent.enabled ? "enabled" : "disabled"}
+                                      장착 순서 {agent.mountOrder} · {agent.enabled ? "활성" : "비활성"}
                                     </p>
                                   </div>
                                   <Button size="sm" variant="outline" className="gap-1.5" onClick={() => orgPrefix && navigate(`/${orgPrefix}/agents/${agent.agentId}`)}>
                                     <Bot size={14} />
-                                    Open Agent
+                                    에이전트 열기
                                   </Button>
                                 </div>
                               </div>

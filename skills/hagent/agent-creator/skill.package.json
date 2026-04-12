@@ -1,0 +1,33 @@
+{
+  "id": "hagent/agent-creator",
+  "slug": "agent-creator",
+  "namespace": "hagent",
+  "displayName": "에이전트 생성기",
+  "version": "0.1.0",
+  "summary": "학원 운영 역할에 맞는 에이전트 구성, 이름, 기본 스킬 장착 기준을 설계합니다.",
+  "packageType": "builtin",
+  "capabilityType": "system",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/agent-creator"
+  },
+  "compatibility": {
+    "agentTypes": ["orchestrator", "complaint", "scheduler", "retention", "operations"],
+    "adapters": ["codex_qauth", "codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "recommendedAgents": ["orchestrator"],
+  "launchEntrypoints": ["agent", "onboarding", "project"]
+}

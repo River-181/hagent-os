@@ -1,0 +1,38 @@
+{
+  "id": "hagent/document-setup-pack",
+  "slug": "document-setup-pack",
+  "namespace": "hagent",
+  "displayName": "문서 자동화 Setup Pack",
+  "version": "0.1.0",
+  "summary": "HWPX/문서 산출물 경로와 템플릿 사용 기준을 준비하는 setup pack입니다.",
+  "packageType": "composite",
+  "capabilityType": "system",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/document-setup-pack"
+  },
+  "compatibility": {
+    "agentTypes": ["orchestrator", "operations", "marketing"],
+    "adapters": ["codex_qauth", "codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "composite",
+    "requiredIntegrations": ["hwpx-cli"],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "packIncludes": {
+    "skills": ["message-template-pack"],
+    "integrations": ["hwpx-cli"],
+    "runtimes": ["codex_qauth", "codex_local", "claude_local"]
+  },
+  "recommendedAgents": ["orchestrator", "operations", "marketing"],
+  "launchEntrypoints": ["onboarding", "project", "case"]
+}

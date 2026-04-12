@@ -20,8 +20,6 @@ import {
   Wallet,
   CheckSquare,
   Calendar,
-  Cpu,
-  Cog,
   FolderKanban,
   GraduationCap,
 } from "lucide-react"
@@ -178,9 +176,7 @@ export function Sidebar() {
         <NavItem to={`${base}/agents`} icon={<Bot size={16} />} label="AI 팀" />
         <NavItem to={`${base}/org`} icon={<Network size={16} />} label="조직도" />
         <NavItem to={`${base}/routines`} icon={<Clock size={16} />} label="자동 실행" />
-        <NavItem to={`${base}/skills`} icon={<Puzzle size={16} />} label="업무 스킬" />
-        <NavItem to={`${base}/plugins`} icon={<Cpu size={16} />} label="외부 연동" />
-        <NavItem to={`${base}/adapters`} icon={<Cog size={16} />} label="AI 연결" />
+        <NavItem to={`${base}/capabilities`} icon={<Puzzle size={16} />} label="역량" />
 
         <SectionLabel label="운영 관리" />
         <NavItem to={`${base}/projects`} icon={<FolderKanban size={16} />} label="프로젝트" />

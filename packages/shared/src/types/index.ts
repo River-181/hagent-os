@@ -48,6 +48,7 @@ export type RunStatus =
 export type AttendanceStatus = "present" | "absent" | "late" | "excused"
 
 export type SkillPackageType = "builtin" | "imported" | "wrapper" | "composite"
+export type CapabilityType = "skill" | "integration" | "runtime" | "pack" | "system"
 
 export type SkillSourceKind = "local" | "github_repo" | "github_subdir" | "registry_url" | "manual"
 
@@ -89,8 +90,22 @@ export interface SkillPackageManifest {
   version: string
   summary: string
   packageType: SkillPackageType
+  capabilityType?: Extract<CapabilityType, "skill" | "pack" | "system">
   source: SkillSourceMetadata
   compatibility: SkillCompatibility
   runtime: SkillRuntimeContract
   distribution: SkillDistribution
+  packIncludes?: {
+    skills: string[]
+    integrations: string[]
+    runtimes: string[]
+  }
+  recommendedAgents?: AgentType[]
+  launchEntrypoints?: Array<"case" | "project" | "agent" | "onboarding">
+  forkOf?: {
+    namespace: string
+    slug: string
+    repo?: string
+    commit?: string
+  } | null
 }

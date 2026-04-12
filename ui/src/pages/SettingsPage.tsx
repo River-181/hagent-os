@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate } from "react-router-dom"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
+import { usePanel } from "@/context/PanelContext"
 import { useToast } from "@/components/ToastContext"
 import { organizationsApi } from "@/api/organizations"
 import { adaptersApi } from "@/api/adapters"
@@ -200,6 +201,7 @@ type IntegrationPreference = {
 export function SettingsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId, organizations } = useOrganization()
+  const { closePanel, setPanelContent } = usePanel()
   const { success, error: toastError } = useToast()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
@@ -236,6 +238,11 @@ export function SettingsPage() {
   useEffect(() => {
     setBreadcrumbs([{ label: "설정" }])
   }, [setBreadcrumbs])
+
+  useEffect(() => {
+    setPanelContent(null)
+    closePanel()
+  }, [closePanel, setPanelContent])
 
   const selectedOrg = organizations.find((org) => org.id === selectedOrgId) ?? null
 

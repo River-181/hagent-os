@@ -7,9 +7,9 @@ import { useToast } from "@/components/ToastContext"
 import { Bot, Cable, Copy, RefreshCcw, ShieldCheck, TriangleAlert } from "lucide-react"
 
 function statusTone(item: { connected?: boolean; missingEnv?: string[] }) {
-  if (item.connected) return { bg: "rgba(34,197,94,0.12)", color: "var(--color-success)", label: "connected" }
-  if ((item.missingEnv ?? []).length > 0) return { bg: "rgba(245,158,11,0.12)", color: "#d97706", label: "missing credentials" }
-  return { bg: "var(--bg-tertiary)", color: "var(--text-secondary)", label: "inactive" }
+  if (item.connected) return { bg: "rgba(34,197,94,0.12)", color: "var(--color-success)", label: "연결됨" }
+  if ((item.missingEnv ?? []).length > 0) return { bg: "rgba(245,158,11,0.12)", color: "#d97706", label: "설정 필요" }
+  return { bg: "var(--bg-tertiary)", color: "var(--text-secondary)", label: "대기" }
 }
 
 export function AdaptersPage() {
@@ -27,10 +27,10 @@ export function AdaptersPage() {
       <div className="flex items-end justify-between gap-6">
         <div>
           <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
-            어댑터 & 연동
+            AI 연결
           </h1>
           <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-            Codex/Claude 실행 계층과 외부 MCP·캘린더·메시징 상태를 한 번에 점검합니다.
+            답변을 만드는 AI 모델과, 그 결과를 업무에 연결하는 서비스를 구분해서 점검합니다.
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()} disabled={isRefetching}>
@@ -47,11 +47,11 @@ export function AdaptersPage() {
           <div className="flex items-center gap-2">
             <Bot size={16} style={{ color: "var(--color-teal-500)" }} />
             <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-              Runtime Adapters
+              모델 연결
             </h2>
           </div>
           <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-            bootstrap과 agent execution에서 실제로 선택되는 모델 계층입니다.
+            에이전트가 실제로 답변을 만들 때 사용하는 AI 모델 연결입니다.
           </p>
 
           <div className="mt-4 space-y-3">
@@ -78,13 +78,13 @@ export function AdaptersPage() {
                         </div>
                       </div>
                       <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: tone.bg, color: tone.color }}>
-                        {tone.label}
+                        {adapter.connected ? "연결됨" : (adapter.missingEnv ?? []).length > 0 ? "설정 필요" : "대기"}
                       </span>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
-                        default: {adapter.defaultModel}
-                      </Badge>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+                        기본 모델: {adapter.defaultModel}
+                        </Badge>
                       {(adapter.availableModels ?? []).map((model: string) => (
                         <Badge key={model} className="border-0" style={{ backgroundColor: "rgba(20,184,166,0.08)", color: "var(--color-teal-500)" }}>
                           {model}
@@ -124,11 +124,11 @@ export function AdaptersPage() {
           <div className="flex items-center gap-2">
             <Cable size={16} style={{ color: "var(--color-teal-500)" }} />
             <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-              External Integrations
+              업무 연동
             </h2>
           </div>
           <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-            MCP, Calendar, Messaging readiness를 실행 전 점검합니다.
+            법령 조회, 캘린더, 메시지 발송처럼 AI 결과를 실제 업무 처리로 이어주는 서비스입니다.
           </p>
 
           <div className="mt-4 space-y-3">
@@ -155,12 +155,12 @@ export function AdaptersPage() {
                         </div>
                       </div>
                       <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: tone.bg, color: tone.color }}>
-                        {tone.label}
+                        {integration.connected ? "연결됨" : (integration.missingEnv ?? []).length > 0 ? "설정 필요" : "대기"}
                       </span>
                     </div>
                     <div className="mt-3 flex items-center gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
                       <ShieldCheck size={12} />
-                      category: {integration.category}
+                      구분: {integration.category}
                     </div>
                     {(integration.missingEnv ?? []).length > 0 ? (
                       <div className="mt-3">
@@ -188,7 +188,7 @@ export function AdaptersPage() {
                       </div>
                     ) : (
                       <div className="mt-3 text-xs" style={{ color: "var(--color-success)" }}>
-                        credentials ready
+                        자격 정보 준비됨
                       </div>
                     )}
                   </div>
@@ -197,6 +197,30 @@ export function AdaptersPage() {
             )}
           </div>
         </section>
+      </div>
+
+      <div
+        className="rounded-2xl border p-5"
+        style={{ borderColor: "var(--border-default)", background: "var(--bg-elevated)" }}
+      >
+        <div className="flex items-center gap-2">
+          <ShieldCheck size={16} style={{ color: "var(--color-teal-500)" }} />
+          <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>이 화면에서 보는 것</span>
+        </div>
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl p-4" style={{ backgroundColor: "var(--bg-secondary)" }}>
+            <p className="text-xs font-semibold" style={{ color: "var(--text-tertiary)" }}>모델 연결</p>
+            <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+              어떤 AI를 기본으로 쓸지, 연결 테스트가 통과했는지를 확인합니다.
+            </p>
+          </div>
+          <div className="rounded-xl p-4" style={{ backgroundColor: "var(--bg-secondary)" }}>
+            <p className="text-xs font-semibold" style={{ color: "var(--text-tertiary)" }}>업무 연동</p>
+            <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+              캘린더 저장, 법령 조회, 카카오·텔레그램 발송처럼 실제 업무 마감에 필요한 연결입니다.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   )

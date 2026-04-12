@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useNavigate, useSearchParams, useParams } from "react-router-dom"
-import { Bot, FileText, GitBranchPlus, Loader2, MessageSquarePlus, RefreshCcw, Scale, Send, Sparkles, Workflow } from "lucide-react"
+import { Bot, CalendarClock, FileText, GitBranchPlus, Loader2, MessageSquarePlus, RefreshCcw, Scale, Send, Sparkles, Workflow } from "lucide-react"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { useToast } from "@/components/ToastContext"
@@ -152,38 +152,24 @@ export function AssistantPage() {
 
   const pinnedShortcuts = [
     {
-      key: "legal",
-      title: "법률 질문",
-      description: "환불, 교습비, 학원 운영 기준을 바로 브리프로 만듭니다.",
+      key: "policy-legal",
+      title: "정책·법률 질문",
+      description: "운영 정책이나 환불·교습비 기준을 바로 브리프로 남깁니다.",
       icon: Scale,
       onClick: () =>
         submitMutation.mutate({
-          question: "우리나라 학원 환불 기준 핵심만 운영자 관점으로 정리해줘.",
-          title: "법률 질문 · 학원 환불 기준",
+          question: "학원 환불 기준과 학부모 안내 시 꼭 고지해야 할 핵심을 운영자 관점으로 정리해줘.",
+          title: "정책·법률 질문 · 환불 기준",
           origin: "assistant_shortcut",
           scenarioKey: "law-question",
           forceNewThread: true,
         }),
     },
     {
-      key: "policy",
-      title: "운영 정책 질문",
-      description: "상담·환불·보강 정책을 직원용 브리프로 정리합니다.",
-      icon: FileText,
-      onClick: () =>
-        submitMutation.mutate({
-          question: "학원 상담 운영 정책 핵심만 3줄로 정리하고, 직원이 바로 적용할 체크리스트도 붙여줘.",
-          title: "운영 정책 질문 · 상담 운영",
-          origin: "assistant_shortcut",
-          scenarioKey: "policy-question",
-          forceNewThread: true,
-        }),
-    },
-    {
       key: "schedule",
-      title: "보강·결석 질문",
-      description: "보강 가능 시간과 학부모 안내 초안을 일정 관점으로 정리합니다.",
-      icon: Send,
+      title: "보강·결석 문의",
+      description: "보강 가능 시간, 상담 흐름, 학부모 안내 문안을 같이 정리합니다.",
+      icon: CalendarClock,
       onClick: () =>
         submitMutation.mutate({
           question: "결석한 학생의 보강 가능 시간을 제안하고, 학부모에게 보낼 안내 문안도 같이 정리해줘.",
@@ -199,6 +185,14 @@ export function AssistantPage() {
       description: "상반기 프로모션을 프로젝트와 하위 케이스로 바로 생성합니다.",
       icon: Workflow,
       onClick: () => projectScenarioMutation.mutate(),
+    },
+    {
+      key: "inbound",
+      title: "카카오·텔레그램 인입",
+      description: "민원 접수, 상담 문의, 발송 대기 건을 알림함에서 바로 확인합니다.",
+      icon: Send,
+      onClick: () =>
+        navigate(`/${orgPrefix}/inbox`),
     },
   ]
 
@@ -230,7 +224,7 @@ export function AssistantPage() {
                   Assistant
                 </div>
                 <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-                  운영 질문과 법률 질문을 세션 단위로 남깁니다.
+                  질문을 케이스와 문서로 남기고, 심사 시나리오를 여기서 바로 시작합니다.
                 </div>
               </div>
               <Button
@@ -287,12 +281,6 @@ export function AssistantPage() {
                   </button>
                 )
               })}
-              <Button variant="outline" className="w-full justify-start gap-2" asChild>
-                <Link to={`/${orgPrefix}/inbox`}>
-                  <Send size={14} />
-                  카카오/텔레그램 인입 보기
-                </Link>
-              </Button>
             </div>
           </div>
 

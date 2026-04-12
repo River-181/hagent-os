@@ -161,6 +161,7 @@ export async function executeAgentRun(
     const followUpContext = caseComments
       .slice(0, 5)
       .reverse()
+      .filter((comment: typeof schema.caseComments.$inferSelect) => comment.authorType !== "agent")
       .map((comment: typeof schema.caseComments.$inferSelect) => {
         const author = comment.authorType === "agent" ? "agent" : comment.authorType === "external" ? "external" : "user"
         return `- ${author}: ${comment.content}`
@@ -208,7 +209,7 @@ export async function executeAgentRun(
           instruction: `${caseRecord.title}\n${caseRecord.description ?? ""}`.trim(),
           orgName: org?.name ?? null,
           pendingCases: pendingCases
-            .filter((item) => item.status !== "done" && item.status !== "closed")
+            .filter((item) => item.status !== "done")
             .slice(0, 5),
         }),
         ...runtimeBinding,
@@ -249,7 +250,7 @@ export async function executeAgentRun(
       const attendanceRows = await db
         .select()
         .from(schema.attendance)
-        .where(eq(schema.attendance.studentId, caseRecord.studentId))
+        .where(eq(schema.attendance.studentId, linkedStudentId))
         .orderBy(desc(schema.attendance.date))
 
       const result = await runRetentionAgent({
@@ -329,8 +330,18 @@ export async function executeAgentRun(
       status: artifactStatus,
     })
 
+    const requiresApproval = (() => {
+      if (!agentOutput || typeof agentOutput !== "object" || Array.isArray(agentOutput)) {
+        return approvalLevel >= 1
+      }
+      if (typeof (agentOutput as { requiresApproval?: unknown }).requiresApproval === "boolean") {
+        return (agentOutput as { requiresApproval: boolean }).requiresApproval
+      }
+      return approvalLevel >= 1
+    })()
+
     // 6. Store result, create approval or auto-complete
-    if (approvalLevel >= 1) {
+    if (approvalLevel >= 1 && requiresApproval) {
       // Create Approval record, status pending_approval
       await db.insert(schema.approvals).values({
         organizationId,

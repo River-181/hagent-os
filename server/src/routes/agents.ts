@@ -1,6 +1,6 @@
 // v0.3.0
 import { Router } from "express"
-import { eq } from "drizzle-orm"
+import { desc, eq } from "drizzle-orm"
 import { mkdirSync, writeFileSync } from "fs"
 import { join } from "path"
 import type { Db } from "@hagent/db"
@@ -47,8 +47,63 @@ export function agentRoutes(db: Db): Router {
         .select()
         .from(schema.agents)
         .where(eq(schema.agents.organizationId, req.params.orgId))
+      const runs = await db
+        .select()
+        .from(schema.agentRuns)
+        .where(eq(schema.agentRuns.organizationId, req.params.orgId))
+        .orderBy(desc(schema.agentRuns.createdAt))
+      const cases = await db
+        .select()
+        .from(schema.cases)
+        .where(eq(schema.cases.organizationId, req.params.orgId))
 
-      res.json(agents)
+      const caseTitleById = new Map(cases.map((item) => [item.id, item.title]))
+      const runsByAgentId = new Map<string, typeof schema.agentRuns.$inferSelect[]>()
+      for (const run of runs) {
+        if (!runsByAgentId.has(run.agentId)) {
+          runsByAgentId.set(run.agentId, [])
+        }
+        runsByAgentId.get(run.agentId)?.push(run)
+      }
+
+      const summarizeRunOutput = (output: unknown): string | null => {
+        if (!output) return null
+        if (typeof output === "string") return output.slice(0, 280)
+        if (typeof output === "object") {
+          const value = output as Record<string, unknown>
+          for (const key of ["draft", "summary", "reasoning", "message"]) {
+            if (typeof value[key] === "string" && value[key]?.trim()) {
+              return (value[key] as string).slice(0, 280)
+            }
+          }
+        }
+        return null
+      }
+
+      const enriched = agents.map((agent) => {
+        const recentRuns = (runsByAgentId.get(agent.id) ?? []).slice(0, 4)
+        const activeRun = recentRuns.find((run) => run.status === "running" || run.status === "queued") ?? null
+        const lastCompletedRun = recentRuns.find((run) => run.status === "completed" || run.status === "pending_approval") ?? null
+        return {
+          ...agent,
+          activeRun,
+          lastRunAt: recentRuns[0]?.completedAt ?? recentRuns[0]?.startedAt ?? recentRuns[0]?.createdAt ?? null,
+          recentRuns: recentRuns.map((run) => ({
+            id: run.id,
+            caseId: run.caseId,
+            caseTitle: run.caseId ? caseTitleById.get(run.caseId) ?? "케이스 없음" : "케이스 없음",
+            status: run.status,
+            createdAt: run.createdAt,
+            startedAt: run.startedAt,
+            completedAt: run.completedAt,
+            tokensUsed: run.tokensUsed,
+            excerpt: summarizeRunOutput(run.output) ?? summarizeRunOutput(run.input) ?? run.error ?? null,
+          })),
+          recentActivitySummary: summarizeRunOutput(lastCompletedRun?.output) ?? summarizeRunOutput(lastCompletedRun?.input) ?? null,
+        }
+      })
+
+      res.json(enriched)
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch agents" })
     }

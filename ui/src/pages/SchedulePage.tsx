@@ -1467,7 +1467,7 @@ function InstructorList({ schedules }: { schedules: ScheduleItem[] }) {
 export function SchedulePage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
-  const { setPanelContent } = usePanel()
+  const { setPanelContent, openPanel } = usePanel()
   const navigate = useNavigate()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1721,9 +1721,9 @@ export function SchedulePage() {
       return (
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>일정 속성</p>
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>핵심 연결</p>
             <p className="mt-1 text-sm" style={{ color: "var(--text-tertiary)" }}>
-              일정을 선택하면 담당 직원, 연결 학생, 관련 케이스와 후속 작업을 확인할 수 있습니다.
+              담당 직원, 연결 학생, 관련 케이스와 후속 작업을 같은 구조로 확인합니다.
             </p>
           </div>
 
@@ -1973,6 +1973,10 @@ export function SchedulePage() {
       }),
     [cases, schedules, selectedSchedule?.id, studentSchedules],
   )
+
+  useEffect(() => {
+    openPanel()
+  }, [openPanel])
 
   useEffect(() => {
     setPanelContent(panelContent)

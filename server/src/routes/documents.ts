@@ -141,18 +141,19 @@ export function documentRoutes(db: Db): Router {
       const [doc] = await db.select().from(schema.documents)
         .where(eq(schema.documents.id, req.params.id))
       if (!doc) { res.status(404).json({ error: "Not found" }); return }
+      const docTags = Array.isArray(doc.tags) ? doc.tags : []
       const [linkedCase, linkedProject] = await Promise.all([
-        Array.isArray(doc.tags)
+        docTags.length > 0
           ? (async () => {
-              const caseTag = doc.tags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("case:"))
+              const caseTag = docTags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("case:"))
               return caseTag
                 ? (await db.select().from(schema.cases).where(eq(schema.cases.id, caseTag.slice(5))))[0] ?? null
                 : null
             })()
           : Promise.resolve(null),
-        Array.isArray(doc.tags)
+        docTags.length > 0
           ? (async () => {
-              const projectTag = doc.tags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("project:"))
+              const projectTag = docTags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("project:"))
               return projectTag
                 ? (await db.select().from(schema.opsGroups).where(eq(schema.opsGroups.id, projectTag.slice(8))))[0] ?? null
                 : null
@@ -275,18 +276,19 @@ export function documentRoutes(db: Db): Router {
         .where(eq(schema.documents.id, req.params.id))
         .returning()
       if (!updated) { res.status(404).json({ error: "Not found" }); return }
+      const updatedTags = Array.isArray(updated.tags) ? updated.tags : []
       const [linkedCase, linkedProject] = await Promise.all([
-        Array.isArray(updated.tags)
+        updatedTags.length > 0
           ? (async () => {
-              const caseTag = updated.tags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("case:"))
+              const caseTag = updatedTags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("case:"))
               return caseTag
                 ? (await db.select().from(schema.cases).where(eq(schema.cases.id, caseTag.slice(5))))[0] ?? null
                 : null
             })()
           : Promise.resolve(null),
-        Array.isArray(updated.tags)
+        updatedTags.length > 0
           ? (async () => {
-              const projectTag = updated.tags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("project:"))
+              const projectTag = updatedTags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("project:"))
               return projectTag
                 ? (await db.select().from(schema.opsGroups).where(eq(schema.opsGroups.id, projectTag.slice(8))))[0] ?? null
                 : null

@@ -64,6 +64,8 @@ function DialogContent({
         )}
         {...props}
       >
+        <DialogPrimitive.Title className="sr-only">대화 상자</DialogPrimitive.Title>
+        <DialogPrimitive.Description className="sr-only">현재 작업을 위한 대화 상자입니다.</DialogPrimitive.Description>
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close

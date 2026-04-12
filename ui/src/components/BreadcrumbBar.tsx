@@ -1,12 +1,14 @@
 import { Link } from "react-router-dom"
-import { ChevronRight } from "lucide-react"
+import { ChevronRight, PanelRightOpen, PanelRightClose } from "lucide-react"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useSidebar } from "@/context/SidebarContext"
+import { usePanel } from "@/context/PanelContext"
 import { Menu } from "lucide-react"
 
 export function BreadcrumbBar() {
   const { breadcrumbs } = useBreadcrumbs()
   const { toggleSidebar, isMobile } = useSidebar()
+  const { panelVisible, togglePanel } = usePanel()
 
   return (
     <div
@@ -72,6 +74,21 @@ export function BreadcrumbBar() {
       >
         <span style={{ fontSize: 11 }}>&#8984;</span>K
       </kbd>
+      {!isMobile && (
+        <button
+          type="button"
+          onClick={togglePanel}
+          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs shrink-0 transition-colors hover:bg-[var(--bg-tertiary)]"
+          style={{
+            color: "var(--text-tertiary)",
+            border: "1px solid var(--border-default)",
+          }}
+          aria-label={panelVisible ? "속성 패널 닫기" : "속성 패널 열기"}
+        >
+          {panelVisible ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
+          Properties
+        </button>
+      )}
     </div>
   )
 }

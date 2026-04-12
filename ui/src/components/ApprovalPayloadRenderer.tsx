@@ -1,13 +1,14 @@
 // v0.2.0
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, ExternalLink } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 
 interface Props {
   type?: string
   payload?: any
+  decision?: any
 }
 
-export function ApprovalPayloadRenderer({ type, payload }: Props) {
+export function ApprovalPayloadRenderer({ type, payload, decision }: Props) {
   if (!payload) return null
 
   let data: any
@@ -28,6 +29,19 @@ export function ApprovalPayloadRenderer({ type, payload }: Props) {
       </pre>
     )
   }
+
+  const decisionData =
+    decision && typeof decision === "object" && !Array.isArray(decision)
+      ? decision
+      : {}
+  const decisionSideEffects =
+    decisionData.sideEffects && typeof decisionData.sideEffects === "object" && !Array.isArray(decisionData.sideEffects)
+      ? decisionData.sideEffects
+      : {}
+  const decisionCalendar =
+    decisionSideEffects.googleCalendar && typeof decisionSideEffects.googleCalendar === "object" && !Array.isArray(decisionSideEffects.googleCalendar)
+      ? decisionSideEffects.googleCalendar
+      : null
 
   // Response draft (complaint/retention agent output)
   if (data.draft || data.response || data.message) {
@@ -145,8 +159,8 @@ export function ApprovalPayloadRenderer({ type, payload }: Props) {
   }
 
   if (data.suggestedSchedule || data.calendarAction || data.summary) {
-    const schedule = data.suggestedSchedule
-    const calendarAction = data.calendarAction
+    const schedule = decisionCalendar?.schedule ?? data.suggestedSchedule
+    const calendarAction = decisionCalendar ?? data.calendarAction
     return (
       <div className="space-y-3">
         {data.summary && (
@@ -168,10 +182,15 @@ export function ApprovalPayloadRenderer({ type, payload }: Props) {
               요일 {schedule.dayOfWeek} · {schedule.startTime} - {schedule.endTime}
               {schedule.room ? ` · ${schedule.room}` : ""}
             </div>
+            {decisionCalendar?.schedule ? (
+              <div className="text-[11px]" style={{ color: "var(--color-success)" }}>
+                승인 후 일정으로 생성됨
+              </div>
+            ) : null}
           </div>
         )}
         {calendarAction && (
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge
               className="text-xs border-0"
               style={{
@@ -191,6 +210,18 @@ export function ApprovalPayloadRenderer({ type, payload }: Props) {
             >
               {calendarAction.provider} · {calendarAction.status}
             </Badge>
+            {calendarAction.eventLink ? (
+              <a
+                href={calendarAction.eventLink}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs"
+                style={{ color: "var(--color-teal-500)" }}
+              >
+                캘린더 열기
+                <ExternalLink size={11} />
+              </a>
+            ) : null}
           </div>
         )}
       </div>

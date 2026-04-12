@@ -1,0 +1,47 @@
+{
+  "id": "hagent/schedule-operations-pack",
+  "slug": "schedule-operations-pack",
+  "namespace": "hagent",
+  "displayName": "보강/일정 조정 Pack",
+  "version": "0.1.0",
+  "summary": "보강, 상담 예약, 시간표 조정을 캘린더 연동과 일정 최적화 흐름으로 묶는 운영 pack입니다.",
+  "packageType": "composite",
+  "capabilityType": "pack",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/schedule-operations-pack"
+  },
+  "compatibility": {
+    "agentTypes": ["scheduler", "orchestrator", "staff"],
+    "adapters": ["codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "composite",
+    "requiredIntegrations": ["google-calendar-mcp"],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "packIncludes": {
+    "skills": [
+      "schedule-manager",
+      "schedule-optimizer",
+      "google-calendar-mcp"
+    ],
+    "integrations": [
+      "google-calendar-mcp"
+    ],
+    "runtimes": [
+      "codex_local",
+      "claude_local"
+    ]
+  },
+  "recommendedAgents": ["scheduler", "orchestrator", "staff"],
+  "launchEntrypoints": ["case", "project", "onboarding"]
+}

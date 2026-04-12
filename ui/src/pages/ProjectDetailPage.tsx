@@ -1,6 +1,6 @@
 // v0.3.0
 import { useContext, useEffect, useMemo, useState, type ReactNode } from "react"
-import { useParams, Link } from "react-router-dom"
+import { useParams, Link, useNavigate } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
@@ -12,10 +12,23 @@ import { queryKeys } from "@/lib/queryKeys"
 import { CaseTypeBadge } from "@/components/CaseTypeBadge"
 import { CaseSeverityBadge } from "@/components/CaseSeverityBadge"
 import { StatusIcon, type CaseStatus } from "@/components/StatusIcon"
-import { FolderKanban, CalendarDays, Layers, FileText, UserPlus, Sparkles, Target } from "lucide-react"
+import { FolderKanban, CalendarDays, Layers, FileText, UserPlus, Sparkles, Target, Archive } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-type Tab = "overview" | "cases" | "outputs"
+type Tab = "cases" | "overview" | "configuration" | "budget"
+
+function recommendProjectCapabilities(projectTrackKey: string) {
+  if (projectTrackKey === "policy") {
+    return ["compliance-refund-pack", "hwpx-document-pack"]
+  }
+  if (projectTrackKey === "complaint-ops") {
+    return ["kakao-complaint-pack", "compliance-refund-pack"]
+  }
+  if (projectTrackKey === "general") {
+    return ["schedule-operations-pack", "hwpx-document-pack"]
+  }
+  return ["kakao-complaint-pack"]
+}
 
 export function ProjectDetailPage() {
   const { id, orgPrefix } = useParams<{ id: string; orgPrefix: string }>()
@@ -23,8 +36,9 @@ export function ProjectDetailPage() {
   const { selectedOrgId, organizations } = useOrganization()
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
-  const { setPanelContent } = usePanel()
-  const [activeTab, setActiveTab] = useState<Tab>("overview")
+  const { setPanelContent, openPanel } = usePanel()
+  const navigate = useNavigate()
+  const [activeTab, setActiveTab] = useState<Tab>("cases")
 
   const activeOrgId = useMemo(() => {
     if (!orgPrefix) return selectedOrgId
@@ -47,6 +61,11 @@ export function ProjectDetailPage() {
   })
 
   const recommendedRoles: string[] = project?.recommendedRoles ?? []
+  const projectTrack = project?.projectTrack ?? {
+    key: "general",
+    label: "일반 운영 프로젝트",
+    summary: "기관 운영 과제를 케이스와 산출물로 묶어 실행하는 기본 프로젝트",
+  }
 
   const existingRoles = useMemo(
     () => new Set((agents ?? []).map((agent: any) => agent.agentType ?? agent.slug ?? agent.name)),
@@ -54,6 +73,10 @@ export function ProjectDetailPage() {
   )
 
   const missingRecommendedRoles = recommendedRoles.filter((role) => !existingRoles.has(role))
+  const capabilityProfile = useMemo(
+    () => recommendProjectCapabilities(projectTrack.key),
+    [projectTrack.key],
+  )
 
   const hireMutation = useMutation({
     mutationFn: (role: string) =>
@@ -88,6 +111,19 @@ export function ProjectDetailPage() {
     onError: () => toast?.error("고용 승인 요청 생성에 실패했습니다."),
   })
 
+  const archiveMutation = useMutation({
+    mutationFn: () => projectsApi.archive(id!),
+    onSuccess: () => {
+      toast?.success("프로젝트를 숨겼습니다.")
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id ?? "") })
+      navigate(`/${orgPrefix}/projects`)
+    },
+    onError: () => {
+      toast?.error("프로젝트 숨기기에 실패했습니다.")
+    },
+  })
+
   useEffect(() => {
     if (project) {
       setBreadcrumbs([
@@ -96,6 +132,10 @@ export function ProjectDetailPage() {
       ])
     }
   }, [project, setBreadcrumbs, orgPrefix])
+
+  useEffect(() => {
+    openPanel()
+  }, [openPanel])
 
   const cases: any[] = project?.cases ?? []
   const documents: any[] = project?.documents ?? []
@@ -106,9 +146,9 @@ export function ProjectDetailPage() {
     setPanelContent(
       <div className="space-y-4">
         <div>
-          <p className="text-sm font-semibold text-slate-900">프로젝트 운영 요약</p>
+          <p className="text-sm font-semibold text-slate-900">핵심 연결</p>
           <p className="mt-1 text-sm text-slate-500">
-            연결 케이스, 산출물, 추천 역할 기준으로 프로젝트 진행 상태를 확인합니다.
+            연결 케이스, 산출물, 추천 역할과 진행 상태를 이 패널에서 빠르게 확인합니다.
           </p>
         </div>
 
@@ -120,6 +160,29 @@ export function ProjectDetailPage() {
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <p className="text-xs text-slate-500">연결 산출물</p>
             <p className="mt-1 text-xl font-semibold text-slate-900">{documents.length}건</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
+          <p className="text-xs font-semibold text-teal-700">운영 묶음</p>
+          <p className="mt-1 text-sm font-semibold text-teal-900">{projectTrack.label}</p>
+          <p className="mt-2 text-sm text-teal-800">{projectTrack.summary}</p>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-600">Capability Profile</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {capabilityProfile.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className="rounded-full px-3 py-1.5 text-xs"
+                style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }}
+                onClick={() => navigate(`/${orgPrefix}/capabilities/pack/${item}`)}
+              >
+                {item}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -140,10 +203,28 @@ export function ProjectDetailPage() {
             </div>
           </div>
         </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-600">다음 액션</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <div className="flex items-center justify-between gap-3">
+              <span>산출물 검토</span>
+              <span className="font-medium text-slate-900">{documents.length > 0 ? "가능" : "대기"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>고용 요청</span>
+              <span className="font-medium text-slate-900">{missingRecommendedRoles.length > 0 ? `${missingRecommendedRoles.length}개 필요` : "준비됨"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>케이스 정리</span>
+              <span className="font-medium text-slate-900">{activeCases.length > 0 ? "진행 중" : "정리됨"}</span>
+            </div>
+          </div>
+        </div>
       </div>,
     )
     return () => setPanelContent(null)
-  }, [activeCases.length, documents.length, doneCases.length, missingRecommendedRoles.length, recommendedRoles.length, setPanelContent])
+  }, [activeCases.length, capabilityProfile, documents.length, doneCases.length, missingRecommendedRoles.length, navigate, orgPrefix, projectTrack.label, projectTrack.summary, recommendedRoles.length, setPanelContent])
 
   if (isLoading) {
     return (
@@ -173,15 +254,21 @@ export function ProjectDetailPage() {
           <FolderKanban size={20} style={{ color: project.color ?? "var(--color-teal-500)" }} />
         </div>
         <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
-              {project.name}
-            </h1>
-            <span
-              className="w-3 h-3 rounded-full"
-              style={{ backgroundColor: project.color ?? "var(--color-teal-500)" }}
-            />
-          </div>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
+            {project.name}
+          </h1>
+          <span
+            className="w-3 h-3 rounded-full"
+            style={{ backgroundColor: project.color ?? "var(--color-teal-500)" }}
+          />
+          <span
+            className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium"
+            style={{ backgroundColor: "rgba(20,184,166,0.08)", color: "var(--color-teal-500)" }}
+          >
+            {projectTrack.label}
+          </span>
+        </div>
           {project.description && (
             <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
               {project.description}
@@ -195,7 +282,7 @@ export function ProjectDetailPage() {
         className="flex items-center gap-1 mb-6"
         style={{ borderBottom: "1px solid var(--border-default)" }}
       >
-        {(["overview", "cases", "outputs"] as Tab[]).map((tab) => (
+        {(["cases", "overview", "configuration", "budget"] as Tab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -210,12 +297,18 @@ export function ProjectDetailPage() {
               borderColor: activeTab === tab ? "var(--color-teal-500)" : "transparent",
             }}
           >
-            {tab === "overview" ? "개요" : tab === "cases" ? `케이스 (${cases.length})` : `산출물 (${documents.length})`}
+            {tab === "cases"
+              ? `케이스 (${cases.length})`
+              : tab === "overview"
+              ? "개요"
+              : tab === "configuration"
+              ? "설정"
+              : "예산"}
           </button>
         ))}
       </div>
 
-      {/* Tab: 개요 */}
+      {/* Tab: Overview */}
       {activeTab === "overview" && (
         <div className="space-y-4">
           <div
@@ -271,6 +364,34 @@ export function ProjectDetailPage() {
               </p>
             </div>
           )}
+
+          <div
+            className="rounded-xl p-5"
+            style={{
+              backgroundColor: "rgba(20,184,166,0.06)",
+              border: "1px solid rgba(20,184,166,0.16)",
+              boxShadow: "var(--shadow-sm)",
+            }}
+          >
+            <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
+              운영 묶음
+            </h3>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              {projectTrack.summary}
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {capabilityProfile.map((item) => (
+                <Link
+                  key={item}
+                  to={`/${orgPrefix}/capabilities/pack/${item}`}
+                  className="rounded-full px-3 py-1.5 text-xs"
+                  style={{ backgroundColor: "var(--bg-base)", color: "var(--text-secondary)" }}
+                >
+                  {item}
+                </Link>
+              ))}
+            </div>
+          </div>
 
           {/* 목표 섹션 */}
           <div
@@ -388,7 +509,7 @@ export function ProjectDetailPage() {
         </div>
       )}
 
-      {/* Tab: 케이스 */}
+      {/* Tab: Cases */}
       {activeTab === "cases" && (
         <div>
           {cases.length === 0 ? (
@@ -451,7 +572,97 @@ export function ProjectDetailPage() {
         </div>
       )}
 
-      {activeTab === "outputs" && (
+      {/* Tab: Configuration */}
+      {activeTab === "configuration" && (
+        <div className="space-y-4">
+          <div
+            className="rounded-xl p-5"
+            style={{
+              backgroundColor: "var(--bg-elevated)",
+              border: "1px solid var(--border-default)",
+              boxShadow: "var(--shadow-sm)",
+            }}
+          >
+            <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
+              프로젝트 설정
+            </h3>
+            <dl className="grid grid-cols-1 md:grid-cols-[140px,1fr] gap-y-3 text-sm">
+              <dt style={{ color: "var(--text-tertiary)" }}>Name</dt>
+              <dd style={{ color: "var(--text-primary)" }}>{project.name}</dd>
+              <dt style={{ color: "var(--text-tertiary)" }}>Description</dt>
+              <dd style={{ color: "var(--text-secondary)" }}>{project.description || "-"}</dd>
+              <dt style={{ color: "var(--text-tertiary)" }}>Status</dt>
+              <dd>
+                <span
+                  className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
+                  style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }}
+                >
+                  planned
+                </span>
+              </dd>
+              <dt style={{ color: "var(--text-tertiary)" }}>Goals</dt>
+              <dd style={{ color: "var(--text-primary)" }}>{goals.length}개 연결됨</dd>
+              <dt style={{ color: "var(--text-tertiary)" }}>Created</dt>
+              <dd style={{ color: "var(--text-primary)" }}>
+                {new Date(project.createdAt).toLocaleDateString("ko-KR", { year: "numeric", month: "short", day: "numeric" })}
+              </dd>
+              <dt style={{ color: "var(--text-tertiary)" }}>Updated</dt>
+              <dd style={{ color: "var(--text-primary)" }}>
+                {new Date(project.updatedAt).toLocaleDateString("ko-KR", { year: "numeric", month: "short", day: "numeric" })}
+              </dd>
+            </dl>
+          </div>
+
+          <div
+            className="rounded-xl p-5"
+            style={{
+              backgroundColor: "var(--bg-elevated)",
+              border: "1px solid var(--border-default)",
+              boxShadow: "var(--shadow-sm)",
+            }}
+          >
+            <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
+              연결 정보
+            </h3>
+            <div className="space-y-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+              <p>케이스: {cases.length}건</p>
+              <p>산출물: {documents.length}건</p>
+              <p>추천 역할: {recommendedRoles.length}개</p>
+            </div>
+          </div>
+
+          <div
+            className="rounded-xl p-5"
+            style={{
+              backgroundColor: "rgba(239,68,68,0.06)",
+              border: "1px solid rgba(239,68,68,0.24)",
+              boxShadow: "var(--shadow-sm)",
+            }}
+          >
+            <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "#dc2626" }}>
+              Danger Zone
+            </p>
+            <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
+              프로젝트를 숨기면 사이드바와 프로젝트 목록에서 제외됩니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                if (!window.confirm("프로젝트를 숨기시겠습니까? 복구는 DB에서만 가능합니다.")) return
+                archiveMutation.mutate()
+              }}
+              disabled={archiveMutation.isPending}
+              className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-opacity disabled:opacity-60"
+              style={{ backgroundColor: "#dc2626", color: "white" }}
+            >
+              <Archive size={14} />
+              {archiveMutation.isPending ? "숨기는 중..." : "Archive project"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "budget" && (
         <div>
           {documents.length === 0 ? (
             <div

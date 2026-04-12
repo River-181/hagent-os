@@ -818,7 +818,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 export function InstructorsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
-  const { setPanelContent } = usePanel()
+  const { setPanelContent, openPanel } = usePanel()
   const navigate = useNavigate()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1023,9 +1023,9 @@ export function InstructorsPage() {
       return (
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>직원/강사 속성</p>
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>핵심 연결</p>
             <p className="mt-1 text-sm" style={{ color: "var(--text-tertiary)" }}>
-              직원을 선택하면 담당 수업, 연결 학생, 최근 케이스를 바로 확인할 수 있습니다.
+              담당 수업, 연결 학생, 최근 케이스를 같은 구조로 확인합니다.
             </p>
           </div>
 
@@ -1187,6 +1187,10 @@ export function InstructorsPage() {
       teacherCount,
     ],
   )
+
+  useEffect(() => {
+    openPanel()
+  }, [openPanel])
 
   useEffect(() => {
     setPanelContent(panelContent)

@@ -19,6 +19,7 @@ export interface RuntimeOptions {
 
 let anthropicClient: Anthropic | null = null
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url))
+const CODEX_CLI_TIMEOUT_MS = 45_000
 
 function getAnthropicClient() {
   if (!anthropicClient) {
@@ -68,6 +69,50 @@ function extractCodexContentFromJsonLines(output: string) {
   }
 
   return latest
+}
+
+function extractUsageFromUnknown(value: unknown): { inputTokens: number; outputTokens: number } | null {
+  if (!value || typeof value !== "object") return null
+
+  const stack: unknown[] = [value]
+  while (stack.length > 0) {
+    const current = stack.pop()
+    if (!current || typeof current !== "object") continue
+
+    if (Array.isArray(current)) {
+      for (const item of current) stack.push(item)
+      continue
+    }
+
+    const record = current as Record<string, unknown>
+    const directInput = typeof record.input_tokens === "number" ? record.input_tokens
+      : typeof record.inputTokens === "number" ? record.inputTokens
+      : null
+    const directOutput = typeof record.output_tokens === "number" ? record.output_tokens
+      : typeof record.outputTokens === "number" ? record.outputTokens
+      : null
+
+    if (directInput !== null || directOutput !== null) {
+      return {
+        inputTokens: directInput ?? 0,
+        outputTokens: directOutput ?? 0,
+      }
+    }
+
+    for (const nested of Object.values(record)) {
+      if (nested && typeof nested === "object") {
+        stack.push(nested)
+      }
+    }
+  }
+
+  return null
+}
+
+function estimateTokenCount(text: string) {
+  const normalized = text.trim()
+  if (!normalized) return 0
+  return Math.max(1, Math.ceil(normalized.length / 4))
 }
 
 function hasCodexQauthSessionSync() {
@@ -122,7 +167,7 @@ async function callCodexCli(
     instruction,
   ]
 
-  const { output, exitCode } = await new Promise<{ output: string; exitCode: number }>((resolve) => {
+  const { output, exitCode, timedOut } = await new Promise<{ output: string; exitCode: number; timedOut: boolean }>((resolve) => {
     const child = spawn("codex", args, {
       cwd: repoRoot,
       env: {
@@ -133,6 +178,17 @@ async function callCodexCli(
 
     let stdout = ""
     let stderr = ""
+    let settled = false
+    const timeout = setTimeout(() => {
+      if (settled) return
+      settled = true
+      child.kill("SIGTERM")
+      resolve({
+        output: `${stdout}\n${stderr}\n[codex-timeout] exceeded ${CODEX_CLI_TIMEOUT_MS}ms`,
+        exitCode: 124,
+        timedOut: true,
+      })
+    }, CODEX_CLI_TIMEOUT_MS)
 
     child.stdout.on("data", (chunk) => {
       stdout += String(chunk)
@@ -141,21 +197,29 @@ async function callCodexCli(
       stderr += String(chunk)
     })
     child.on("close", (code) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
       resolve({
         output: `${stdout}\n${stderr}`,
         exitCode: code ?? 0,
+        timedOut: false,
       })
     })
     child.on("error", () => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
       resolve({
         output: `${stdout}\n${stderr}`,
         exitCode: 1,
+        timedOut: false,
       })
     })
   })
 
   const content = extractCodexContentFromJsonLines(output)
-  if (exitCode !== 0 || !content) {
+  if (timedOut || exitCode !== 0 || !content) {
     return {
       ...getMockResponse(systemPrompt, userMessage),
       adapterType: options.adapterType ?? "codex_qauth",
@@ -164,10 +228,31 @@ async function callCodexCli(
     }
   }
 
+  let usage = { inputTokens: 0, outputTokens: 0 }
+  for (const line of output.split(/\r?\n/)) {
+    if (!isJsonObjectLine(line)) continue
+    try {
+      const parsed = JSON.parse(line) as unknown
+      const found = extractUsageFromUnknown(parsed)
+      if (found && (found.inputTokens > 0 || found.outputTokens > 0)) {
+        usage = found
+      }
+    } catch {
+      // ignore malformed lines
+    }
+  }
+
+  if (usage.inputTokens === 0 && usage.outputTokens === 0) {
+    usage = {
+      inputTokens: estimateTokenCount(`${systemPrompt}\n${userMessage}`),
+      outputTokens: estimateTokenCount(content),
+    }
+  }
+
   return {
     content,
-    inputTokens: 0,
-    outputTokens: 0,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
     adapterType: options.adapterType ?? "codex_qauth",
     model: options.model ?? "gpt-5-codex",
   }

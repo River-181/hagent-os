@@ -1,0 +1,32 @@
+{
+  "id": "hagent/re-enrollment-playbook",
+  "slug": "re-enrollment-playbook",
+  "namespace": "hagent",
+  "displayName": "재등록 방어 플레이북",
+  "version": "0.1.0",
+  "summary": "이탈 징후가 보이는 학생에 대해 재등록 방어 시나리오와 후속 액션을 제안합니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/re-enrollment-playbook"
+  },
+  "compatibility": {
+    "agentTypes": ["retention", "counseling", "orchestrator"],
+    "adapters": ["codex_qauth", "codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "recommendedAgents": ["retention", "counseling"],
+  "launchEntrypoints": ["case", "project", "agent"]
+}

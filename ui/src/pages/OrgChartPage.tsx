@@ -9,7 +9,6 @@ import { instructorsApi } from "@/api/students"
 import { queryKeys } from "@/lib/queryKeys"
 import { Identity } from "@/components/Identity"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import {
   Upload,
   Download,
@@ -180,9 +179,18 @@ interface Instructor {
   id: string
   name: string
   subject: string
+  role?: string
 }
 
 function InstructorCard({ instructor }: { instructor: Instructor }) {
+  const roleLabel =
+    instructor.role === "teacher"
+      ? "강사"
+      : instructor.role === "staff"
+        ? "직원"
+        : instructor.role === "hybrid"
+          ? "운영+강의"
+          : "직원"
   return (
     <div
       className="flex flex-col items-center gap-2 rounded-xl"
@@ -224,7 +232,7 @@ function InstructorCard({ instructor }: { instructor: Instructor }) {
           color: "#3b82f6",
         }}
       >
-        직원
+        {roleLabel}
       </Badge>
     </div>
   )
@@ -360,6 +368,9 @@ export function OrgChartPage() {
   })
 
   const agentList = agents as any[]
+  const instructorList = instructors as Instructor[]
+  const staffInstructors = instructorList.filter((item) => item.role !== "teacher")
+  const teacherInstructors = instructorList.filter((item) => item.role === "teacher")
 
   // Roots = agents with no reportsTo (or reportsTo === null/undefined/"")
   const roots = agentList.filter(
@@ -382,9 +393,9 @@ export function OrgChartPage() {
   }, [navigate, orgPrefix])
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <ScrollArea className="flex-1">
-        <div className="p-6 max-w-5xl mx-auto">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="flex-1 overflow-auto">
+        <div className="mx-auto max-w-6xl p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
@@ -422,11 +433,14 @@ export function OrgChartPage() {
 
           {/* Chart area */}
           <div
-            className="rounded-2xl p-8 overflow-x-auto"
+            className="overflow-auto rounded-2xl border bg-[var(--bg-elevated)]"
             style={{
-              backgroundColor: "var(--bg-elevated)",
-              border: "1px solid var(--border-default)",
+              borderColor: "var(--border-default)",
               minHeight: 320,
+              height: "70vh",
+              width: "100%",
+              maxWidth: "100%",
+              WebkitOverflowScrolling: "touch",
             }}
           >
             {isLoading ? (
@@ -441,7 +455,7 @@ export function OrgChartPage() {
               <EmptyOrg onNavigate={handleCreateAgent} />
             ) : roots.length === 0 ? (
               /* All agents have reportsTo but none match — render flat */
-              <div className="flex flex-wrap gap-6 justify-center">
+              <div className="flex min-w-max flex-wrap justify-center gap-6 p-6 sm:p-8">
                 {agentList.map((agent: any) => (
                   <AgentNode
                     key={agent.id}
@@ -451,7 +465,7 @@ export function OrgChartPage() {
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col gap-12 items-center">
+              <div className="flex min-w-max flex-col items-center gap-12 p-6 pb-8 sm:p-8">
                 {roots.map((root: any) => (
                   <OrgTreeNode
                     key={root.id}
@@ -493,10 +507,10 @@ export function OrgChartPage() {
                 className="text-base font-semibold"
                 style={{ color: "var(--text-primary)" }}
               >
-                직원
+                직원/강사
               </h2>
               <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-                학원 강사 및 스태프
+                운영 인력과 강사 역할을 나눠서 확인합니다
               </p>
             </div>
             <div
@@ -506,15 +520,32 @@ export function OrgChartPage() {
                 border: "1px solid var(--border-default)",
               }}
             >
-              <div className="flex flex-wrap gap-4">
-                {(instructors as Instructor[]).map((instructor) => (
-                  <InstructorCard key={instructor.id} instructor={instructor} />
-                ))}
+              <div className="space-y-5">
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">운영 인력</p>
+                  <div className="flex flex-wrap gap-4">
+                    {staffInstructors.length > 0 ? staffInstructors.map((instructor) => (
+                      <InstructorCard key={instructor.id} instructor={instructor} />
+                    )) : (
+                      <p className="text-sm text-slate-500">등록된 운영 인력이 없습니다.</p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">강사진</p>
+                  <div className="flex flex-wrap gap-4">
+                    {teacherInstructors.length > 0 ? teacherInstructors.map((instructor) => (
+                      <InstructorCard key={instructor.id} instructor={instructor} />
+                    )) : (
+                      <p className="text-sm text-slate-500">등록된 강사가 없습니다.</p>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }

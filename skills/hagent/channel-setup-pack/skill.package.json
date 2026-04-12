@@ -1,0 +1,38 @@
+{
+  "id": "hagent/channel-setup-pack",
+  "slug": "channel-setup-pack",
+  "namespace": "hagent",
+  "displayName": "채널 연결 Setup Pack",
+  "version": "0.1.0",
+  "summary": "Kakao, Telegram, SMS 같은 인바운드/아웃바운드 채널의 연결 상태를 점검하고 운영 기준을 맞추는 setup pack입니다.",
+  "packageType": "composite",
+  "capabilityType": "system",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/channel-setup-pack"
+  },
+  "compatibility": {
+    "agentTypes": ["orchestrator", "complaint", "notification"],
+    "adapters": ["codex_qauth", "codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "composite",
+    "requiredIntegrations": ["kakao-channel", "telegram-bot", "solapi"],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "packIncludes": {
+    "skills": ["complaint-classifier", "korean-tone-guide", "message-template-pack"],
+    "integrations": ["kakao-channel", "telegram-bot", "solapi"],
+    "runtimes": ["codex_qauth", "codex_local", "claude_local"]
+  },
+  "recommendedAgents": ["orchestrator", "complaint", "notification"],
+  "launchEntrypoints": ["onboarding", "agent", "project"]
+}

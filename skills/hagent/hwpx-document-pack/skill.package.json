@@ -1,0 +1,46 @@
+{
+  "id": "hagent/hwpx-document-pack",
+  "slug": "hwpx-document-pack",
+  "namespace": "hagent",
+  "displayName": "HWPX 문서 자동화 Pack",
+  "version": "0.1.0",
+  "summary": "한글(HWPX) 문서 처리와 산출물 연결 흐름을 케이스/프로젝트 작업에 붙이는 document pack입니다.",
+  "packageType": "composite",
+  "capabilityType": "pack",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/hwpx-document-pack"
+  },
+  "compatibility": {
+    "agentTypes": ["staff", "orchestrator", "compliance"],
+    "adapters": ["codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "composite",
+    "requiredIntegrations": ["hwpx-cli"],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "packIncludes": {
+    "skills": [
+      "hwpx-document-processor",
+      "message-template-pack"
+    ],
+    "integrations": [
+      "hwpx-cli"
+    ],
+    "runtimes": [
+      "codex_local",
+      "claude_local"
+    ]
+  },
+  "recommendedAgents": ["staff", "orchestrator", "compliance"],
+  "launchEntrypoints": ["case", "project", "onboarding"]
+}

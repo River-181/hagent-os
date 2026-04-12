@@ -1,0 +1,32 @@
+{
+  "id": "hagent/attendance-followup",
+  "slug": "attendance-followup",
+  "namespace": "hagent",
+  "displayName": "출결 후속 조치",
+  "version": "0.1.0",
+  "summary": "결석, 지각, 잦은 일정 누락에 대한 후속 연락과 내부 follow-up을 정리합니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "path": "skills/hagent/attendance-followup"
+  },
+  "compatibility": {
+    "agentTypes": ["operations", "scheduler", "complaint"],
+    "adapters": ["codex_qauth", "codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": ["kakao-channel", "solapi"],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  },
+  "recommendedAgents": ["operations", "scheduler"],
+  "launchEntrypoints": ["case", "project"]
+}

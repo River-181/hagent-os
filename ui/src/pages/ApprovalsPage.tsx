@@ -55,7 +55,7 @@ export function ApprovalsPage() {
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
-  const { setPanelContent } = usePanel()
+  const { setPanelContent, openPanel } = usePanel()
 
   const [activeTab, setActiveTab] = useState<ApprovalStatusTab>("pending")
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -64,6 +64,10 @@ export function ApprovalsPage() {
   useEffect(() => {
     setBreadcrumbs([{ label: "승인 큐" }])
   }, [setBreadcrumbs])
+
+  useEffect(() => {
+    openPanel()
+  }, [openPanel])
 
   const {
     data: allApprovals = [],
@@ -188,12 +192,19 @@ export function ApprovalsPage() {
       const source = resolvedCaseId ? caseMap[resolvedCaseId]?.source : null
       const channelLabel = source === "telegram" ? "텔레그램" : source === "kakao" ? "카카오톡" : "채널"
       const deliveryStatus = result?.deliveryStatus ?? result?.approval?.decision?.sideEffects?.kakaoMessage?.status ?? result?.approval?.decision?.sideEffects?.telegramMessage?.status
+      const provider = result?.provider
       toast?.success(
         variables.mode === "confirm_bridge"
-          ? `${channelLabel} 회신을 발송 완료로 처리했습니다.`
-          : deliveryStatus === "ready_to_send"
-            ? `${channelLabel} 회신을 발송 준비 상태로 올렸습니다.`
-            : `${channelLabel} 회신 발송을 시도했습니다.`,
+          ? `${channelLabel} 회신을 운영자 발송 완료로 처리했습니다.`
+          : deliveryStatus === "sent"
+            ? provider?.includes("auto_send")
+              ? `${channelLabel} 회신을 자동 발송했습니다.`
+              : `${channelLabel} 회신을 운영자 발송 완료로 기록했습니다.`
+            : deliveryStatus === "ready_to_send"
+              ? `${channelLabel} 회신이 발송 준비 상태입니다. 채널에서 보내거나 전송 완료 처리하세요.`
+              : deliveryStatus === "failed"
+                ? `${channelLabel} 자동 발송이 실패했습니다. 운영자 브리지를 사용하세요.`
+                : `${channelLabel} 회신 발송을 시도했습니다.`,
       )
       invalidateAll()
     },
@@ -218,7 +229,7 @@ export function ApprovalsPage() {
     setPanelContent(
       <div className="space-y-4">
         <div>
-          <p className="text-sm font-semibold text-slate-900">승인 운영 요약</p>
+          <p className="text-sm font-semibold text-slate-900">승인 속성</p>
           <p className="mt-1 text-sm text-slate-500">
             승인 대기, 발송 대기, 일괄 처리를 한 패널에서 확인합니다.
           </p>
@@ -374,6 +385,37 @@ export function ApprovalsPage() {
         </div>
       ) : (
         <>
+          <div className="px-6 pt-4">
+            <div
+              className="rounded-2xl border px-4 py-4"
+              style={{
+                borderColor: "rgba(245,158,11,0.18)",
+                backgroundColor: "rgba(245,158,11,0.06)",
+              }}
+            >
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                    운영자 발송 브리지 큐
+                  </div>
+                  <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+                    승인 완료 후 `발송 준비`로 올라온 항목은 문안 확인, 채널 열기, 전송 완료 처리 순서로 마감합니다.
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Badge className="border-0" style={{ backgroundColor: "rgba(245,158,11,0.12)", color: "#d97706" }}>
+                    발송 준비 {readyToSendCount}건
+                  </Badge>
+                  <Badge className="border-0" style={{ backgroundColor: "rgba(239,68,68,0.12)", color: "var(--color-danger)" }}>
+                    발송 실패 {failedCount}건
+                  </Badge>
+                  <Badge className="border-0" style={{ backgroundColor: "rgba(34,197,94,0.12)", color: "var(--color-success)" }}>
+                    발송 완료 {sentCount}건
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </div>
           <Tabs
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as ApprovalStatusTab)}

@@ -1432,7 +1432,7 @@ function EmptyState({
 export function StudentsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
-  const { setPanelContent } = usePanel()
+  const { setPanelContent, openPanel } = usePanel()
   const navigate = useNavigate()
   const { orgPrefix, id: routeStudentId } = useParams<{ orgPrefix: string; id?: string }>()
   const queryClient = useQueryClient()
@@ -1663,9 +1663,9 @@ export function StudentsPage() {
       return (
         <div className="space-y-4">
           <div>
-            <p className={cn("text-sm font-semibold", themeClass.textPrimary)}>학생 속성</p>
+            <p className={cn("text-sm font-semibold", themeClass.textPrimary)}>핵심 연결</p>
             <p className={cn("mt-1 text-sm", themeClass.textSecondary)}>
-              학생을 선택하면 보호자, 차량, 연결 수업, 최근 상담, 관련 케이스를 바로 확인할 수 있습니다.
+              보호자, 결제, 연결 수업, 최근 상담, 관련 케이스를 같은 구조로 확인합니다.
             </p>
           </div>
 
@@ -1956,6 +1956,10 @@ export function StudentsPage() {
       students.length,
     ],
   )
+
+  useEffect(() => {
+    openPanel()
+  }, [openPanel])
 
   useEffect(() => {
     setPanelContent(panelContent)

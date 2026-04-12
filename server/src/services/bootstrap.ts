@@ -7,6 +7,7 @@ import * as schema from "@hagent/db"
 import { dispatchInstruction } from "./orchestration.js"
 import { installSkillForOrganization, updateAgentSkillMounts } from "./skills.js"
 import { createCaseWithRetry } from "../lib/case-create.js"
+import { inferInstructorRoleFromSubject } from "../lib/instructor-roles.js"
 import { TANZANIA_PRESET } from "../data/tanzania-preset.js"
 
 const AGENT_DATA_DIR = path.join(import.meta.dirname, "../../data/agents")
@@ -760,16 +761,14 @@ async function deleteOrganizationCascade(db: Db, organizationId: string) {
 
 export async function bootstrapOrganization(db: Db, payload: unknown) {
   const input = bootstrapSchema.parse(payload)
-  const prefix = slugify(input.institutionName)
+  const basePrefix = slugify(input.institutionName)
 
   const [existing] = await db
     .select()
     .from(schema.organizations)
-    .where(eq(schema.organizations.prefix, prefix))
+    .where(eq(schema.organizations.prefix, basePrefix))
 
-  if (existing) {
-    throw new Error("같은 prefix를 가진 기관이 이미 존재합니다.")
-  }
+  const prefix = existing ? `${basePrefix}-${Date.now().toString(36).slice(-4)}` : basePrefix
 
   let organizationId: string | null = null
 
@@ -860,6 +859,7 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
           organizationId: organization.id,
           name: item.name,
           subject: item.subject,
+          role: inferInstructorRoleFromSubject(item.subject),
           status: "active",
           phone: item.phone,
         })
@@ -934,7 +934,7 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
       ? TANZANIA_PRESET.schedules
       : [{ title: "기본 수업 시간표", type: "regular", dayOfWeek: 2, startTime: "18:00", endTime: "19:30", room: "A101" }]
 
-    const createdSchedules = []
+    const createdSchedules: Array<typeof schema.schedules.$inferSelect> = []
     for (const [index, item] of scheduleSeeds.entries()) {
       const [createdSchedule] = await db
         .insert(schema.schedules)
@@ -988,7 +988,7 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
             scheduleId: targetSchedule.id,
             date: new Date(Date.now() - record.daysAgo * 86400000).toISOString().split("T")[0],
             status: record.status,
-            note: record.note ?? null,
+            note: "note" in record ? record.note ?? null : null,
           }]
         }),
       )
@@ -1145,10 +1145,12 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
       }
     }
 
-    const launch = await dispatchInstruction(db, {
+    void dispatchInstruction(db, {
       organizationId: organization.id,
       instruction: input.initialInstruction,
       preferredProjectId: starterProject.id,
+    }).catch((error) => {
+      console.error("[bootstrap] launch dispatch failed", error)
     })
 
     const [updatedOrganization] = await db
@@ -1246,7 +1248,11 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
       cases: createdCases,
       installedSkills,
       mountedSkills,
-      launch,
+      launch: {
+        status: "queued",
+        instruction: input.initialInstruction,
+        preferredProjectId: starterProject.id,
+      },
       connectedChannels: resolveChannelConfig(input).channels,
       preview: {
         student,

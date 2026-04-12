@@ -17,6 +17,7 @@ const manifestSchema = z.object({
   version: z.string().min(1),
   summary: z.string().min(2),
   packageType: z.enum(["builtin", "imported", "wrapper", "composite"]),
+  capabilityType: z.enum(["skill", "pack", "system"]).optional(),
   source: z.object({
     kind: z.enum(["local", "github_repo", "github_subdir", "registry_url", "manual"]),
     repo: z.string().optional(),
@@ -43,6 +44,24 @@ const manifestSchema = z.object({
     editable: z.boolean().default(false),
     publishable: z.boolean().default(false),
   }),
+  packIncludes: z
+    .object({
+      skills: z.array(z.string()).default([]),
+      integrations: z.array(z.string()).default([]),
+      runtimes: z.array(z.string()).default([]),
+    })
+    .optional(),
+  recommendedAgents: z.array(z.string()).default([]).optional(),
+  launchEntrypoints: z.array(z.enum(["case", "project", "agent", "onboarding"])).default([]).optional(),
+  forkOf: z
+    .object({
+      namespace: z.string(),
+      slug: z.string(),
+      repo: z.string().optional(),
+      commit: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
 })
 
 const importRequestSchema = z.object({
@@ -108,6 +127,17 @@ interface SkillPackageRecord {
   markdown: string
   openaiYaml: string | null
   fileTree: SkillFileNode[]
+}
+
+function inferCapabilityType(manifest: SkillPackageManifest) {
+  return manifest.capabilityType ?? (manifest.packageType === "composite" ? "pack" : "skill")
+}
+
+function computeSourceStatus(manifest: SkillPackageManifest) {
+  if (manifest.namespace === "hagent" && manifest.forkOf) return "forked"
+  if (manifest.source.kind === "local") return "local"
+  if (manifest.source.kind === "manual") return "manual"
+  return "upstream"
 }
 
 type SkillSourceKind = SkillPackageManifest["source"]["kind"]
@@ -482,15 +512,25 @@ export async function listSkills(db: Db, orgId?: string) {
     version: pkg.manifest.version,
     summary: pkg.manifest.summary,
     packageType: pkg.manifest.packageType,
+    capabilityType: inferCapabilityType(pkg.manifest),
     source: pkg.manifest.source,
+    sourceStatus: computeSourceStatus(pkg.manifest),
     compatibility: pkg.manifest.compatibility,
     distribution: pkg.manifest.distribution,
+    packIncludes: pkg.manifest.packIncludes ?? null,
+    recommendedAgents: pkg.manifest.recommendedAgents ?? [],
+    recommendedEntrypoints: pkg.manifest.launchEntrypoints ?? [],
+    forkOf: pkg.manifest.forkOf ?? null,
     installed: pkg.installed,
     sourceBadge: pkg.sourceBadge,
     runtimeHealth: pkg.runtimeHealth,
     ready: pkg.ready,
     mountedAgents: pkg.mountedAgents,
     fileCount: countFiles(pkg.fileTree),
+    upstreamSync: {
+      status: pkg.manifest.source.commit ? "pinned" : pkg.manifest.source.kind === "local" ? "local" : "manual_review_required",
+      pinnedCommit: pkg.manifest.source.commit ?? null,
+    },
   }))
 }
 
@@ -616,6 +656,11 @@ function buildLegacySkillStub(slug: string) {
 
 export async function getSkillDetail(db: Db, slug: string, orgId?: string) {
   const pkg = await resolvePackage(db, slug, orgId)
+  const capabilityType = inferCapabilityType(pkg.manifest)
+  const recommendedCaseTypes = capabilityType === "pack"
+    ? inferPackCaseTypes(pkg.manifest)
+    : inferSkillCaseTypes(pkg.manifest)
+  const recommendedProjectTracks = inferProjectTracks(pkg.manifest)
   return {
     id: pkg.manifest.id,
     slug: pkg.manifest.slug,
@@ -624,10 +669,16 @@ export async function getSkillDetail(db: Db, slug: string, orgId?: string) {
     version: pkg.manifest.version,
     summary: pkg.manifest.summary,
     packageType: pkg.manifest.packageType,
+    capabilityType,
     source: pkg.manifest.source,
+    sourceStatus: computeSourceStatus(pkg.manifest),
     compatibility: pkg.manifest.compatibility,
     runtime: pkg.manifest.runtime,
     distribution: pkg.manifest.distribution,
+    packIncludes: pkg.manifest.packIncludes ?? null,
+    recommendedAgents: pkg.manifest.recommendedAgents ?? [],
+    recommendedEntrypoints: pkg.manifest.launchEntrypoints ?? [],
+    forkOf: pkg.manifest.forkOf ?? null,
     fileTree: pkg.fileTree,
     skillMarkdown: pkg.markdown,
     openaiYaml: pkg.openaiYaml,
@@ -638,7 +689,54 @@ export async function getSkillDetail(db: Db, slug: string, orgId?: string) {
     ready: pkg.ready,
     sourceBadge: pkg.sourceBadge,
     readOnly: pkg.manifest.namespace !== "hagent",
+    usedByCases: recommendedCaseTypes,
+    usedByProjects: recommendedProjectTracks,
+    forkInfo: pkg.manifest.forkOf
+      ? {
+          sourceNamespace: pkg.manifest.forkOf.namespace,
+          sourceSlug: pkg.manifest.forkOf.slug,
+          sourceRepo: pkg.manifest.forkOf.repo ?? null,
+        }
+      : null,
+    upstreamSync: {
+      status: pkg.manifest.source.commit ? "pinned" : pkg.manifest.namespace === "hagent" ? "forked-local" : "manual_review_required",
+      pinnedCommit: pkg.manifest.source.commit ?? null,
+      sourceRepo: pkg.manifest.source.repo ?? null,
+    },
   }
+}
+
+function inferSkillCaseTypes(manifest: SkillPackageManifest) {
+  const text = `${manifest.slug} ${manifest.summary}`.toLowerCase()
+  const types = new Set<string>()
+  if (/complaint|민원|tone|message|refund/.test(text)) types.add("complaint")
+  if (/refund|환불|law/.test(text)) types.add("refund")
+  if (/schedule|calendar|보강|시간표/.test(text)) types.add("schedule")
+  if (/student|counsel|상담|lead/.test(text)) types.add("inquiry")
+  if (/churn|retention|이탈/.test(text)) types.add("churn")
+  return Array.from(types)
+}
+
+function inferPackCaseTypes(manifest: SkillPackageManifest) {
+  const types = new Set<string>(inferSkillCaseTypes(manifest))
+  for (const slug of manifest.packIncludes?.skills ?? []) {
+    inferSkillCaseTypes({
+      ...manifest,
+      slug,
+      summary: slug,
+    }).forEach((type) => types.add(type))
+  }
+  return Array.from(types)
+}
+
+function inferProjectTracks(manifest: SkillPackageManifest) {
+  const text = `${manifest.slug} ${manifest.summary}`.toLowerCase()
+  const tracks = new Set<string>()
+  if (/complaint|민원|kakao/.test(text)) tracks.add("complaint-ops")
+  if (/refund|policy|law|법령/.test(text)) tracks.add("policy")
+  if (/schedule|calendar|보강/.test(text)) tracks.add("general")
+  if (/document|hwpx|문서/.test(text)) tracks.add("general")
+  return Array.from(tracks)
 }
 
 export async function getSkillFileTree(db: Db, slug: string) {
@@ -884,7 +982,14 @@ export async function forkSkillPackage(db: Db, slug: string) {
   manifest.id = `hagent/${slug}`
   manifest.namespace = "hagent"
   manifest.packageType = "builtin"
+  manifest.capabilityType = inferCapabilityType(manifest)
   manifest.source.kind = "local"
+  manifest.forkOf = {
+    namespace: pkg.manifest.namespace,
+    slug: pkg.manifest.slug,
+    repo: pkg.manifest.source.repo,
+    commit: pkg.manifest.source.commit,
+  }
   manifest.distribution.editable = true
   manifest.distribution.publishable = true
   await fs.writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8")

@@ -58,6 +58,12 @@ const COLUMNS: ColumnConfig[] = [
     tint: "rgba(239,68,68,0.06)",
     headerColor: "var(--color-danger)",
   },
+  {
+    status: "done",
+    label: "완료",
+    tint: "rgba(34,197,94,0.06)",
+    headerColor: "var(--color-success)",
+  },
 ]
 
 function normalizeCaseStatus(status?: string): CaseStatus {
@@ -475,48 +481,29 @@ export function KanbanBoard({ cases, onDeleteCase, deletingCaseId = null }: Kanb
     return acc
   }, {})
 
-  const doneCount = cases.filter((caseItem) => normalizeCaseStatus(caseItem.status) === "done").length
-
   return (
-    <div className="flex flex-col gap-3">
-      <div
-        className={cn(
-          "flex gap-3 overflow-x-auto pb-3",
-          "scrollbar-thin scrollbar-thumb-[var(--border-default)] scrollbar-track-transparent"
-        )}
-        style={{ minHeight: 480 }}
-      >
-        {COLUMNS.map((col) => (
-          <KanbanColumn
-            key={col.status}
-            config={col}
-            cards={grouped[col.status] ?? []}
-            orgPrefix={orgPrefix ?? ""}
-            isDragOver={dragOverColumn === col.status}
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            onCardDragStart={handleCardDragStart}
-            onDeleteCase={onDeleteCase}
-            deletingCaseId={deletingCaseId}
-          />
-        ))}
-      </div>
-
-      {doneCount > 0 && (
-        <div
-          className="flex items-center gap-2 px-3 py-2 rounded-lg"
-          style={{
-            backgroundColor: "var(--bg-elevated)",
-            border: "1px solid var(--border-default)",
-          }}
-        >
-          <StatusIcon status="done" size={14} />
-          <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-            완료된 케이스 {doneCount}개가 숨겨져 있습니다.
-          </span>
-        </div>
+    <div
+      className={cn(
+        "flex gap-3 overflow-x-auto pb-3",
+        "scrollbar-thin scrollbar-thumb-[var(--border-default)] scrollbar-track-transparent"
       )}
+      style={{ minHeight: 480 }}
+    >
+      {COLUMNS.map((col) => (
+        <KanbanColumn
+          key={col.status}
+          config={col}
+          cards={grouped[col.status] ?? []}
+          orgPrefix={orgPrefix ?? ""}
+          isDragOver={dragOverColumn === col.status}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          onCardDragStart={handleCardDragStart}
+          onDeleteCase={onDeleteCase}
+          deletingCaseId={deletingCaseId}
+        />
+      ))}
     </div>
   )
 }

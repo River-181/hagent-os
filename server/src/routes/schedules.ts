@@ -3,6 +3,7 @@ import { Router } from "express"
 import { eq } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
+import { normalizeInstructorRole } from "../lib/instructor-roles.js"
 
 export function scheduleRoutes(db: Db): Router {
   const router = Router()
@@ -15,16 +16,41 @@ export function scheduleRoutes(db: Db): Router {
         .where(eq(schema.instructors.organizationId, req.params.orgId))
       const studentSchedules = await db.select().from(schema.studentSchedules)
         .where(eq(schema.studentSchedules.organizationId, req.params.orgId))
+      const requestedStudentId = typeof req.query.studentId === "string" ? req.query.studentId : null
 
-      const enriched = schedules.map(s => ({
-        ...s,
-        instructor: instructors.find(i => i.id === s.instructorId) ?? null,
-        instructorName: instructors.find(i => i.id === s.instructorId)?.name ?? null,
-        instructorStatus: instructors.find(i => i.id === s.instructorId)?.status ?? null,
-        instructorSubject: instructors.find(i => i.id === s.instructorId)?.subject ?? null,
-        studentCount: studentSchedules.filter(item => item.scheduleId === s.id).length,
-      }))
-      res.json(enriched)
+      const instructorMap = new Map<string, (typeof schema.instructors.$inferSelect & { role: string })>(
+        instructors.map((instructor: typeof schema.instructors.$inferSelect) => [
+          instructor.id,
+          {
+            ...instructor,
+            role: normalizeInstructorRole(instructor.role, instructor.subject),
+          },
+        ]),
+      )
+
+      const studentIdsByScheduleId = new Map<string, string[]>()
+      for (const row of studentSchedules) {
+        if (!studentIdsByScheduleId.has(row.scheduleId)) {
+          studentIdsByScheduleId.set(row.scheduleId, [])
+        }
+        studentIdsByScheduleId.get(row.scheduleId)?.push(row.studentId)
+      }
+
+      const enriched = schedules.map((s: typeof schema.schedules.$inferSelect) => {
+        const instructor = s.instructorId ? instructorMap.get(s.instructorId) ?? null : null
+        const studentIds = studentIdsByScheduleId.get(s.id) ?? []
+        return {
+          ...s,
+          instructor,
+          instructorName: instructor?.name ?? null,
+          instructorStatus: instructor?.status ?? null,
+          instructorSubject: instructor?.subject ?? null,
+          instructorRole: instructor?.role ?? null,
+          studentIds,
+          studentCount: studentIds.length,
+        }
+      })
+      res.json(requestedStudentId ? enriched.filter((item) => item.studentIds.includes(requestedStudentId)) : enriched)
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch schedules" })
     }

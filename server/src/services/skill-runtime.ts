@@ -56,15 +56,15 @@ export async function buildAgentSkillRuntimeContext(db: Db, agentId: string) {
     .sort((a, b) => (a.mountOrder ?? 0) - (b.mountOrder ?? 0))
     .map((item) => ({
       slug: item.slug,
-      displayName: item.displayName ?? item.name ?? item.slug,
+      displayName: item.displayName ?? item.slug,
       summary: item.summary ?? "",
       mountOrder: item.mountOrder ?? 0,
-      requiredIntegrations: Array.isArray(item.runtime?.requiredIntegrations) ? item.runtime.requiredIntegrations : [],
+      requiredIntegrations: [],
       requiredEnv: Array.isArray(item.runtimeHealth)
         ? item.runtimeHealth.flatMap((health: { requiredEnv?: string[] }) => health.requiredEnv ?? [])
         : [],
       ready: Array.isArray(item.runtimeHealth) ? item.runtimeHealth.every((health: { ready?: boolean }) => health.ready !== false) : true,
-      excerpt: summarizeSkillMarkdown(String(item.skillMarkdown ?? "")),
+      excerpt: summarizeSkillMarkdown(String(item.summary ?? "")),
     }))
 
   const text =

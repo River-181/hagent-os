@@ -8,7 +8,6 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { cn, timeAgo } from "@/lib/utils"
-import { Identity } from "./Identity"
 import { StatusIcon } from "./StatusIcon"
 import { PriorityIcon, priorityLabel } from "./PriorityIcon"
 import type { CaseStatus } from "./StatusIcon"
@@ -19,6 +18,12 @@ interface CaseData {
   priority?: number
   type?: string
   severity?: string
+  assigneeAgentId?: string | null
+  opsGroupId?: string | null
+  project?: {
+    id: string
+    name: string
+  } | null
   assigneeAgent?: {
     id: string
     name: string
@@ -46,6 +51,8 @@ interface CasePropertiesProps {
   case?: CaseData
   onStatusChange?: (status: string) => void
   onUpdate?: (field: string, value: unknown) => void
+  agents?: Array<{ id: string; name: string; agentType?: string }>
+  projects?: Array<{ id: string; name: string }>
   className?: string
 }
 
@@ -88,6 +95,8 @@ export function CaseProperties({
   case: caseProp,
   onStatusChange,
   onUpdate,
+  agents = [],
+  projects = [],
   className,
 }: CasePropertiesProps) {
   const data = caseData ?? caseProp ?? {}
@@ -95,6 +104,9 @@ export function CaseProperties({
   const status = (data.status ?? "backlog") as CaseStatus
   const priority = (data.priority ?? 4) as number
   const assigneeAgent = data.assigneeAgent ?? data.assignee_agent
+  const assigneeAgentId = data.assigneeAgentId ?? assigneeAgent?.id ?? null
+  const project = data.project ?? null
+  const projectId = data.opsGroupId ?? project?.id ?? null
   const studentName = data.studentName ?? data.student_name
   const createdAt = data.createdAt ?? data.created_at
   const dueAt = data.dueAt ?? data.due_at
@@ -106,6 +118,14 @@ export function CaseProperties({
 
   const handlePriorityChange = (value: string) => {
     onUpdate?.("priority", Number(value))
+  }
+
+  const handleAssigneeChange = (value: string) => {
+    onUpdate?.("assigneeAgentId", value === "__none__" ? null : value)
+  }
+
+  const handleProjectChange = (value: string) => {
+    onUpdate?.("opsGroupId", value === "__none__" ? null : value)
   }
 
   const canEdit = !!(onStatusChange ?? onUpdate)
@@ -172,6 +192,48 @@ export function CaseProperties({
         </Select>
       </PropertyRow>
 
+      <Separator style={{ backgroundColor: "var(--border-default)" }} />
+
+      <PropertyRow label="담당 에이전트">
+        <Select value={assigneeAgentId ?? "__none__"} onValueChange={handleAssigneeChange} disabled={!onUpdate}>
+          <SelectTrigger
+            className="h-7 text-xs w-44 border-0 focus:ring-0"
+            style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-primary)" }}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">미배정</SelectItem>
+            {agents.map((agent) => (
+              <SelectItem key={agent.id} value={agent.id}>
+                {agent.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </PropertyRow>
+
+      <Separator style={{ backgroundColor: "var(--border-default)" }} />
+
+      <PropertyRow label="프로젝트">
+        <Select value={projectId ?? "__none__"} onValueChange={handleProjectChange} disabled={!onUpdate}>
+          <SelectTrigger
+            className="h-7 text-xs w-44 border-0 focus:ring-0"
+            style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-primary)" }}
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__none__">미연결</SelectItem>
+            {projects.map((projectOption) => (
+              <SelectItem key={projectOption.id} value={projectOption.id}>
+                {projectOption.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </PropertyRow>
+
       {data.type && (
         <>
           <Separator style={{ backgroundColor: "var(--border-default)" }} />
@@ -196,20 +258,6 @@ export function CaseProperties({
             >
               {data.severity}
             </Badge>
-          </PropertyRow>
-        </>
-      )}
-
-      {assigneeAgent && (
-        <>
-          <Separator style={{ backgroundColor: "var(--border-default)" }} />
-          <PropertyRow label="담당 에이전트">
-            <Identity
-              name={assigneeAgent.name}
-              avatarUrl={assigneeAgent.avatarUrl}
-              type="agent"
-              size="xs"
-            />
           </PropertyRow>
         </>
       )}
