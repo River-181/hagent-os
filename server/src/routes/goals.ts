@@ -48,7 +48,7 @@ export function goalRoutes(db: Db): Router {
   router.patch("/goals/:id", async (req, res) => {
     try {
       const updates: Record<string, unknown> = {}
-      for (const f of ["title", "description", "status", "parentGoalId", "targetDate"] as const) {
+      for (const f of ["title", "description", "status", "parentGoalId", "targetDate", "opsGroupId"] as const) {
         if (f in req.body) updates[f] = req.body[f]
       }
       const [updated] = await db.update(schema.opsGoals)

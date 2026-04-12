@@ -5,6 +5,7 @@ import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { useToast } from "@/components/ToastContext"
 import { goalsApi } from "@/api/goals"
+import { projectsApi } from "@/api/projects"
 import { queryKeys } from "@/lib/queryKeys"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -18,7 +19,7 @@ import {
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EmptyState } from "@/components/EmptyState"
-import { Target, Plus, Loader2, Calendar, ChevronRight } from "lucide-react"
+import { Target, Plus, Loader2, Calendar, ChevronRight, FolderKanban } from "lucide-react"
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
   active:      { label: "진행중", bg: "var(--color-primary-bg)",       color: "var(--color-teal-500)" },
@@ -51,6 +52,7 @@ export function GoalsPage() {
   const [newTitle, setNewTitle] = useState("")
   const [newStatus, setNewStatus] = useState("active")
   const [newDate, setNewDate] = useState("")
+  const [newProjectId, setNewProjectId] = useState("")
 
   useEffect(() => {
     setBreadcrumbs([{ label: "목표" }])
@@ -62,20 +64,33 @@ export function GoalsPage() {
     enabled: !!selectedOrgId,
   })
 
+  const { data: projects = [] } = useQuery({
+    queryKey: queryKeys.projects.list(selectedOrgId ?? ""),
+    queryFn: () => projectsApi.list(selectedOrgId!),
+    enabled: !!selectedOrgId,
+  })
+
+  const projectMap = Object.fromEntries(
+    (Array.isArray(projects) ? projects : []).map((p: any) => [p.id, p])
+  )
+
   const createMutation = useMutation({
     mutationFn: () =>
       goalsApi.create(selectedOrgId!, {
         title: newTitle.trim(),
         status: newStatus,
         targetDate: newDate || undefined,
+        opsGroupId: newProjectId || undefined,
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.goals.list(selectedOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.list(selectedOrgId ?? "") })
       success("목표를 추가했습니다.")
       setShowNew(false)
       setNewTitle("")
       setNewStatus("active")
       setNewDate("")
+      setNewProjectId("")
     },
     onError: () => toastError("목표 추가에 실패했습니다."),
   })
@@ -122,6 +137,7 @@ export function GoalsPage() {
             {list.map((goal: any) => {
               const cfg = statusCfg(goal.status ?? "active")
               const due = formatDate(goal.targetDate)
+              const linkedProject = goal.opsGroupId ? projectMap[goal.opsGroupId] : null
               return (
                 <button
                   key={goal.id}
@@ -139,12 +155,20 @@ export function GoalsPage() {
                     <span className="text-sm font-medium truncate block" style={{ color: "var(--text-primary)" }}>
                       {goal.title}
                     </span>
-                    {due && (
-                      <span className="flex items-center gap-1 mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                        <Calendar size={11} />
-                        {due}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-3 mt-1">
+                      {due && (
+                        <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                          <Calendar size={11} />
+                          {due}
+                        </span>
+                      )}
+                      {linkedProject && (
+                        <span className="flex items-center gap-1 text-xs" style={{ color: "var(--color-teal-500)" }}>
+                          <FolderKanban size={11} />
+                          {linkedProject.name}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <Badge
                     className="border-0 px-2 py-0.5 text-xs shrink-0"
@@ -161,7 +185,7 @@ export function GoalsPage() {
       </div>
 
       {/* New Goal Dialog */}
-      <Dialog open={showNew} onOpenChange={(o) => { if (!o) { setShowNew(false); setNewTitle(""); setNewStatus("active"); setNewDate("") } }}>
+      <Dialog open={showNew} onOpenChange={(o) => { if (!o) { setShowNew(false); setNewTitle(""); setNewStatus("active"); setNewDate(""); setNewProjectId("") } }}>
         <DialogContent style={{ backgroundColor: "var(--bg-base)", border: "1px solid var(--border-default)" }}>
           <DialogHeader>
             <DialogTitle style={{ color: "var(--text-primary)" }}>새 목표</DialogTitle>
@@ -192,6 +216,20 @@ export function GoalsPage() {
               <p className="mb-1.5 text-xs" style={{ color: "var(--text-secondary)" }}>목표 기한 (선택)</p>
               <Input type="date" value={newDate} onChange={(e) => setNewDate(e.target.value)} />
             </div>
+            {(Array.isArray(projects) ? projects : []).length > 0 && (
+              <div>
+                <p className="mb-1.5 text-xs" style={{ color: "var(--text-secondary)" }}>프로젝트 연결 (선택)</p>
+                <Select value={newProjectId} onValueChange={setNewProjectId}>
+                  <SelectTrigger><SelectValue placeholder="프로젝트 선택…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">연결 안 함</SelectItem>
+                    {(Array.isArray(projects) ? projects : []).map((p: any) => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNew(false)}>취소</Button>

@@ -8,6 +8,27 @@ import { createCaseWithRetry } from "../lib/case-create.js"
 function createProjectBreakdown(instruction: string) {
   const normalized = instruction.toLowerCase()
 
+  if (
+    normalized.includes("정책") ||
+    normalized.includes("환불") ||
+    normalized.includes("상담 정책") ||
+    normalized.includes("보강 정책") ||
+    normalized.includes("운영 규정")
+  ) {
+    return {
+      projectName: "학원 운영 정책 정비",
+      description: "환불, 상담, 보강, 출결 운영 정책을 정리해 직원용 플레이북과 학부모 안내문으로 만드는 작업",
+      cases: [
+        { title: "환불 정책 정리", description: "학원 환불 기준과 예외 처리 원칙을 정리합니다.", type: "complaint" as const, caseKind: "policy-request" },
+        { title: "상담 응대 원칙", description: "학부모 상담 응대 톤과 단계별 대응 원칙을 정리합니다.", type: "complaint" as const, caseKind: "policy-request" },
+        { title: "보강/결석 운영 규정", description: "보강, 결석, 일정 변경 처리 원칙을 문서화합니다.", type: "schedule" as const, caseKind: "policy-request" },
+        { title: "직원용 운영 플레이북", description: "직원/강사 공통 운영 체크리스트와 의사결정 기준을 정리합니다.", type: "inquiry" as const, caseKind: "policy-request" },
+        { title: "학부모 안내 FAQ", description: "학부모에게 바로 전달할 수 있는 운영 정책 FAQ를 작성합니다.", type: "complaint" as const, caseKind: "policy-request" },
+      ],
+      recommendedRoles: ["complaint", "scheduler", "compliance", "operations"],
+    }
+  }
+
   if (normalized.includes("프로모션") || normalized.includes("promotion") || normalized.includes("캠페인")) {
     return {
       projectName: "상반기 프로모션 준비",
@@ -85,10 +106,14 @@ export function projectRoutes(db: Db): Router {
         ? creationMetadata.recommendedRoles.filter((item: unknown): item is string => typeof item === "string")
         : []
 
+      const goals = await db.select().from(schema.opsGoals)
+        .where(eq(schema.opsGoals.opsGroupId, req.params.id))
+
       res.json({
         ...project,
         cases,
         documents,
+        goals,
         recommendedRoles,
         sourceInstruction: typeof creationMetadata.instruction === "string" ? creationMetadata.instruction : null,
       })

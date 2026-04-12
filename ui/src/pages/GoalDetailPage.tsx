@@ -5,6 +5,7 @@ import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { useToast } from "@/components/ToastContext"
 import { goalsApi } from "@/api/goals"
+import { projectsApi } from "@/api/projects"
 import { queryKeys } from "@/lib/queryKeys"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,7 +17,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { ArrowLeft, Calendar, Loader2, Pencil, Trash2, Check, X } from "lucide-react"
+import { ArrowLeft, Calendar, FolderKanban, Loader2, Pencil, Trash2, Check, X, Link2, Link2Off } from "lucide-react"
 
 const STATUS_OPTIONS = [
   { value: "active",      label: "진행중", bg: "var(--color-primary-bg)",  color: "var(--color-teal-500)" },
@@ -48,6 +49,13 @@ export function GoalDetailPage() {
   const [editingTitle, setEditingTitle] = useState(false)
   const [titleDraft, setTitleDraft] = useState("")
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [linkingProject, setLinkingProject] = useState(false)
+
+  const { data: projects = [] } = useQuery({
+    queryKey: queryKeys.projects.list(selectedOrgId ?? ""),
+    queryFn: () => projectsApi.list(selectedOrgId!),
+    enabled: !!selectedOrgId,
+  })
 
   const { data: goal, isLoading, isError } = useQuery({
     queryKey: ["goals", id],
@@ -119,6 +127,8 @@ export function GoalDetailPage() {
 
   const cfg = statusCfg(goal.status ?? "active")
   const due = formatDate(goal.targetDate)
+  const projectList = Array.isArray(projects) ? projects : []
+  const linkedProject = projectList.find((p: any) => p.id === goal.opsGroupId) ?? null
 
   return (
     <div className="h-full overflow-y-auto">
@@ -201,6 +211,92 @@ export function GoalDetailPage() {
 
           {patchMutation.isPending && (
             <Loader2 size={13} className="animate-spin ml-1" style={{ color: "var(--text-tertiary)" }} />
+          )}
+        </div>
+
+        {/* Linked Project */}
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>연결 프로젝트</p>
+            {linkedProject && (
+              <button
+                type="button"
+                className="text-xs flex items-center gap-1"
+                style={{ color: "var(--text-tertiary)" }}
+                onClick={() => patchMutation.mutate({ opsGroupId: null })}
+                title="연결 해제"
+              >
+                <Link2Off size={12} />
+                연결 해제
+              </button>
+            )}
+          </div>
+
+          {linkedProject ? (
+            <button
+              type="button"
+              onClick={() => navigate(`/${orgPrefix}/projects/${linkedProject.id}`)}
+              className="flex items-center gap-2 w-full px-4 py-3 rounded-xl text-left transition-colors"
+              style={{
+                backgroundColor: "var(--bg-elevated)",
+                border: "1px solid var(--border-default)",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--color-teal-500)")}
+              onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
+            >
+              <span
+                className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
+                style={{ backgroundColor: linkedProject.color ? `${linkedProject.color}20` : "var(--bg-tertiary)" }}
+              >
+                <FolderKanban size={13} style={{ color: linkedProject.color ?? "var(--color-teal-500)" }} />
+              </span>
+              <span className="text-sm font-medium flex-1" style={{ color: "var(--text-primary)" }}>
+                {linkedProject.name}
+              </span>
+              <span className="text-xs" style={{ color: "var(--color-teal-500)" }}>→</span>
+            </button>
+          ) : linkingProject ? (
+            <div className="flex items-center gap-2">
+              <Select
+                onValueChange={(val) => {
+                  patchMutation.mutate({ opsGroupId: val })
+                  setLinkingProject(false)
+                }}
+              >
+                <SelectTrigger className="flex-1 text-sm">
+                  <SelectValue placeholder="프로젝트 선택…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {projectList.map((p: any) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button
+                type="button"
+                onClick={() => setLinkingProject(false)}
+                className="p-2 rounded-lg"
+                style={{ color: "var(--text-tertiary)" }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setLinkingProject(true)}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm transition-colors"
+              style={{
+                backgroundColor: "var(--bg-elevated)",
+                border: "1px dashed var(--border-default)",
+                color: "var(--text-tertiary)",
+              }}
+            >
+              <Link2 size={14} />
+              프로젝트 연결
+            </button>
           )}
         </div>
 
