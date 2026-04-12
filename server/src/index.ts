@@ -1,7 +1,6 @@
 import fs from "fs"
 import path from "path"
 import { createDb } from "@hagent/db"
-import EmbeddedPostgres from "embedded-postgres"
 import detectPort from "detect-port"
 import pino from "pino"
 import { loadConfig } from "./config.js"
@@ -24,6 +23,9 @@ async function main() {
 
     const dataDir = path.resolve(config.embeddedPostgresDataDir)
     const alreadyInitialised = fs.existsSync(path.join(dataDir, "data", "PG_VERSION"))
+
+    // 동적 import — DATABASE_URL 있을 때는 로드하지 않음 (바이너리 없어도 안전)
+    const { default: EmbeddedPostgres } = await import("embedded-postgres")
 
     const pg = new EmbeddedPostgres({
       databaseDir: dataDir,
