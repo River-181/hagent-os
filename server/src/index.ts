@@ -7,6 +7,7 @@ import pino from "pino"
 import { loadConfig } from "./config.js"
 import { createApp } from "./app.js"
 import { startTelegramInboundPolling } from "./services/telegram-inbound-sync.js"
+import { autoSeedDemoOrganization } from "./services/auto-seed-demo.js"
 
 const logger = pino({ level: "info" })
 
@@ -141,6 +142,9 @@ async function main() {
       logger.warn(e, "Database connection verification failed (non-fatal)")
     }
   })()
+
+  // 심사위원용 "완성된 학원 OS" 자동 시드 (AUTO_SEED_DEMO=true 일 때만 동작, 멱등)
+  void autoSeedDemoOrganization(db).catch((err) => logger.warn(err, "Auto-seed crashed"))
 
   const stopTelegramPolling = startTelegramInboundPolling(db)
 

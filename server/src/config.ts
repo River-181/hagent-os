@@ -16,7 +16,7 @@ export interface Config {
 
 export function loadConfig(): Config {
   return {
-    port: parseInt(process.env.PORT || "3100", 10),
+    port: parseInt(process.env.PORT || "3200", 10),
     databaseUrl: process.env.DATABASE_URL || null,
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || null,
     deploymentMode:

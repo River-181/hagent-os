@@ -89,6 +89,11 @@ function normalizeInstitutionSize(value: string | undefined) {
   return institutionSizeValueMap[value] ?? value
 }
 
+function describeIntegrationStatusSource(value: string | undefined) {
+  if (value === "org-configured") return "조직 설정 기반"
+  return "process env 기반"
+}
+
 function isObjectRecord(value: unknown): value is Record<string, any> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
@@ -1055,13 +1060,16 @@ export function SettingsPage() {
                           {integration.connected ? "연결됨" : "환경변수 필요"}
                         </StatusPill>
                       </div>
-                      <div className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                        {integration.description}
-                      </div>
+                    <div className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                      {integration.description}
                     </div>
-                    <NativeSwitch
-                      checked={preference.enabled}
-                      onCheckedChange={(checked) =>
+                    <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                      출처: {describeIntegrationStatusSource((integration as any).statusSource)}
+                    </div>
+                  </div>
+                  <NativeSwitch
+                    checked={preference.enabled}
+                    onCheckedChange={(checked) =>
                         setIntegrationPrefs((prev) => ({
                           ...prev,
                           [integration.key]: {
@@ -1207,6 +1215,16 @@ export function SettingsPage() {
                 </div>
                 <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
                   {channel.description}
+                </div>
+                <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  출처:{" "}
+                  {channel.key === "telegram-outbound"
+                    ? describeIntegrationStatusSource(
+                        (integrations.find((item: any) => item.key === "telegram-outbound") as any)?.statusSource,
+                      )
+                    : channel.key === "kakao-outbound"
+                      ? "process env 기반"
+                      : "기관 설정 기반"}
                 </div>
                 <div className="mt-3 text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
                   {channel.detail}

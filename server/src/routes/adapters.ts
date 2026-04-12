@@ -14,14 +14,24 @@ function resolveOrgScopedIntegrationStatuses(
   integrations: ReturnType<typeof getIntegrationStatuses>,
   config: unknown,
 ) {
-  if (!isPlainObject(config)) return integrations
+  if (!isPlainObject(config)) {
+    return integrations.map((integration) => ({
+      ...integration,
+      statusSource: "process-env",
+    }))
+  }
 
   const nestedIntegrations = isPlainObject(config.integrations) ? config.integrations : {}
   const channels = isPlainObject(nestedIntegrations.channels) ? nestedIntegrations.channels : {}
   const telegram = isPlainObject(channels.telegram) ? channels.telegram : {}
   const telegramBotToken = typeof telegram.botToken === "string" ? telegram.botToken.trim() : ""
 
-  if (!telegramBotToken) return integrations
+  if (!telegramBotToken) {
+    return integrations.map((integration) => ({
+      ...integration,
+      statusSource: "process-env",
+    }))
+  }
 
   return integrations.map((integration) =>
     integration.key === "telegram-outbound"
@@ -30,8 +40,12 @@ function resolveOrgScopedIntegrationStatuses(
           connected: true,
           inactive: false,
           missingEnv: [],
+          statusSource: "org-configured",
         }
-      : integration,
+      : {
+          ...integration,
+          statusSource: "process-env",
+        },
   )
 }
 

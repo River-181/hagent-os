@@ -8,6 +8,7 @@ export function useSSE(orgId: string | null) {
   const esRef = useRef<EventSource | null>(null)
   const reconnectTimerRef = useRef<number | null>(null)
   const retryDelayRef = useRef(5000)
+  const reconnectEpochRef = useRef(0)
 
   useEffect(() => {
     if (!orgId) return
@@ -32,6 +33,11 @@ export function useSSE(orgId: string | null) {
       }
     }
 
+    const invalidatePendingReconnect = () => {
+      reconnectEpochRef.current += 1
+      clearReconnectTimer()
+    }
+
     const closeEventSource = (target?: EventSource | null) => {
       if (target) {
         target.close()
@@ -43,11 +49,18 @@ export function useSSE(orgId: string | null) {
 
     const scheduleReconnect = () => {
       if (disposed) return
+      const epoch = ++reconnectEpochRef.current
       clearReconnectTimer()
       reconnectTimerRef.current = window.setTimeout(() => {
         reconnectTimerRef.current = null
+        if (disposed || epoch !== reconnectEpochRef.current) return
         connect()
       }, retryDelayRef.current)
+    }
+
+    const hasActiveEventSource = () => {
+      const es = esRef.current
+      return es !== null && es.readyState !== EventSource.CLOSED
     }
 
     const connect = () => {
@@ -57,6 +70,11 @@ export function useSSE(orgId: string | null) {
         return
       }
 
+      if (hasActiveEventSource()) {
+        return
+      }
+
+      invalidatePendingReconnect()
       closeEventSource(esRef.current)
 
       const es = new EventSource(`/api/organizations/${orgId}/events/sse`)
@@ -104,12 +122,14 @@ export function useSSE(orgId: string | null) {
     }
 
     const handleOnline = () => {
+      if (disposed) return
       retryDelayRef.current = 5000
       connect()
     }
 
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && !esRef.current) {
+      if (disposed) return
+      if (document.visibilityState === "visible" && !hasActiveEventSource()) {
         retryDelayRef.current = 5000
         connect()
       }
