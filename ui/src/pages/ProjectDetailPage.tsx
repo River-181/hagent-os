@@ -1,27 +1,81 @@
 // v0.3.0
-import { useEffect, useState } from "react"
+import { useContext, useEffect, useMemo, useState, type ReactNode } from "react"
 import { useParams, Link } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
+import { useOrganization } from "@/context/OrganizationContext"
 import { projectsApi } from "@/api/projects"
+import { agentsApi } from "@/api/agents"
+import { ToastContext } from "@/components/ToastContext"
 import { queryKeys } from "@/lib/queryKeys"
 import { CaseTypeBadge } from "@/components/CaseTypeBadge"
 import { CaseSeverityBadge } from "@/components/CaseSeverityBadge"
 import { StatusIcon, type CaseStatus } from "@/components/StatusIcon"
-import { FolderKanban, CalendarDays, Layers } from "lucide-react"
+import { FolderKanban, CalendarDays, Layers, FileText, UserPlus, Sparkles } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-type Tab = "overview" | "cases"
+type Tab = "overview" | "cases" | "outputs"
 
 export function ProjectDetailPage() {
   const { id, orgPrefix } = useParams<{ id: string; orgPrefix: string }>()
   const { setBreadcrumbs } = useBreadcrumbs()
+  const { selectedOrgId } = useOrganization()
+  const queryClient = useQueryClient()
+  const toast = useContext(ToastContext)
   const [activeTab, setActiveTab] = useState<Tab>("overview")
 
   const { data: project, isLoading } = useQuery<any>({
     queryKey: queryKeys.projects.detail(id ?? ""),
     queryFn: () => projectsApi.get(id!),
     enabled: !!id,
+  })
+
+  const { data: agents = [] } = useQuery<any[]>({
+    queryKey: queryKeys.agents.list(selectedOrgId ?? ""),
+    queryFn: () => agentsApi.list(selectedOrgId!),
+    enabled: !!selectedOrgId,
+  })
+
+  const recommendedRoles: string[] = project?.recommendedRoles ?? []
+
+  const existingRoles = useMemo(
+    () => new Set((agents ?? []).map((agent: any) => agent.agentType ?? agent.slug ?? agent.name)),
+    [agents],
+  )
+
+  const missingRecommendedRoles = recommendedRoles.filter((role) => !existingRoles.has(role))
+
+  const hireMutation = useMutation({
+    mutationFn: (role: string) =>
+      agentsApi.createHireRequest(selectedOrgId!, {
+        name:
+          role === "marketing"
+            ? "프로모션 담당"
+            : role === "complaint"
+            ? "민원담당"
+            : role === "scheduler"
+            ? "스케줄러"
+            : role === "orchestrator"
+            ? "원장 오케스트레이터"
+            : role,
+        agentType:
+          role === "marketing"
+            ? "staff"
+            : role === "complaint"
+            ? "complaint"
+            : role === "scheduler"
+            ? "scheduler"
+            : role === "orchestrator"
+            ? "orchestrator"
+            : "staff",
+        title: role,
+        model: "gpt-5-codex",
+      }),
+    onSuccess: () => {
+      toast?.success("추천 에이전트 고용 승인 요청을 만들었습니다.")
+      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") })
+    },
+    onError: () => toast?.error("고용 승인 요청 생성에 실패했습니다."),
   })
 
   useEffect(() => {
@@ -51,6 +105,7 @@ export function ProjectDetailPage() {
   }
 
   const cases: any[] = project.cases ?? []
+  const documents: any[] = project.documents ?? []
   const activeCases = cases.filter((c) => c.status !== "done")
   const doneCases = cases.filter((c) => c.status === "done")
 
@@ -87,7 +142,7 @@ export function ProjectDetailPage() {
         className="flex items-center gap-1 mb-6"
         style={{ borderBottom: "1px solid var(--border-default)" }}
       >
-        {(["overview", "cases"] as Tab[]).map((tab) => (
+        {(["overview", "cases", "outputs"] as Tab[]).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -102,7 +157,7 @@ export function ProjectDetailPage() {
               borderColor: activeTab === tab ? "var(--color-teal-500)" : "transparent",
             }}
           >
-            {tab === "overview" ? "개요" : `케이스 (${cases.length})`}
+            {tab === "overview" ? "개요" : tab === "cases" ? `케이스 (${cases.length})` : `Outputs (${documents.length})`}
           </button>
         ))}
       </div>
@@ -143,6 +198,90 @@ export function ProjectDetailPage() {
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
                 {project.description}
               </p>
+            </div>
+          )}
+
+          {project.sourceInstruction && (
+            <div
+              className="rounded-xl p-5"
+              style={{
+                backgroundColor: "var(--bg-elevated)",
+                border: "1px solid var(--border-default)",
+                boxShadow: "var(--shadow-sm)",
+              }}
+            >
+              <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
+                원본 지시
+              </h3>
+              <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+                {project.sourceInstruction}
+              </p>
+            </div>
+          )}
+
+          {recommendedRoles.length > 0 && (
+            <div
+              className="rounded-xl p-5"
+              style={{
+                backgroundColor: "var(--bg-elevated)",
+                border: "1px solid var(--border-default)",
+                boxShadow: "var(--shadow-sm)",
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles size={16} style={{ color: "var(--color-teal-500)" }} />
+                <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  추천 역할
+                </h3>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {recommendedRoles.map((role) => {
+                  const missing = missingRecommendedRoles.includes(role)
+                  return (
+                    <span
+                      key={role}
+                      className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs"
+                      style={{
+                        backgroundColor: missing ? "var(--color-primary-bg)" : "var(--bg-secondary)",
+                        color: missing ? "var(--color-teal-500)" : "var(--text-secondary)",
+                      }}
+                    >
+                      {role}
+                      {missing ? "추천 고용 필요" : "배치됨"}
+                    </span>
+                  )
+                })}
+              </div>
+
+              {missingRecommendedRoles.length > 0 && selectedOrgId && (
+                <div className="mt-4 space-y-2">
+                  {missingRecommendedRoles.map((role) => (
+                    <button
+                      key={role}
+                      type="button"
+                      onClick={() => hireMutation.mutate(role)}
+                      className="flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left"
+                      style={{
+                        borderColor: "var(--border-default)",
+                        backgroundColor: "var(--bg-secondary)",
+                      }}
+                    >
+                      <div>
+                        <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                          {role}
+                        </div>
+                        <div className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
+                          이 프로젝트에 필요한 역할입니다.
+                        </div>
+                      </div>
+                      <span className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: "var(--color-teal-500)" }}>
+                        <UserPlus size={14} />
+                        고용 요청
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -210,6 +349,53 @@ export function ProjectDetailPage() {
           )}
         </div>
       )}
+
+      {activeTab === "outputs" && (
+        <div>
+          {documents.length === 0 ? (
+            <div
+              className="rounded-xl p-10 flex flex-col items-center justify-center gap-3"
+              style={{
+                backgroundColor: "var(--bg-elevated)",
+                border: "1px solid var(--border-default)",
+                boxShadow: "var(--shadow-sm)",
+              }}
+            >
+              <FileText size={36} style={{ color: "var(--text-tertiary)" }} />
+              <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                아직 연결된 산출물 문서가 없습니다.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {documents.map((document) => (
+                <div
+                  key={document.id}
+                  className="rounded-xl border p-4"
+                  style={{
+                    borderColor: "var(--border-default)",
+                    backgroundColor: "var(--bg-elevated)",
+                    boxShadow: "var(--shadow-sm)",
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-medium" style={{ color: "var(--text-primary)" }}>{document.title}</div>
+                      <div className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                        {document.category} · {new Date(document.updatedAt).toLocaleDateString("ko-KR")}
+                      </div>
+                    </div>
+                    <FileText size={16} style={{ color: "var(--color-teal-500)" }} />
+                  </div>
+                  <p className="mt-3 text-sm line-clamp-4 whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+                    {document.body}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -223,7 +409,7 @@ function StatCard({
   label: string
   value: string | number
   color?: string
-  icon?: React.ReactNode
+  icon?: ReactNode
 }) {
   return (
     <div className="flex flex-col gap-1">

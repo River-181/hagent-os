@@ -112,6 +112,22 @@ export function documentRoutes(db: Db): Router {
     }
   })
 
+  router.get("/cases/:id/documents", async (req, res) => {
+    try {
+      const [caseRecord] = await db.select().from(schema.cases).where(eq(schema.cases.id, req.params.id))
+      if (!caseRecord) {
+        res.status(404).json({ error: "Case not found" })
+        return
+      }
+
+      const docs = (await db.select().from(schema.documents).where(eq(schema.documents.organizationId, caseRecord.organizationId)))
+        .filter((doc: typeof schema.documents.$inferSelect) => Array.isArray(doc.tags) && doc.tags.includes(`case:${caseRecord.id}`))
+      res.json(docs)
+    } catch {
+      res.status(500).json({ error: "Failed to fetch case documents" })
+    }
+  })
+
   // Get single document
   router.get("/documents/:id", async (req, res) => {
     try {
@@ -144,6 +160,74 @@ export function documentRoutes(db: Db): Router {
       res.status(201).json(doc)
     } catch (err) {
       res.status(500).json({ error: "Failed to create document" })
+    }
+  })
+
+  router.post("/cases/:id/documents", async (req, res) => {
+    try {
+      const [caseRecord] = await db.select().from(schema.cases).where(eq(schema.cases.id, req.params.id))
+      if (!caseRecord) {
+        res.status(404).json({ error: "Case not found" })
+        return
+      }
+
+      const { title, category, body, tags, runId, documentType, status, version } = req.body as {
+        title: string
+        category?: string
+        body?: string
+        tags?: string[]
+        runId?: string
+        documentType?: string
+        status?: string
+        version?: string
+      }
+
+      if (!title?.trim()) {
+        res.status(400).json({ error: "title required" })
+        return
+      }
+
+      const nextTags = Array.from(
+        new Set([
+          ...(Array.isArray(tags) ? tags : []),
+          `case:${caseRecord.id}`,
+          ...(caseRecord.opsGroupId ? [`project:${caseRecord.opsGroupId}`] : []),
+          ...(runId ? [`run:${runId}`] : []),
+          ...(documentType ? [`artifact:${documentType}`] : []),
+          ...(status ? [`status:${status}`] : []),
+          ...(version ? [`version:${version}`] : []),
+        ]),
+      )
+
+      const [doc] = await db
+        .insert(schema.documents)
+        .values({
+          organizationId: caseRecord.organizationId,
+          title: title.trim(),
+          category: category ?? "artifact",
+          body: body ?? "",
+          tags: nextTags,
+        })
+        .returning()
+
+      await db.insert(schema.activityEvents).values({
+        organizationId: caseRecord.organizationId,
+        actorType: "user",
+        actorId: "case-detail",
+        action: "document.created",
+        entityType: "document",
+        entityId: doc.id,
+        entityTitle: doc.title,
+        metadata: {
+          caseId: caseRecord.id,
+          runId: runId ?? null,
+          documentType: documentType ?? null,
+        } as Record<string, unknown>,
+      })
+
+      res.status(201).json(doc)
+    } catch {
+      res.status(500).json({ error: "Failed to create case document" })
     }
   })
 

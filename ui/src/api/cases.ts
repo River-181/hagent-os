@@ -5,6 +5,8 @@ export const casesApi = {
   get: (id: string) => api.get<any>(`/cases/${id}`),
   create: (orgId: string, data: unknown) =>
     api.post<any>(`/organizations/${orgId}/cases`, data),
+  listChildCases: (id: string) => api.get<any[]>(`/cases/${id}/child-cases`),
+  createChildCase: (id: string, data: unknown) => api.post<any>(`/cases/${id}/child-cases`, data),
   update: (id: string, data: unknown) => api.patch<any>(`/cases/${id}`, data),
   delete: (id: string) => api.delete<void>(`/cases/${id}`),
 }

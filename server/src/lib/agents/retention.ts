@@ -47,6 +47,9 @@ export async function runRetentionAgent(input: RetentionAgentInput): Promise<Ret
 
 학생 이름: ${input.studentName}
 현재 위험도 점수: ${input.currentRiskScore.toFixed(2)}
+${input.allowedChannels?.length ? `허용 채널: ${input.allowedChannels.join(", ")}` : ""}
+${input.runtimeSkills?.length ? `장착된 스킬: ${input.runtimeSkills.map((skill) => `${skill.displayName}(${skill.slug})`).join(", ")}` : ""}
+${input.skillContext ? `\n실행 스킬 번들:\n${input.skillContext}\n` : ""}
 
 출석 현황 (최근 ${Math.min(totalSessions, 10)}회):
 ${attendanceSummary || "  데이터 없음"}

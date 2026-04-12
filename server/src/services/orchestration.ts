@@ -1,8 +1,9 @@
-import { count, desc, eq } from "drizzle-orm"
+import { desc, eq } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { runOrchestrator } from "../lib/agents/orchestrator.js"
 import { executeAgentRun } from "./execution.js"
+import { createCaseWithRetry } from "../lib/case-create.js"
 
 export function getApprovalLevelForAgentType(agentType: string) {
   if (agentType === "complaint" || agentType === "scheduler") return 1
@@ -89,30 +90,21 @@ export async function dispatchInstruction(
     let caseRecord = matchingOpenCase
 
     if (!caseRecord) {
-      const [{ total }] = await db
-        .select({ total: count() })
-        .from(schema.cases)
-        .where(eq(schema.cases.organizationId, input.organizationId))
-
-      const [created] = await db
-        .insert(schema.cases)
-        .values({
-          organizationId: input.organizationId,
-          opsGroupId: input.preferredProjectId ?? null,
-          identifier: `C-${String(total + 1).padStart(3, "0")}`,
-          title: `[자동생성] ${assignment.reason}`,
-          description: input.instruction,
-          type: inferCaseType(agent.agentType),
-          severity: "normal",
-          status: "todo",
-          priority: 2,
-          source: "manual",
-          metadata: {
-            generatedBy: "orchestrator",
-            assignmentReason: assignment.reason,
-          } as Record<string, unknown>,
-        })
-        .returning()
+      const created = await createCaseWithRetry(db, {
+        organizationId: input.organizationId,
+        opsGroupId: input.preferredProjectId ?? null,
+        title: `[자동생성] ${assignment.reason}`,
+        description: input.instruction,
+        type: inferCaseType(agent.agentType),
+        severity: "normal",
+        status: "todo",
+        priority: 2,
+        source: "manual",
+        metadata: {
+          generatedBy: "orchestrator",
+          assignmentReason: assignment.reason,
+        } as Record<string, unknown>,
+      })
 
       caseRecord = created
       createdCaseIds.push(created.id)

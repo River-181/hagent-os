@@ -63,7 +63,8 @@ function which(command: string) {
 export function getIntegrationStatuses(): IntegrationStatus[] {
   const lawEnv = customEnvStatus(["LAW_OC", "KOREAN_LAW_API_KEY"], "LAW_OC")
   const calendarEnv = envStatus(["GOOGLE_CALENDAR_ACCESS_TOKEN"])
-  const kakaoEnv = envStatus(["KAKAO_CHANNEL_ID", "KAKAO_CHANNEL_SECRET"])
+  const kakaoEnv = customEnvStatus(["KAKAO_REST_API_KEY", "KAKAO_ADMIN_KEY"], "KAKAO_REST_API_KEY")
+  const kakaoOutboundEnv = envStatus(["KAKAO_OUTBOUND_PROVIDER_URL"])
   const smsEnv = envStatus(["ALIGO_API_KEY", "ALIGO_USER_ID"])
   const lawCliPath = fileURLToPath(
     new URL("../../../integrations/korean-law-mcp/build/cli.js", import.meta.url),
@@ -102,6 +103,17 @@ export function getIntegrationStatuses(): IntegrationStatus[] {
       missingEnv: kakaoEnv.missingEnv,
       command: null,
       description: "학부모 카카오 응대/알림 전송",
+    },
+    {
+      key: "kakao-outbound",
+      label: "Kakao Outbound",
+      category: "messaging",
+      installed: true,
+      connected: kakaoOutboundEnv.connected,
+      inactive: !kakaoOutboundEnv.connected,
+      missingEnv: kakaoOutboundEnv.missingEnv,
+      command: null,
+      description: "승인 후 카카오 자동 회신 provider",
     },
     {
       key: "aligo-sms",

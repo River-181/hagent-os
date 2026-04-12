@@ -7,6 +7,8 @@ import { runOrchestrator } from "../lib/agents/orchestrator.js"
 import { runComplaintAgent } from "../lib/agents/complaint.js"
 import { runRetentionAgent } from "../lib/agents/retention.js"
 import { runSchedulerAgent } from "../lib/agents/scheduler.js"
+import { buildAgentSkillRuntimeContext } from "./skill-runtime.js"
+import { createCaseDocumentArtifact } from "./case-artifacts.js"
 
 const logger = pino({ level: "info" })
 
@@ -107,6 +109,18 @@ export async function executeAgentRun(
       .from(schema.organizations)
       .where(eq(schema.organizations.id, organizationId))
 
+    const { bundles: runtimeSkills, text: skillContext } = await buildAgentSkillRuntimeContext(db, agent.id)
+    const adapterConfig =
+      agent.adapterConfig && typeof agent.adapterConfig === "object" && !Array.isArray(agent.adapterConfig)
+        ? (agent.adapterConfig as Record<string, unknown>)
+        : {}
+    const allowedChannels = Array.isArray(adapterConfig.allowedChannels)
+      ? adapterConfig.allowedChannels.filter((item): item is string => typeof item === "string")
+      : []
+    const allowedEntityScopes = Array.isArray(adapterConfig.allowedEntityScopes)
+      ? adapterConfig.allowedEntityScopes.filter((item): item is string => typeof item === "string")
+      : []
+
     let linkedStudentId = caseRecord.studentId ?? null
     if (!linkedStudentId && (agentType === "retention" || agentType === "scheduler")) {
       const fallbackStudents = await db
@@ -129,6 +143,21 @@ export async function executeAgentRun(
     }
 
     let studentRecord: typeof schema.students.$inferSelect | undefined
+    const caseComments = await db
+      .select()
+      .from(schema.caseComments)
+      .where(eq(schema.caseComments.caseId, caseId))
+      .orderBy(desc(schema.caseComments.createdAt))
+
+    const followUpContext = caseComments
+      .slice(0, 5)
+      .reverse()
+      .map((comment: typeof schema.caseComments.$inferSelect) => {
+        const author = comment.authorType === "agent" ? "agent" : comment.authorType === "external" ? "external" : "user"
+        return `- ${author}: ${comment.content}`
+      })
+      .join("\n")
+
     if (linkedStudentId) {
       const rows = await db
         .select()
@@ -174,6 +203,10 @@ export async function executeAgentRun(
             .slice(0, 5),
         }),
         ...runtimeBinding,
+        runtimeSkills,
+        skillContext,
+        allowedChannels,
+        allowedEntityScopes,
       })
       agentOutput = result as unknown as Record<string, unknown>
       reasoning = result.plan
@@ -185,6 +218,11 @@ export async function executeAgentRun(
         description: caseRecord.description ?? "",
         reporterId: caseRecord.reporterId ?? undefined,
         studentId: caseRecord.studentId ?? undefined,
+        followUpContext: followUpContext || undefined,
+        runtimeSkills,
+        skillContext,
+        allowedChannels,
+        allowedEntityScopes,
         ...runtimeBinding,
       })
       agentOutput = result.analysis as unknown as Record<string, unknown>
@@ -212,6 +250,11 @@ export async function executeAgentRun(
           status: r.status,
         })),
         currentRiskScore: studentRecord.riskScore ?? 0,
+        followUpContext: followUpContext || undefined,
+        runtimeSkills,
+        skillContext,
+        allowedChannels,
+        allowedEntityScopes,
         ...runtimeBinding,
       })
       agentOutput = result.assessment as unknown as Record<string, unknown>
@@ -241,6 +284,11 @@ export async function executeAgentRun(
           endTime: schedule.endTime,
           room: schedule.room,
         })),
+        followUpContext: followUpContext || undefined,
+        runtimeSkills,
+        skillContext,
+        allowedChannels,
+        allowedEntityScopes,
         adapterType: runtimeBinding.adapterType ?? undefined,
         model: runtimeBinding.model ?? undefined,
       })
@@ -254,6 +302,17 @@ export async function executeAgentRun(
     }
 
     const completedAt = new Date()
+    const artifactStatus = approvalLevel >= 1 ? "draft" : "approved"
+    await createCaseDocumentArtifact(db, {
+      organizationId,
+      caseId: caseRecord.id,
+      caseIdentifier: caseRecord.identifier,
+      opsGroupId: caseRecord.opsGroupId ?? null,
+      runId,
+      agentType,
+      output: agentOutput,
+      status: artifactStatus,
+    })
 
     // 6. Store result, create approval or auto-complete
     if (approvalLevel >= 1) {

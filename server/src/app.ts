@@ -27,6 +27,7 @@ import { agentInstructionsRoutes } from "./routes/agent-instructions.js"
 import { agentHireRoutes } from "./routes/agent-hires.js"
 import { pluginRoutes } from "./routes/plugins.js"
 import { adapterRoutes } from "./routes/adapters.js"
+import { messageRoutes } from "./routes/messages.js"
 
 export function createApp(db: Db, config: Config): Express {
   const app = express()
@@ -62,7 +63,9 @@ export function createApp(db: Db, config: Config): Express {
   app.use("/api", scheduleRoutes(db))
   app.use("/api/plugins", pluginRoutes())
   app.use("/api/adapters", adapterRoutes())
+  app.use("/api", messageRoutes(db))
   app.use("/api/webhook", webhookRoutes(db))
+  app.use("/api/channels", webhookRoutes(db))
   app.use("/api", agentHireRoutes(db))
 
   return app

@@ -334,7 +334,7 @@ function ScheduleDetailDialog({
               style={inputStyle} />
             <select value={editInstructorId} onChange={e => setEditInstructorId(e.target.value)}
               className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle}>
-              <option value="">강사 미지정</option>
+              <option value="">직원/강사 미지정</option>
               {instructors.map(inst => (
                 <option key={inst.id} value={inst.id}>{inst.name} ({inst.subject})</option>
               ))}
@@ -372,7 +372,7 @@ function ScheduleDetailDialog({
             <div className="rounded-xl overflow-hidden" style={{ border: "1px solid var(--border-default)" }}>
               {!isShuttle && !isLeave && schedule.instructor && (
                 <div className="flex items-center gap-3 px-4 py-2.5" style={{ borderBottom: "1px solid var(--border-default)" }}>
-                  <span className="text-xs w-14 shrink-0" style={{ color: "var(--text-tertiary)" }}>강사</span>
+                  <span className="text-xs w-20 shrink-0" style={{ color: "var(--text-tertiary)" }}>담당 직원/강사</span>
                   <span className="text-sm font-medium" style={{ color: "var(--color-teal-500)" }}>
                     {schedule.instructor.name}
                   </span>
@@ -561,7 +561,7 @@ function NewScheduleDialog({ open, onClose }: { open: boolean; onClose: () => vo
           <select value={instructorId} onChange={e => setInstructorId(e.target.value)}
             className="w-full px-3 py-2 rounded-lg text-sm"
             style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)", color: "var(--text-primary)" }}>
-            <option value="">강사 미지정</option>
+            <option value="">직원/강사 미지정</option>
             {instructors.map(inst => (
               <option key={inst.id} value={inst.id}>{inst.name} ({inst.subject})</option>
             ))}
@@ -1212,7 +1212,7 @@ export function SchedulePage() {
           <div className="mt-6 flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <p className="text-xs font-medium mb-2" style={{ color: "var(--text-tertiary)" }}>
-                담당 강사
+                담당 직원/강사
               </p>
               <InstructorList schedules={schedules as ScheduleItem[]} />
             </div>

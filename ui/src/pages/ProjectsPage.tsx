@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
-import { FolderKanban, Plus } from "lucide-react"
+import { FolderKanban, Plus, Sparkles } from "lucide-react"
 import { useParams } from "react-router-dom"
 import { EmptyState } from "@/components/EmptyState"
 
@@ -193,6 +193,76 @@ function NewProjectDialog({
   )
 }
 
+function CreateFromInstructionDialog({
+  open,
+  onClose,
+  onCreated,
+  orgId,
+}: NewProjectDialogProps) {
+  const [instruction, setInstruction] = useState("상반기 프로모션 준비해볼까?")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async () => {
+    if (!instruction.trim() || submitting) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      await projectsApi.createFromInstruction({
+        organizationId: orgId,
+        instruction: instruction.trim(),
+      })
+      onCreated()
+      handleClose()
+    } catch {
+      setError("instruction 기반 프로젝트 생성에 실패했습니다.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleClose = () => {
+    setInstruction("상반기 프로모션 준비해볼까?")
+    setError(null)
+    onClose()
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
+      <DialogContent style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}>
+        <DialogHeader>
+          <DialogTitle style={{ color: "var(--text-primary)" }}>Instruction으로 프로젝트 생성</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-2">
+          <Textarea
+            value={instruction}
+            onChange={(e) => setInstruction(e.target.value)}
+            rows={5}
+            placeholder="예: 상반기 프로모션 준비해볼까?"
+            style={{
+              backgroundColor: "var(--bg-base)",
+              borderColor: "var(--border-default)",
+              color: "var(--text-primary)",
+            }}
+          />
+          <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+            project + child cases + brief document를 함께 생성합니다.
+          </div>
+          {error ? <div className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</div> : null}
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={handleClose} disabled={submitting} style={{ color: "var(--text-secondary)" }}>
+            취소
+          </Button>
+          <Button onClick={handleSubmit} disabled={!instruction.trim() || submitting} className="border-0 text-white" style={{ backgroundColor: "var(--color-teal-500)" }}>
+            {submitting ? "생성 중…" : "생성"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function ProjectsPage() {
@@ -202,6 +272,7 @@ export function ProjectsPage() {
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [instructionDialogOpen, setInstructionDialogOpen] = useState(false)
 
   useEffect(() => {
     setBreadcrumbs([{ label: "프로젝트" }])
@@ -255,16 +326,28 @@ export function ProjectsPage() {
               : "프로젝트가 없습니다"}
           </p>
         </div>
-        <Button
-          size="sm"
-          className="flex items-center gap-2 text-sm border-0 text-white"
-          style={{ background: "var(--color-teal-500)" }}
-          onClick={() => setDialogOpen(true)}
-          disabled={!selectedOrgId}
-        >
-          <Plus size={14} />
-          새 프로젝트
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="flex items-center gap-2 text-sm"
+            onClick={() => setInstructionDialogOpen(true)}
+            disabled={!selectedOrgId}
+          >
+            <Sparkles size={14} />
+            Instruction으로 생성
+          </Button>
+          <Button
+            size="sm"
+            className="flex items-center gap-2 text-sm border-0 text-white"
+            style={{ background: "var(--color-teal-500)" }}
+            onClick={() => setDialogOpen(true)}
+            disabled={!selectedOrgId}
+          >
+            <Plus size={14} />
+            새 프로젝트
+          </Button>
+        </div>
       </div>
 
       {projects.length === 0 ? (
@@ -353,12 +436,20 @@ export function ProjectsPage() {
       )}
 
       {selectedOrgId && (
-        <NewProjectDialog
-          open={dialogOpen}
-          onClose={() => setDialogOpen(false)}
-          onCreated={handleCreated}
-          orgId={selectedOrgId}
-        />
+        <>
+          <NewProjectDialog
+            open={dialogOpen}
+            onClose={() => setDialogOpen(false)}
+            onCreated={handleCreated}
+            orgId={selectedOrgId}
+          />
+          <CreateFromInstructionDialog
+            open={instructionDialogOpen}
+            onClose={() => setInstructionDialogOpen(false)}
+            onCreated={handleCreated}
+            orgId={selectedOrgId}
+          />
+        </>
       )}
     </div>
   )

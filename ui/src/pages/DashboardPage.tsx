@@ -8,6 +8,7 @@ import { agentsApi } from "@/api/agents"
 import { approvalsApi } from "@/api/approvals"
 import { schedulesApi } from "@/api/schedules"
 import { activityApi } from "@/api/activity"
+import { documentsApi } from "@/api/documents"
 import { queryKeys } from "@/lib/queryKeys"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -224,6 +225,11 @@ export function DashboardPage() {
     queryFn: () => activityApi.list(selectedOrgId!),
     enabled: !!selectedOrgId,
   })
+  const { data: documents = [], isLoading: documentsLoading } = useQuery({
+    queryKey: queryKeys.documents.list(selectedOrgId ?? ""),
+    queryFn: () => documentsApi.list(selectedOrgId!),
+    enabled: !!selectedOrgId,
+  })
 
   // ── derived ────────────────────────────────────────────────────────────────
   const activeCases = (cases as any[]).filter(
@@ -259,6 +265,13 @@ export function DashboardPage() {
     .slice(0, 5)
 
   const recentActivity = (activity as any[]).slice(0, 10)
+  const recentInbound = (activity as any[])
+    .filter((event: any) => event.action === "case.created_from_channel" || event.action === "case.appended_from_channel")
+    .slice(0, 5)
+  const recentDocuments = (documents as any[])
+    .slice()
+    .sort((a: any, b: any) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? "")))
+    .slice(0, 5)
 
   // Collect all runs from agents for ActiveAgentsPanel
   const allRuns = (agents as any[]).flatMap(
@@ -482,55 +495,133 @@ export function DashboardPage() {
               </section>
             </div>
 
-            {/* Right: recent activity */}
-            <section className="space-y-3">
-              <h2
-                className="text-sm font-semibold"
-                style={{ color: "var(--text-primary)" }}
-              >
-                최근 활동
-              </h2>
+            <section className="space-y-4">
+              <div>
+                <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
+                  최근 인바운드
+                </h2>
+                <div
+                  className="rounded-xl"
+                  style={{
+                    backgroundColor: "var(--bg-elevated)",
+                    border: "1px solid var(--border-default)",
+                    boxShadow: "var(--shadow-sm)",
+                  }}
+                >
+                  {recentInbound.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 py-8">
+                      <Clock size={24} style={{ color: "var(--text-tertiary)" }} />
+                      <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                        최근 인바운드가 없습니다.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="px-3">
+                      {recentInbound.map((item: any, i: number) => (
+                        <ActivityRow
+                          key={item.id ?? i}
+                          event={item}
+                          orgPrefix={orgPrefix}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
 
-              <div
-                className="rounded-xl"
-                style={{
-                  backgroundColor: "var(--bg-elevated)",
-                  border: "1px solid var(--border-default)",
-                  boxShadow: "var(--shadow-sm)",
-                }}
-              >
-                {activityLoading ? (
-                  <div className="flex items-center justify-center py-10">
-                    <Loader2
-                      size={20}
-                      className="animate-spin"
-                      style={{ color: "var(--text-tertiary)" }}
-                    />
-                  </div>
-                ) : recentActivity.length === 0 ? (
-                  <div className="flex flex-col items-center gap-2 py-10">
-                    <Clock
-                      size={28}
-                      style={{ color: "var(--text-tertiary)" }}
-                    />
-                    <p
-                      className="text-sm"
-                      style={{ color: "var(--text-tertiary)" }}
-                    >
-                      활동 내역이 없습니다.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="px-3">
-                    {recentActivity.map((item: any, i: number) => (
-                      <ActivityRow
-                        key={item.id ?? i}
-                        event={item}
-                        orgPrefix={orgPrefix}
+              <div>
+                <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
+                  최근 문서
+                </h2>
+                <div
+                  className="rounded-xl"
+                  style={{
+                    backgroundColor: "var(--bg-elevated)",
+                    border: "1px solid var(--border-default)",
+                    boxShadow: "var(--shadow-sm)",
+                  }}
+                >
+                  {documentsLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 size={20} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
+                    </div>
+                  ) : recentDocuments.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 py-8">
+                      <FileText size={24} style={{ color: "var(--text-tertiary)" }} />
+                      <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                        최근 문서가 없습니다.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-[var(--border-default)]">
+                      {recentDocuments.map((document: any) => (
+                        <Link
+                          key={document.id}
+                          to={`/${orgPrefix}/documents`}
+                          className="block px-4 py-3 hover:bg-[var(--bg-secondary)] transition-colors"
+                        >
+                          <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                            {document.title}
+                          </div>
+                          <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                            {document.category} · {new Date(document.updatedAt).toLocaleDateString("ko-KR")}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <h2
+                  className="text-sm font-semibold mb-3"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  최근 활동
+                </h2>
+
+                <div
+                  className="rounded-xl"
+                  style={{
+                    backgroundColor: "var(--bg-elevated)",
+                    border: "1px solid var(--border-default)",
+                    boxShadow: "var(--shadow-sm)",
+                  }}
+                >
+                  {activityLoading ? (
+                    <div className="flex items-center justify-center py-10">
+                      <Loader2
+                        size={20}
+                        className="animate-spin"
+                        style={{ color: "var(--text-tertiary)" }}
                       />
-                    ))}
-                  </div>
-                )}
+                    </div>
+                  ) : recentActivity.length === 0 ? (
+                    <div className="flex flex-col items-center gap-2 py-10">
+                      <Clock
+                        size={28}
+                        style={{ color: "var(--text-tertiary)" }}
+                      />
+                      <p
+                        className="text-sm"
+                        style={{ color: "var(--text-tertiary)" }}
+                      >
+                        활동 내역이 없습니다.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="px-3">
+                      {recentActivity.map((item: any, i: number) => (
+                        <ActivityRow
+                          key={item.id ?? i}
+                          event={item}
+                          orgPrefix={orgPrefix}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
           </div>

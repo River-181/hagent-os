@@ -94,7 +94,7 @@ function NavItem({ to, icon, label, disabled, badge }: NavItemProps) {
 function SectionLabel({ label }: { label: string }) {
   return (
     <div
-      className="px-3 py-1 text-xs font-semibold uppercase tracking-wider mt-2 mb-1"
+      className="px-3 py-1 text-xs font-semibold tracking-wider mt-2 mb-1"
       style={{ color: "var(--text-tertiary)" }}
     >
       {label}
@@ -201,7 +201,7 @@ export function Sidebar() {
         <NavItem to={`${base}/dashboard`} icon={<LayoutDashboard size={16} />} label="대시보드" />
         <NavItem to={`${base}/inbox`} icon={<Bell size={16} />} label="알림함" />
 
-        <SectionLabel label="Work" />
+        <SectionLabel label="업무" />
         <NavItem to={`${base}/cases`} icon={<FileText size={16} />} label="케이스" />
         <NavItem to={`${base}/projects`} icon={<FolderKanban size={16} />} label="프로젝트" />
         <NavItem to={`${base}/approvals`} icon={<CheckSquare size={16} />} label="승인" />
@@ -209,6 +209,7 @@ export function Sidebar() {
         <NavItem to={`${base}/goals`} icon={<Target size={16} />} label="운영 목표" />
 
         <SectionLabel label="에이전트 팀" />
+        <NavItem to={`${base}/agents`} icon={<Bot size={16} />} label="에이전트" />
         <NavItem
           to={`${base}/org`}
           icon={<Network size={16} />}
@@ -262,9 +263,9 @@ export function Sidebar() {
           </div>
         )}
 
-        <SectionLabel label="기관 관리" />
+        <SectionLabel label="학원 관리" />
         <NavItem to={`${base}/students`} icon={<GraduationCap size={16} />} label="학생 관리" />
-        <NavItem to={`${base}/instructors`} icon={<GraduationCap size={16} />} label="강사 관리" />
+        <NavItem to={`${base}/instructors`} icon={<GraduationCap size={16} />} label="직원/강사 관리" />
         <NavItem to={`${base}/documents`} icon={<BookOpen size={16} />} label="문서" />
         <NavItem to={`${base}/skills`} icon={<Puzzle size={16} />} label="k-skill 레지스트리" />
         <NavItem to={`${base}/plugins`} icon={<Cpu size={16} />} label="플러그인" />

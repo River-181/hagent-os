@@ -6,6 +6,7 @@ import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { publishEvent } from "../services/live-events.js"
 import { syncGoogleCalendarEvent } from "../services/integrations/google-calendar.js"
+import { processKakaoApprovalDelivery } from "../services/kakao-approval-delivery.js"
 
 const AGENT_DATA_DIR = join(import.meta.dirname, "../../data/agents")
 
@@ -118,7 +119,12 @@ export function approvalRoutes(db: Db): Router {
       }
     }
 
+    let requiresOutboundDelivery = false
     if (decision === "approved" && existing.caseId) {
+      if (caseRecord?.source === "kakao") {
+        requiresOutboundDelivery = true
+      }
+
       if (caseRecord?.type === "schedule") {
         const schedulePayload = payload?.suggestedSchedule as Record<string, unknown> | undefined
         if (schedulePayload) {
@@ -180,10 +186,12 @@ export function approvalRoutes(db: Db): Router {
         }
       }
 
-      await db
-        .update(schema.cases)
-        .set({ status: "done", updatedAt: new Date() })
-        .where(eq(schema.cases.id, existing.caseId))
+      if (!requiresOutboundDelivery) {
+        await db
+          .update(schema.cases)
+          .set({ status: "done", updatedAt: new Date() })
+          .where(eq(schema.cases.id, existing.caseId))
+      }
     }
 
     if (decision === "rejected" && existing.caseId) {
@@ -225,10 +233,17 @@ export function approvalRoutes(db: Db): Router {
       comment: comment ?? null,
     })
 
-    const [latest] = await db
+    let [latest] = await db
       .select()
       .from(schema.approvals)
       .where(eq(schema.approvals.id, approvalId))
+
+    if (decision === "approved" && caseRecord?.source === "kakao") {
+      latest = await processKakaoApprovalDelivery(db, approvalId, {
+        mode: "auto",
+        actor: "system",
+      })
+    }
 
     return latest
   }
@@ -325,6 +340,25 @@ export function approvalRoutes(db: Db): Router {
       res.json(await processDecision(req.params.id, "revision_requested", req.body?.comment))
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : "Failed to request revision" })
+    }
+  })
+
+  router.post("/approvals/:id/send", async (req, res) => {
+    try {
+      const mode = req.body?.mode
+      const normalizedMode =
+        mode === "bridge" || mode === "confirm_bridge" || mode === "auto" ? mode : "auto"
+
+      const approval = await processKakaoApprovalDelivery(db, req.params.id, {
+        mode: normalizedMode,
+        actor: normalizedMode === "confirm_bridge" ? "user" : "system",
+      })
+
+      res.json(approval)
+    } catch (err) {
+      res.status(400).json({
+        error: err instanceof Error ? err.message : "Failed to send approval message",
+      })
     }
   })
 

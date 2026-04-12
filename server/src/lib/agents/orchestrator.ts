@@ -69,6 +69,10 @@ ${pendingCasesSummary}
 원장 지시:
 "${contextData.instruction ?? input.context ?? ""}"
 
+${input.allowedChannels?.length ? `운영 채널: ${input.allowedChannels.join(", ")}` : ""}
+${input.runtimeSkills?.length ? `장착된 스킬: ${input.runtimeSkills.map((skill) => `${skill.displayName}(${skill.slug})`).join(", ")}` : ""}
+${input.skillContext ? `\n실행 스킬 번들:\n${input.skillContext}\n` : ""}
+
 위 지시를 분석하여 실행 계획과 에이전트 배정을 JSON으로 출력하세요.`
 
   const response = await runWithAdapter(SYSTEM_PROMPT, userMessage, {

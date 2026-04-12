@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom"
-import { ArrowRight, CheckCircle2, XCircle } from "lucide-react"
+import { ArrowRight, CheckCircle2, Copy, ExternalLink, Loader2, Send, XCircle } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
@@ -23,11 +23,12 @@ interface ApprovalAgent {
 interface ApprovalItem {
   id: string
   level?: "low" | "medium" | "high" | "critical"
-  status: "pending" | "approved" | "rejected"
+  status: "pending" | "approved" | "rejected" | "revision_requested"
   payload?: {
     draft?: string
     [key: string]: unknown
   }
+  decision?: Record<string, unknown>
   case?: ApprovalCase
   caseTitle?: string
   agent?: ApprovalAgent
@@ -40,8 +41,11 @@ interface ApprovalCardProps {
   approval: ApprovalItem
   onApprove: (id: string) => void
   onReject: (id: string) => void
+  onSend?: (id: string, mode?: "auto" | "confirm_bridge") => void
   approving?: boolean
   rejecting?: boolean
+  sending?: boolean
+  sendingMode?: "auto" | "confirm_bridge" | null
   isPending?: boolean
   pendingAction?: "approve" | "reject"
   className?: string
@@ -67,8 +71,11 @@ export function ApprovalCard({
   approval,
   onApprove,
   onReject,
+  onSend,
   approving = false,
   rejecting = false,
+  sending = false,
+  sendingMode = null,
   isPending = false,
   pendingAction,
   className,
@@ -87,6 +94,43 @@ export function ApprovalCard({
   const isApprovePending = approving || (isPending && pendingAction === "approve")
   const isRejectPending = rejecting || (isPending && pendingAction === "reject")
   const anyPending = isApprovePending || isRejectPending
+  const decision = approval.decision ?? {}
+  const sideEffects =
+    typeof decision.sideEffects === "object" && decision.sideEffects && !Array.isArray(decision.sideEffects)
+      ? (decision.sideEffects as Record<string, unknown>)
+      : {}
+  const kakaoMessage =
+    typeof sideEffects.kakaoMessage === "object" && sideEffects.kakaoMessage && !Array.isArray(sideEffects.kakaoMessage)
+      ? (sideEffects.kakaoMessage as Record<string, any>)
+      : null
+  const kakaoStatus = typeof kakaoMessage?.status === "string" ? kakaoMessage.status : null
+  const bridge = typeof kakaoMessage?.bridge === "object" && kakaoMessage.bridge ? kakaoMessage.bridge : null
+  const replyDraft =
+    (typeof kakaoMessage?.draft === "string" && kakaoMessage.draft) ||
+    (typeof approval.payload?.draft === "string" && approval.payload.draft) ||
+    (typeof approval.payload?.suggestedReply === "string" && approval.payload.suggestedReply) ||
+    ""
+
+  const copyDraft = async () => {
+    if (!replyDraft) return
+    await navigator.clipboard.writeText(replyDraft)
+  }
+
+  const openChannel = () => {
+    const target = bridge?.chatUrl ?? bridge?.channelUrl
+    if (typeof target === "string" && target) {
+      window.open(target, "_blank", "noopener,noreferrer")
+    }
+  }
+
+  const outboundTone =
+    kakaoStatus === "sent"
+      ? { bg: "rgba(34,197,94,0.12)", text: "var(--color-success)", label: "발송 완료" }
+      : kakaoStatus === "failed"
+        ? { bg: "rgba(239,68,68,0.12)", text: "var(--color-danger)", label: "발송 실패" }
+        : kakaoStatus === "ready_to_send"
+          ? { bg: "rgba(245,158,11,0.12)", text: "#d97706", label: "발송 준비" }
+          : null
 
   return (
     <Card
@@ -160,8 +204,68 @@ export function ApprovalCard({
           )}
 
           {isDecided ? (
-            <div className="flex justify-end">
-              {runStatus && <StatusBadge status={runStatus} />}
+            <div className="flex flex-col items-end gap-2">
+              <div className="flex items-center gap-2">
+                {outboundTone ? (
+                  <Badge
+                    className="text-xs font-medium border-0 px-2 py-0.5"
+                    style={{ backgroundColor: outboundTone.bg, color: outboundTone.text }}
+                  >
+                    {outboundTone.label}
+                  </Badge>
+                ) : null}
+                {runStatus && <StatusBadge status={runStatus} />}
+              </div>
+              {kakaoStatus && onSend ? (
+                <div className="flex flex-wrap justify-end gap-2">
+                  {replyDraft ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-xs"
+                      onClick={() => void copyDraft()}
+                    >
+                      <Copy size={12} />
+                      문안 복사
+                    </Button>
+                  ) : null}
+                  {(bridge?.chatUrl || bridge?.channelUrl) ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-xs"
+                      onClick={openChannel}
+                    >
+                      <ExternalLink size={12} />
+                      채널 열기
+                    </Button>
+                  ) : null}
+                  {kakaoStatus !== "sent" ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="gap-1.5 text-xs"
+                      disabled={sending}
+                      onClick={() => onSend(approval.id, "auto")}
+                    >
+                      {sending && sendingMode === "auto" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                      자동 발송
+                    </Button>
+                  ) : null}
+                  {(kakaoStatus === "ready_to_send" || kakaoStatus === "failed") ? (
+                    <Button
+                      size="sm"
+                      className="gap-1.5 text-xs text-white"
+                      style={{ backgroundColor: "var(--color-teal-500)" }}
+                      disabled={sending}
+                      onClick={() => onSend(approval.id, "confirm_bridge")}
+                    >
+                      {sending && sendingMode === "confirm_bridge" ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                      전송 완료 처리
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="flex items-center gap-2">

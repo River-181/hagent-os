@@ -16,4 +16,6 @@ export const approvalsApi = {
     api.post<any>(`/approvals/${id}/approve`, data ?? {}),
   reject: (id: string, data?: unknown) =>
     api.post<any>(`/approvals/${id}/reject`, data ?? {}),
+  send: (id: string, data?: { mode?: "auto" | "bridge" | "confirm_bridge" }) =>
+    api.post<any>(`/approvals/${id}/send`, data ?? {}),
 }

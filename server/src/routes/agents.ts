@@ -131,7 +131,7 @@ export function agentRoutes(db: Db): Router {
         return
       }
 
-      const allowedFields = ["status", "systemPrompt", "skills"] as const
+      const allowedFields = ["status", "systemPrompt", "skills", "adapterType", "adapterConfig", "description"] as const
       type AllowedField = (typeof allowedFields)[number]
 
       const updates: Partial<Record<AllowedField, unknown>> = {}

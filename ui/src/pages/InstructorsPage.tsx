@@ -136,11 +136,8 @@ function statusBadgeClass(status: InstructorStatus): string {
 
 const SUBJECT_OPTIONS = [
   "영어", "수학", "국어", "과학", "사회",
-  "물리", "화학", "생물", "지구과학",
-  "한국사", "세계사", "지리",
-  "음악", "미술", "체육",
-  "정보", "코딩",
-  "기타",
+  "상담", "운영", "행정", "원무", "마케팅",
+  "차량", "입학상담", "학생관리", "기타",
 ]
 
 const STATUS_OPTIONS = [
@@ -209,11 +206,11 @@ function InstructorDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.instructors.list(orgId ?? "") })
       queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(orgId ?? "") })
-      toast?.success("강사가 등록되었습니다.")
+      toast?.success("직원/강사가 등록되었습니다.")
       onOpenChange(false)
     },
     onError: () => {
-      toast?.error("강사 등록에 실패했습니다.")
+      toast?.error("직원/강사 등록에 실패했습니다.")
     },
   })
 
@@ -225,11 +222,11 @@ function InstructorDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.instructors.list(orgId ?? "") })
       queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(orgId ?? "") })
-      toast?.success("강사 정보가 수정되었습니다.")
+      toast?.success("직원/강사 정보가 수정되었습니다.")
       onOpenChange(false)
     },
     onError: () => {
-      toast?.error("강사 수정에 실패했습니다.")
+      toast?.error("직원/강사 수정에 실패했습니다.")
     },
   })
 
@@ -257,10 +254,10 @@ function InstructorDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle style={{ color: "var(--text-primary)" }}>
-            {isEdit ? "강사 정보 수정" : "강사 등록"}
+            {isEdit ? "직원/강사 정보 수정" : "직원/강사 등록"}
           </DialogTitle>
           <DialogDescription style={{ color: "var(--text-tertiary)" }}>
-            {isEdit ? "강사 정보를 수정합니다." : "새 강사를 등록합니다."}
+            {isEdit ? "직원/강사 정보를 수정합니다." : "새 직원 또는 강사를 등록합니다."}
           </DialogDescription>
         </DialogHeader>
 
@@ -271,7 +268,7 @@ function InstructorDialog({
               이름 <span className="text-rose-500">*</span>
             </label>
             <Input
-              placeholder="강사 이름"
+              placeholder="직원 또는 강사 이름"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               style={{
@@ -286,7 +283,7 @@ function InstructorDialog({
           {/* 과목 */}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-              과목 <span className="text-rose-500">*</span>
+              담당 영역 <span className="text-rose-500">*</span>
             </label>
             <Select
               value={form.subject}
@@ -299,7 +296,7 @@ function InstructorDialog({
                   color: form.subject ? "var(--text-primary)" : "var(--text-tertiary)",
                 }}
               >
-                <SelectValue placeholder="과목 선택" />
+                <SelectValue placeholder="담당 영역 선택" />
               </SelectTrigger>
               <SelectContent>
                 {SUBJECT_OPTIONS.map((s) => (
@@ -429,11 +426,11 @@ function DeleteConfirmDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.instructors.list(orgId ?? "") })
       queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(orgId ?? "") })
-      toast?.success("강사가 삭제되었습니다.")
+      toast?.success("직원/강사가 삭제되었습니다.")
       onOpenChange(false)
     },
     onError: () => {
-      toast?.error("강사 삭제에 실패했습니다.")
+      toast?.error("직원/강사 삭제에 실패했습니다.")
     },
   })
 
@@ -441,12 +438,12 @@ function DeleteConfirmDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle style={{ color: "var(--text-primary)" }}>강사 삭제</DialogTitle>
+          <DialogTitle style={{ color: "var(--text-primary)" }}>직원/강사 삭제</DialogTitle>
           <DialogDescription style={{ color: "var(--text-tertiary)" }}>
             <span className="font-semibold" style={{ color: "var(--text-primary)" }}>
               {instructor?.name}
             </span>{" "}
-            강사를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
+            이 직원/강사 정보를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -504,7 +501,7 @@ function InstructorDetailSheet({
               <div>
                 <SheetTitle style={{ color: "var(--text-primary)" }}>{instructor.name}</SheetTitle>
                 <SheetDescription style={{ color: "var(--text-tertiary)" }}>
-                  {instructor.subject} 강사
+                  {instructor.subject} 담당
                 </SheetDescription>
               </div>
             </div>
@@ -654,10 +651,10 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       </div>
       <div className="flex flex-col gap-1">
         <p className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
-          등록된 강사가 없습니다
+          등록된 직원/강사가 없습니다
         </p>
         <p className="text-sm max-w-xs" style={{ color: "var(--text-tertiary)" }}>
-          강사를 등록하면 수업 배정과 일정 관리가 연결됩니다
+          직원/강사를 등록하면 수업 배정과 일정 관리가 연결됩니다
         </p>
       </div>
       <Button
@@ -666,7 +663,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         style={{ background: "var(--color-teal-500)", color: "#fff" }}
       >
         <Plus size={14} className="mr-1" />
-        강사 등록
+        직원/강사 등록
       </Button>
     </div>
   )
@@ -690,7 +687,7 @@ export function InstructorsPage() {
   const [showDetail, setShowDetail] = useState(false)
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "강사 관리" }])
+    setBreadcrumbs([{ label: "직원/강사 관리" }])
   }, [setBreadcrumbs])
 
   const instructorsQuery = useQuery<Instructor[]>({
@@ -786,7 +783,7 @@ export function InstructorsPage() {
         <div className="flex items-center justify-between gap-4 flex-wrap">
           <div>
             <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>
-              강사 관리
+              직원/강사 관리
             </h1>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-tertiary)" }}>
               총 {instructors.length}명 · 재직중 {activeCount}명 · 기타 {inactiveCount}명
@@ -799,7 +796,7 @@ export function InstructorsPage() {
             style={{ background: "var(--color-teal-500)", color: "#fff" }}
           >
             <Plus size={14} className="mr-1" />
-            강사 등록
+            직원/강사 등록
           </Button>
         </div>
 
@@ -1006,7 +1003,7 @@ function InstructorCard({
               <UserX size={12} style={{ color: "var(--text-tertiary)" }} />
             )}
             <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-              수업 {instructor.classCount}개
+              연결 일정 {instructor.classCount}개
             </span>
           </div>
 

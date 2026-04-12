@@ -6,6 +6,7 @@ import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { agentsApi } from "@/api/agents"
 import { casesApi } from "@/api/cases"
+import { adaptersApi } from "@/api/adapters"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -1327,12 +1328,20 @@ function SkillsTab({ agent }: { agent: any }) {
 // ─── Settings tab ─────────────────────────────────────────────────────────────
 
 function SettingsTab({ agent }: { agent: any }) {
+  const envPath = "/Users/river/workspace/active/hagent-os/.env"
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
   const settings = agent.settings ?? {}
+  const adaptersQuery = useQuery({
+    queryKey: queryKeys.adapters.all,
+    queryFn: () => adaptersApi.list(),
+  })
+  const adapters = adaptersQuery.data?.adapters ?? []
+  const integrations = adaptersQuery.data?.integrations ?? []
 
+  const [adapterType, setAdapterType] = useState<string>(agent.adapterType ?? "codex_local")
   const [model, setModel] = useState<string>(
-    agent.adapterConfig?.model ?? agent.model ?? settings.model ?? "claude-sonnet-4-6"
+    agent.adapterConfig?.model ?? agent.model ?? settings.model ?? "gpt-5-codex"
   )
   const [maxTokens, setMaxTokens] = useState<number>(
     agent.adapterConfig?.maxTokens ?? agent.maxTokens ?? settings.maxTokens ?? 4096
@@ -1344,6 +1353,7 @@ function SettingsTab({ agent }: { agent: any }) {
   const configMutation = useMutation({
     mutationFn: () =>
       agentsApi.update(agent.id, {
+        adapterType,
         adapterConfig: { ...agent.adapterConfig, model, maxTokens, autoRun },
       }),
     onSuccess: () => {
@@ -1369,11 +1379,16 @@ function SettingsTab({ agent }: { agent: any }) {
   const metaRows = [
     { label: "에이전트 ID", value: agent.id },
     { label: "에이전트 유형", value: agentTypeLabel[agent.agentType] ?? agent.agentType ?? "-" },
-    { label: "어댑터", value: agent.adapterType ?? "-" },
+    { label: "실행 어댑터", value: agent.adapterType ?? "-" },
     { label: "슬러그", value: agent.slug ?? "-" },
     { label: "생성일", value: agent.createdAt ? formatDate(agent.createdAt) : "-" },
     { label: "최근 업데이트", value: agent.updatedAt ? formatDate(agent.updatedAt) : "-" },
   ]
+
+  const selectedAdapter = adapters.find((item: any) => item.key === adapterType) ?? null
+  const adapterModels = selectedAdapter?.availableModels ?? ["gpt-5-codex"]
+  const liveReady = Boolean(selectedAdapter?.connected)
+  const lawIntegration = integrations.find((item: any) => item.key === "korean-law-mcp")
 
   return (
     <div className="space-y-5">
@@ -1392,11 +1407,90 @@ function SettingsTab({ agent }: { agent: any }) {
         className="rounded-xl p-4 space-y-4"
         style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
       >
-        <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>어댑터 설정</p>
+        <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>실행 설정</p>
 
-        {/* Model */}
+        <div className="grid gap-3 md:grid-cols-2">
+          <div
+            className="rounded-xl border px-4 py-3"
+            style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+          >
+            <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>현재 실행 경로</p>
+            <div className="mt-2 flex items-center gap-2">
+              {liveReady ? (
+                <CheckCircle2 size={14} style={{ color: "var(--color-success)" }} />
+              ) : (
+                <AlertCircle size={14} style={{ color: "#d97706" }} />
+              )}
+              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {liveReady ? "실연동 가능" : "degraded mode 예정"}
+              </span>
+            </div>
+            <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+              {liveReady
+                ? `${selectedAdapter?.label ?? adapterType}로 실제 응답을 생성합니다.`
+                : `${selectedAdapter?.label ?? adapterType} 연결 키가 없어 mock fallback이 사용됩니다.`}
+            </p>
+            {!liveReady ? (
+              <p className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                `{envPath}`에 `{selectedAdapter?.missingEnv?.[0] ?? "OPENAI_API_KEY"}`를 넣고 서버를 다시 시작해야 합니다.
+              </p>
+            ) : null}
+          </div>
+
+          <div
+            className="rounded-xl border px-4 py-3"
+            style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+          >
+            <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>법령 조회 상태</p>
+            <div className="mt-2 flex items-center gap-2">
+              {lawIntegration?.connected ? (
+                <CheckCircle2 size={14} style={{ color: "var(--color-success)" }} />
+              ) : (
+                <AlertCircle size={14} style={{ color: "#d97706" }} />
+              )}
+              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {lawIntegration?.connected ? "법령 조회 사용 가능" : "LAW_OC 필요"}
+              </span>
+            </div>
+            <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+              민원/환불/근로 이슈는 이 연결이 있어야 실제 법령 근거까지 붙습니다.
+            </p>
+            {!lawIntegration?.connected ? (
+              <p className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                `{envPath}`에 `LAW_OC`를 넣고 서버를 다시 시작해야 합니다.
+              </p>
+            ) : null}
+          </div>
+        </div>
+
         <div className="space-y-1.5">
-          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>모델</label>
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>실행 어댑터</label>
+          <select
+            value={adapterType}
+            onChange={(e) => {
+              const nextAdapterType = e.target.value
+              setAdapterType(nextAdapterType)
+              const nextAdapter = adapters.find((item: any) => item.key === nextAdapterType)
+              const nextDefaultModel = nextAdapter?.availableModels?.[0]
+              if (nextDefaultModel) {
+                setModel(nextDefaultModel)
+              }
+            }}
+            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+            style={{
+              backgroundColor: "var(--bg-secondary)",
+              border: "1px solid var(--border-default)",
+              color: "var(--text-primary)",
+            }}
+          >
+            {adapters.map((adapter: any) => (
+              <option key={adapter.key} value={adapter.key}>{adapter.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="text-xs" style={{ color: "var(--text-secondary)" }}>실행 모델</label>
           <select
             value={model}
             onChange={(e) => setModel(e.target.value)}
@@ -1407,8 +1501,9 @@ function SettingsTab({ agent }: { agent: any }) {
               color: "var(--text-primary)",
             }}
           >
-            <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
-            <option value="claude-haiku-4-5">claude-haiku-4-5</option>
+            {adapterModels.map((item: string) => (
+              <option key={item} value={item}>{item}</option>
+            ))}
           </select>
         </div>
 
@@ -1451,6 +1546,22 @@ function SettingsTab({ agent }: { agent: any }) {
           {configMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
           저장
         </Button>
+
+        {!!selectedAdapter?.missingEnv?.length && (
+          <div
+            className="rounded-xl border px-4 py-3"
+            style={{ borderColor: "rgba(217,119,6,0.24)", backgroundColor: "rgba(245,158,11,0.08)" }}
+          >
+            <p className="text-xs font-medium" style={{ color: "#d97706" }}>실연동에 필요한 환경변수</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {selectedAdapter.missingEnv.map((item: string) => (
+                <Badge key={item} className="border-0" style={{ backgroundColor: "rgba(217,119,6,0.12)", color: "#b45309" }}>
+                  {item}
+                </Badge>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Read-only metadata */}

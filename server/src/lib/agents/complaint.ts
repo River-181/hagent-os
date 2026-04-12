@@ -68,6 +68,10 @@ export async function runComplaintAgent(input: ComplaintAgentInput): Promise<Com
 민원 내용: ${input.description || "(내용 없음)"}
 ${reporterInfo}
 ${studentInfo}
+${input.allowedChannels?.length ? `허용 채널: ${input.allowedChannels.join(", ")}` : ""}
+${input.runtimeSkills?.length ? `장착된 스킬: ${input.runtimeSkills.map((skill) => `${skill.displayName}(${skill.slug})`).join(", ")}` : ""}
+${input.followUpContext ? `\n후속 지시/대화 맥락:\n${input.followUpContext}\n` : ""}
+${input.skillContext ? `\n실행 스킬 번들:\n${input.skillContext}\n` : ""}
 ${legalContextBlock}
 
 위 민원을 분류하고, 학원 방침에 맞는 답변 초안을 작성해주세요.`

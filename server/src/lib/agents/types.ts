@@ -7,6 +7,16 @@ export interface AgentRef {
 export interface RuntimeBinding {
   adapterType?: string | null
   model?: string | null
+  skillContext?: string
+  runtimeSkills?: Array<{
+    slug: string
+    displayName: string
+    summary: string
+    requiredIntegrations: string[]
+    ready: boolean
+  }>
+  allowedChannels?: string[]
+  allowedEntityScopes?: string[]
 }
 
 export interface OrchestratorInput extends RuntimeBinding {
@@ -37,6 +47,7 @@ export interface ComplaintAgentInput extends RuntimeBinding {
   description: string
   reporterId?: string
   studentId?: string
+  followUpContext?: string
 }
 
 export interface ComplaintAnalysis {
@@ -69,6 +80,7 @@ export interface RetentionAgentInput extends RuntimeBinding {
     status: string
   }>
   currentRiskScore: number
+  followUpContext?: string
 }
 
 export interface RetentionRiskAssessment {

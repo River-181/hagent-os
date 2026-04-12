@@ -6,6 +6,8 @@ export const agentsApi = {
   get: (id: string) => api.get<any>(`/agents/${id}`),
   create: (orgId: string, data: unknown) =>
     api.post<any>(`/organizations/${orgId}/agents`, data),
+  createHireRequest: (orgId: string, data: unknown) =>
+    api.post<any>(`/organizations/${orgId}/agent-hires`, data),
   update: (id: string, data: unknown) => api.patch<any>(`/agents/${id}`, data),
   delete: (id: string) => api.delete<void>(`/agents/${id}`),
   wakeup: (id: string, body?: { reason?: string; caseId?: string }) =>

@@ -1,6 +1,7 @@
 import { runWithAdapter } from "../runtime.js"
+import type { RuntimeBinding } from "./types.js"
 
-export interface SchedulerAgentInput {
+export interface SchedulerAgentInput extends RuntimeBinding {
   caseId: string
   organizationId: string
   title: string
@@ -16,8 +17,7 @@ export interface SchedulerAgentInput {
     endTime: string
     room?: string | null
   }>
-  adapterType?: string
-  model?: string
+  followUpContext?: string
 }
 
 export interface SchedulerAgentOutput {
@@ -78,6 +78,10 @@ export async function runSchedulerAgent(input: SchedulerAgentInput): Promise<Sch
     `기관 ID: ${input.organizationId}
 케이스 제목: ${input.title}
 케이스 설명: ${input.description || "(설명 없음)"}
+${input.allowedChannels?.length ? `허용 채널: ${input.allowedChannels.join(", ")}` : ""}
+${input.runtimeSkills?.length ? `장착된 스킬: ${input.runtimeSkills.map((skill) => `${skill.displayName}(${skill.slug})`).join(", ")}` : ""}
+${input.followUpContext ? `후속 지시/대화 맥락:\n${input.followUpContext}\n` : ""}
+${input.skillContext ? `실행 스킬 번들:\n${input.skillContext}\n` : ""}
 
 현재 일정:
 ${scheduleContext || "- 없음"}

@@ -6,6 +6,7 @@ import { useOrganization } from "@/context/OrganizationContext"
 import { casesApi } from "@/api/cases"
 import { approvalsApi } from "@/api/approvals"
 import { activityApi } from "@/api/activity"
+import { documentsApi } from "@/api/documents"
 import { queryKeys } from "@/lib/queryKeys"
 import { api } from "@/api/client"
 import { Button } from "@/components/ui/button"
@@ -38,6 +39,7 @@ import {
   Play,
   FileText,
   MessageSquare,
+  GitBranchPlus,
 } from "lucide-react"
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -405,28 +407,75 @@ function AgentDraftSection({
 function ChatThread({
   caseId,
   comments,
+  orgPrefix,
 }: {
   caseId: string
   comments: any[]
+  orgPrefix?: string
 }) {
   const [newComment, setNewComment] = useState("")
+  const [followUpMode, setFollowUpMode] = useState<"comment" | "rerun" | "childCase">("comment")
   const toast = useContext(ToastContext)
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const sendMutation = useMutation({
-    mutationFn: async () => {
-      return api.post(`/cases/${caseId}/comments`, {
-        body: newComment,
+    mutationFn: async (mode: "comment" | "rerun" | "childCase") => {
+      const body = newComment.trim()
+      const comment = await api.post<any>(`/cases/${caseId}/comments`, {
+        body,
         authorType: "user",
         authorName: "원장",
+        triggerRun: mode === "rerun",
       })
+
+      if (mode === "childCase") {
+        const normalized = body.replace(/\s+/g, " ").trim()
+        const shortTitle = normalized.length > 28 ? `${normalized.slice(0, 28)}...` : normalized
+        const childCase = await casesApi.createChildCase(caseId, {
+          title: `후속 작업: ${shortTitle}`,
+          description: body,
+          metadata: {
+            generatedBy: "comment-follow-up",
+            sourceCommentId: comment.id,
+          },
+        })
+        return { comment, mode, childCase }
+      }
+
+      return { comment, mode }
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       setNewComment("")
       void queryClient.invalidateQueries({ queryKey: queryKeys.cases.detail(caseId) })
+      if (result.mode === "rerun") {
+        toast?.success("댓글을 남기고 에이전트를 다시 실행했습니다.")
+        return
+      }
+      if (result.mode === "childCase") {
+        toast?.success("후속 서브 케이스를 만들었습니다.")
+        if (result.childCase?.id && orgPrefix) {
+          navigate(`/${orgPrefix}/cases/${result.childCase.id}`)
+        }
+        return
+      }
+      toast?.success("댓글을 등록했습니다.")
     },
     onError: () => toast?.error("댓글 등록에 실패했습니다."),
   })
+
+  const followUpOptions: Array<{ value: "comment" | "rerun" | "childCase"; label: string }> = [
+    { value: "comment", label: "기본 댓글" },
+    { value: "rerun", label: "댓글 + 재실행" },
+    { value: "childCase", label: "댓글 + 서브 케이스" },
+  ]
+
+  const primaryActionLabel =
+    followUpMode === "rerun"
+      ? "댓글 + 재실행"
+      : followUpMode === "childCase"
+      ? "댓글 + 서브 케이스"
+      : "전송"
 
   return (
     <div className="space-y-1">
@@ -466,8 +515,27 @@ function ChatThread({
       </div>
 
       {/* Input */}
+      <div className="mt-4 flex flex-wrap gap-2">
+        {followUpOptions.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => setFollowUpMode(option.value)}
+            className="rounded-full px-3 py-1.5 text-xs transition-colors"
+            style={{
+              backgroundColor:
+                followUpMode === option.value ? "var(--color-primary-bg)" : "var(--bg-secondary)",
+              color:
+                followUpMode === option.value ? "var(--color-teal-500)" : "var(--text-secondary)",
+              border: `1px solid ${followUpMode === option.value ? "rgba(20,184,166,0.25)" : "var(--border-default)"}`,
+            }}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
       <div
-        className="flex gap-2 mt-4 rounded-xl p-3"
+        className="flex gap-2 mt-2 rounded-xl p-3"
         style={{
           backgroundColor: "var(--bg-elevated)",
           border: "1px solid var(--border-default)",
@@ -482,7 +550,7 @@ function ChatThread({
           style={{ color: "var(--text-primary)" }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && newComment.trim()) {
-              sendMutation.mutate()
+              sendMutation.mutate(followUpMode)
             }
           }}
         />
@@ -491,13 +559,13 @@ function ChatThread({
           className="self-end text-xs h-8 shrink-0"
           style={{ backgroundColor: "var(--color-teal-500)", color: "#fff" }}
           disabled={!newComment.trim() || sendMutation.isPending}
-          onClick={() => sendMutation.mutate()}
+          onClick={() => sendMutation.mutate(followUpMode)}
         >
-          {sendMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : "전송"}
+          {sendMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : primaryActionLabel}
         </Button>
       </div>
       <p className="text-xs mt-1" style={{ color: "var(--text-disabled)" }}>
-        Cmd+Enter로 전송
+        follow-up 모드에 따라 댓글만 저장하거나, 재실행 또는 서브 케이스 생성까지 이어집니다.
       </p>
     </div>
   )
@@ -512,6 +580,10 @@ export function CaseDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
+  const [newDocumentTitle, setNewDocumentTitle] = useState("")
+  const [newDocumentBody, setNewDocumentBody] = useState("")
+  const [newChildCaseTitle, setNewChildCaseTitle] = useState("")
+  const [newChildCaseDescription, setNewChildCaseDescription] = useState("")
 
   // ── fetch case ─────────────────────────────────────────────────────────────
   const {
@@ -580,6 +652,38 @@ export function CaseDetailPage() {
     onError: () => toast?.error("승인 처리에 실패했습니다."),
   })
 
+  const createDocument = useMutation({
+    mutationFn: () =>
+      documentsApi.createForCase(id!, {
+        title: newDocumentTitle.trim(),
+        body: newDocumentBody.trim(),
+        documentType: "case-output",
+        status: "draft",
+      }),
+    onSuccess: () => {
+      setNewDocumentTitle("")
+      setNewDocumentBody("")
+      toast?.success("문서를 추가했습니다.")
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cases.detail(id!) })
+    },
+    onError: () => toast?.error("문서 추가에 실패했습니다."),
+  })
+
+  const createChildCase = useMutation({
+    mutationFn: () =>
+      casesApi.createChildCase(id!, {
+        title: newChildCaseTitle.trim(),
+        description: newChildCaseDescription.trim(),
+      }),
+    onSuccess: () => {
+      setNewChildCaseTitle("")
+      setNewChildCaseDescription("")
+      toast?.success("서브 케이스를 생성했습니다.")
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cases.detail(id!) })
+    },
+    onError: () => toast?.error("서브 케이스 생성에 실패했습니다."),
+  })
+
   // ── loading / error states ─────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -619,6 +723,8 @@ export function CaseDetailPage() {
   )
   const comments = caseData.comments ?? []
   const approvals = caseData.approvals ?? []
+  const documents = caseData.documents ?? []
+  const childCases = caseData.childCases ?? []
   const runIds = (caseData.runs ?? []).map((run: any) => run.id)
   const approvalIds = approvals.map((approval: any) => approval.id)
   const relatedActivity = filterCaseActivity(orgActivity as any[], caseData.id, runIds, approvalIds)
@@ -626,6 +732,7 @@ export function CaseDetailPage() {
   const identifier = caseData.identifier ?? caseData.id
   const typeLabel =
     caseTypeLabel[caseData.type ?? ""] ?? caseData.type ?? ""
+  const channelContext = caseData.channelContext ?? {}
 
   return (
     <ScrollArea className="flex-1 h-full">
@@ -667,6 +774,22 @@ export function CaseDetailPage() {
                     {caseData.source === 'kakao' ? '카카오톡' : 'SMS'}
                   </Badge>
                 )}
+                {channelContext.threadId ? (
+                  <Badge
+                    className="text-xs border-0"
+                    style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+                  >
+                    thread {String(channelContext.threadId)}
+                  </Badge>
+                ) : null}
+                {channelContext.senderName ? (
+                  <Badge
+                    className="text-xs border-0"
+                    style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+                  >
+                    {String(channelContext.senderName)}
+                  </Badge>
+                ) : null}
               </div>
               <h1
                 className="text-xl font-bold leading-snug"
@@ -759,12 +882,47 @@ export function CaseDetailPage() {
 
             <Separator />
 
-            <Tabs defaultValue="approvals" className="space-y-4">
+            <Tabs defaultValue="documents" className="space-y-4">
               <TabsList variant="line" className="w-full justify-start bg-transparent p-0">
+                <TabsTrigger value="documents">Documents {documents.length > 0 ? `(${documents.length})` : ""}</TabsTrigger>
                 <TabsTrigger value="approvals">Approvals {approvals.length > 0 ? `(${approvals.length})` : ""}</TabsTrigger>
                 <TabsTrigger value="activity">Activity {relatedActivity.length > 0 ? `(${relatedActivity.length})` : ""}</TabsTrigger>
                 <TabsTrigger value="comments">Comments {comments.length > 0 ? `(${comments.length})` : ""}</TabsTrigger>
+                <TabsTrigger value="childCases">Child Cases {childCases.length > 0 ? `(${childCases.length})` : ""}</TabsTrigger>
               </TabsList>
+
+              <TabsContent value="documents" className="space-y-4">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+                  <div className="space-y-3">
+                    {documents.length === 0 ? (
+                      <div className="rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}>
+                        아직 연결된 문서 결과물이 없습니다.
+                      </div>
+                    ) : (
+                      documents.map((document: any) => (
+                        <div key={document.id} className="rounded-xl border p-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <div className="font-medium" style={{ color: "var(--text-primary)" }}>{document.title}</div>
+                              <div className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>{document.category}</div>
+                            </div>
+                            <FileText size={16} style={{ color: "var(--color-teal-500)" }} />
+                          </div>
+                          <pre className="mt-3 whitespace-pre-wrap text-sm" style={{ color: "var(--text-secondary)", fontFamily: "inherit" }}>{document.body}</pre>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                  <div className="rounded-xl border p-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                    <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>문서 추가</div>
+                    <input value={newDocumentTitle} onChange={(e) => setNewDocumentTitle(e.target.value)} placeholder="예: 보호자 답변 초안" className="mt-3 w-full rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-base)", color: "var(--text-primary)" }} />
+                    <Textarea value={newDocumentBody} onChange={(e) => setNewDocumentBody(e.target.value)} rows={8} className="mt-3 text-sm" placeholder="문서 초안을 입력하세요" />
+                    <Button className="mt-3 w-full border-0 text-white" style={{ backgroundColor: "var(--color-teal-500)" }} disabled={!newDocumentTitle.trim() || createDocument.isPending} onClick={() => createDocument.mutate()}>
+                      {createDocument.isPending ? <Loader2 size={14} className="animate-spin" /> : "문서 저장"}
+                    </Button>
+                  </div>
+                </div>
+              </TabsContent>
 
               <TabsContent value="approvals" className="space-y-3">
                 {approvals.length === 0 ? (
@@ -798,7 +956,50 @@ export function CaseDetailPage() {
                   >
                     대화 {comments.length > 0 && `(${comments.length})`}
                   </h2>
-                  <ChatThread caseId={caseData.id} comments={comments} />
+                  <ChatThread caseId={caseData.id} comments={comments} orgPrefix={orgPrefix} />
+                </div>
+              </TabsContent>
+
+              <TabsContent value="childCases" className="space-y-4">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+                  <div className="space-y-3">
+                    {childCases.length === 0 ? (
+                      <div className="rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}>
+                        아직 연결된 서브 케이스가 없습니다.
+                      </div>
+                    ) : (
+                      childCases.map((childCase: any) => (
+                        <button
+                          key={childCase.id}
+                          type="button"
+                          onClick={() => navigate(`/${orgPrefix}/cases/${childCase.id}`)}
+                          className="w-full rounded-xl border p-4 text-left"
+                          style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+                        >
+                          <div className="flex items-center gap-2">
+                            <GitBranchPlus size={14} style={{ color: "var(--color-teal-500)" }} />
+                            <div className="font-medium" style={{ color: "var(--text-primary)" }}>{childCase.title}</div>
+                          </div>
+                          <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                            {childCase.identifier} · {childCase.status}
+                          </div>
+                          {childCase.description ? (
+                            <p className="mt-2 text-sm line-clamp-3 whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
+                              {childCase.description}
+                            </p>
+                          ) : null}
+                        </button>
+                      ))
+                    )}
+                  </div>
+                  <div className="rounded-xl border p-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                    <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>서브 케이스 생성</div>
+                    <input value={newChildCaseTitle} onChange={(e) => setNewChildCaseTitle(e.target.value)} placeholder="예: 보호자 답변 최종본" className="mt-3 w-full rounded-xl border px-3 py-2 text-sm" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-base)", color: "var(--text-primary)" }} />
+                    <Textarea value={newChildCaseDescription} onChange={(e) => setNewChildCaseDescription(e.target.value)} rows={6} className="mt-3 text-sm" placeholder="후속 작업 설명" />
+                    <Button className="mt-3 w-full border-0 text-white" style={{ backgroundColor: "var(--color-teal-500)" }} disabled={!newChildCaseTitle.trim() || createChildCase.isPending} onClick={() => createChildCase.mutate()}>
+                      {createChildCase.isPending ? <Loader2 size={14} className="animate-spin" /> : "서브 케이스 추가"}
+                    </Button>
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>
