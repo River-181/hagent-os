@@ -21,6 +21,7 @@ import { orchestratorApi } from "@/api/orchestrator"
 import { StatusIcon } from "@/components/StatusIcon"
 import { PriorityIcon } from "@/components/PriorityIcon"
 import { DashboardCharts } from "@/components/DashboardCharts"
+import { WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
 import {
   Bot,
   FileText,
@@ -83,8 +84,8 @@ function ChurnWarningCard({ c, orgPrefix }: { c: any; orgPrefix: string }) {
     <div
       className="flex items-center justify-between gap-3 rounded-xl px-4 py-3"
       style={{
-        backgroundColor: "rgba(239,68,68,0.06)",
-        border: "1px solid rgba(239,68,68,0.2)",
+        backgroundColor: "var(--status-danger-soft)",
+        border: "1px solid var(--color-danger)",
       }}
     >
       <div className="flex items-center gap-3 min-w-0">
@@ -140,7 +141,8 @@ function RecentCaseRow({ c, orgPrefix }: { c: any; orgPrefix: string }) {
   return (
     <button
       onClick={() => navigate(`/${orgPrefix}/cases/${c.id}`)}
-      className="flex items-center gap-3 w-full text-left px-2 py-2.5 rounded-lg transition-colors hover:bg-[var(--bg-tertiary)]"
+      className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors"
+      style={{ backgroundColor: "transparent" }}
     >
       <StatusIcon status={status} size={15} />
       <span
@@ -152,7 +154,7 @@ function RecentCaseRow({ c, orgPrefix }: { c: any; orgPrefix: string }) {
       <Badge
         className="text-xs border-0 shrink-0"
         style={{
-          backgroundColor: "var(--bg-tertiary)",
+          backgroundColor: "var(--bg-muted)",
           color: "var(--text-secondary)",
         }}
       >
@@ -312,20 +314,33 @@ export function DashboardPage() {
   }))
 
   return (
-    <div className="flex flex-col h-full min-h-0 overflow-hidden">
-      {/* Instruction bar */}
-      <div
-        className="px-6 py-3 min-h-0"
-        style={{ borderBottom: "1px solid var(--border-default)" }}
-      >
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-            운영 지시
-          </div>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate(`/${orgPrefix}/assistant`)}>
+    <div className="flex h-full min-h-0 flex-col gap-6 p-6 md:p-8">
+      <WorkspaceHeader
+        title="대시보드"
+        description="오케스트레이터 상태와 최근 흐름을 한 화면에서 확인합니다."
+        action={
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => navigate(`/${orgPrefix}/assistant`)}
+          >
             <Sparkles size={13} />
             Assistant 열기
           </Button>
+        }
+      />
+
+      <WorkspacePanel className="p-5 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              운영 지시
+            </div>
+            <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+              한 줄 지시를 넣고, 실행 결과와 후속 상태를 바로 확인합니다.
+            </p>
+          </div>
         </div>
         <InstructionBar
           agents={agentMentions}
@@ -336,331 +351,225 @@ export function DashboardPage() {
           disabled={!activeOrgId}
           placeholder="오케스트레이터에게 지시하기..."
         />
+      </WorkspacePanel>
+
+      {lastDispatchResult && (
+        <WorkspacePanel className="p-4">
+          <div className="flex items-start gap-3">
+            <CheckCircle size={16} className="mt-0.5 shrink-0" style={{ color: "var(--color-success)" }} />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                오케스트레이터 실행 완료
+              </p>
+              <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                {lastDispatchResult.plan}
+              </p>
+              <div className="mt-1 flex items-center gap-3">
+                <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  {lastDispatchResult.runs.length}개 에이전트 실행 시작됨
+                </p>
+                {lastDispatchResult.caseId && (
+                  <Link
+                    to={`/${orgPrefix}/cases/${lastDispatchResult.caseId}`}
+                    className="text-xs font-medium"
+                    style={{ color: "var(--accent-primary)" }}
+                  >
+                    케이스 보기
+                  </Link>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => setLastDispatchResult(null)}
+              className="rounded px-2 py-1 text-xs transition-colors"
+              style={{ color: "var(--text-tertiary)", backgroundColor: "transparent" }}
+            >
+              닫기
+            </button>
+          </div>
+        </WorkspacePanel>
+      )}
+
+      {(allRuns.length > 0 || runningAgents.length > 0) && (
+        <ActiveAgentsPanel agents={agents as any[]} runs={allRuns} />
+      )}
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <MetricCard
+          icon={<Bot size={18} />}
+          value={runningAgents.length}
+          label="실행 중 에이전트"
+          href={`/${orgPrefix}/agents`}
+          loading={agentsLoading}
+        />
+        <MetricCard
+          icon={<FileText size={18} />}
+          value={activeCases.length}
+          label="진행 중 케이스"
+          href={`/${orgPrefix}/cases`}
+          loading={casesLoading}
+        />
+        <MetricCard
+          icon={<Clock size={18} />}
+          value={todaySchedules.length}
+          label="오늘 일정"
+          href={`/${orgPrefix}/schedule`}
+          loading={schedulesLoading}
+        />
+        <MetricCard
+          icon={<CheckCircle size={18} />}
+          value={pendingApprovals.length}
+          label="승인 대기"
+          href={`/${orgPrefix}/approvals`}
+          trend={pendingApprovals.length > 0 ? "up" : "neutral"}
+          loading={approvalsLoading}
+        />
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        <div className="p-6 max-w-6xl mx-auto space-y-6 min-h-0">
-          {/* Dispatch result banner */}
-          {lastDispatchResult && (
-            <div
-              className="rounded-xl px-4 py-3 flex items-start gap-3 animate-in fade-in slide-in-from-top-2 duration-300"
-              style={{
-                backgroundColor: "rgba(20,184,166,0.06)",
-                border: "1px solid rgba(20,184,166,0.2)",
-              }}
-            >
-              <CheckCircle size={16} className="shrink-0 mt-0.5" style={{ color: "var(--color-teal-500)" }} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium" style={{ color: "var(--color-teal-500)" }}>
-                  오케스트레이터 실행 완료
-                </p>
-                <p className="text-xs mt-1" style={{ color: "var(--text-secondary)" }}>
-                  {lastDispatchResult.plan}
-                </p>
-                <div className="flex items-center gap-3 mt-0.5">
-                  <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                    {lastDispatchResult.runs.length}개 에이전트 실행 시작됨
-                  </p>
-                  {lastDispatchResult.caseId && (
-                    <Link
-                      to={`/${orgPrefix}/cases/${lastDispatchResult.caseId}`}
-                      className="text-xs font-medium underline"
-                      style={{ color: "var(--color-teal-500)" }}
-                    >
-                      케이스 보기
-                    </Link>
-                  )}
-                </div>
+      <WorkspacePanel className="p-4">
+        <DashboardCharts cases={cases as any[]} agents={agents as any[]} activity={activity as any[]} />
+      </WorkspacePanel>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-6">
+          {churnCases.length > 0 && (
+            <WorkspacePanel className="p-5 space-y-4">
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={14} style={{ color: "var(--color-danger)" }} />
+                <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  이탈 위험 학생
+                </h2>
               </div>
-              <button
-                onClick={() => setLastDispatchResult(null)}
-                className="text-xs shrink-0 px-2 py-1 rounded hover:bg-[var(--bg-tertiary)] transition-colors"
-                style={{ color: "var(--text-tertiary)" }}
+              <div className="space-y-2">
+                {churnCases.map((c: any) => (
+                  <ChurnWarningCard key={c.id} c={c} orgPrefix={orgPrefix ?? ""} />
+                ))}
+              </div>
+            </WorkspacePanel>
+          )}
+
+          <WorkspacePanel className="overflow-hidden">
+            <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border-default)" }}>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                최근 케이스
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2 text-xs"
+                onClick={() => window.location.assign(`/${orgPrefix}/cases`)}
               >
-                닫기
-              </button>
+                전체 보기
+              </Button>
             </div>
-          )}
-
-          {/* Active agents panel */}
-          {(allRuns.length > 0 || runningAgents.length > 0) && (
-            <ActiveAgentsPanel agents={agents as any[]} runs={allRuns} />
-          )}
-
-          {/* Metric cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <MetricCard
-              icon={<Bot size={18} />}
-              value={runningAgents.length}
-              label="실행 중 에이전트"
-              description={`전체 ${agents.length}개`}
-              href={`/${orgPrefix}/agents`}
-              loading={agentsLoading}
-            />
-            <MetricCard
-              icon={<FileText size={18} />}
-              value={activeCases.length}
-              label="진행 중 케이스"
-              description={`전체 ${cases.length}건`}
-              href={`/${orgPrefix}/cases`}
-              loading={casesLoading}
-            />
-            <MetricCard
-              icon={<Clock size={18} />}
-              value={todaySchedules.length}
-              label="오늘 일정"
-              description="오늘 기준"
-              href={`/${orgPrefix}/schedule`}
-              loading={schedulesLoading}
-            />
-            <MetricCard
-              icon={<CheckCircle size={18} />}
-              value={pendingApprovals.length}
-              label="승인 대기"
-              description="처리 필요"
-              href={`/${orgPrefix}/approvals`}
-              trend={pendingApprovals.length > 0 ? "up" : "neutral"}
-              loading={approvalsLoading}
-            />
-          </div>
-
-          {/* Charts */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <DashboardCharts cases={cases as any[]} agents={agents as any[]} activity={activity as any[]} />
-          </div>
-
-          {/* Body: two columns */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: churn warnings + recent cases */}
-            <div className="lg:col-span-2 space-y-5">
-              {/* Churn warnings */}
-              {churnCases.length > 0 && (
-                <section>
-                  <div className="flex items-center gap-2 mb-3">
-                    <AlertTriangle
-                      size={14}
-                      style={{ color: "var(--color-danger)" }}
-                    />
-                    <h2
-                      className="text-sm font-semibold"
-                      style={{ color: "var(--text-primary)" }}
-                    >
-                      이탈 위험 학생
-                    </h2>
-                    <Badge
-                      className="text-xs border-0"
-                      style={{
-                        backgroundColor: "rgba(239,68,68,0.1)",
-                        color: "var(--color-danger)",
-                      }}
-                    >
-                      {churnCases.length}명
-                    </Badge>
-                  </div>
-                  <div className="space-y-2">
-                    {churnCases.map((c: any) => (
-                      <ChurnWarningCard
-                        key={c.id}
-                        c={c}
-                        orgPrefix={orgPrefix ?? ""}
-                      />
-                    ))}
-                  </div>
-                </section>
+            <div className="px-2">
+              {casesLoading ? (
+                <div className="flex items-center justify-center py-10">
+                  <Loader2 size={20} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
+                </div>
+              ) : recentCases.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-10">
+                  <FileText size={28} style={{ color: "var(--text-tertiary)" }} />
+                  <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                    케이스가 없습니다.
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
+                  {recentCases.map((c: any) => (
+                    <RecentCaseRow key={c.id} c={c} orgPrefix={orgPrefix ?? ""} />
+                  ))}
+                </div>
               )}
-
-              {/* Recent cases */}
-              <section>
-                <div className="flex items-center justify-between mb-3">
-                  <h2
-                    className="text-sm font-semibold"
-                    style={{ color: "var(--text-primary)" }}
-                  >
-                    최근 케이스
-                  </h2>
-                  <button
-                    onClick={() => window.location.assign(`/${orgPrefix}/cases`)}
-                    className="text-xs"
-                    style={{ color: "var(--color-teal-500)" }}
-                  >
-                    전체 보기
-                  </button>
-                </div>
-
-                <div
-                  className="rounded-xl px-2"
-                  style={{
-                    backgroundColor: "var(--bg-elevated)",
-                    border: "1px solid var(--border-default)",
-                    boxShadow: "var(--shadow-sm)",
-                  }}
-                >
-                  {casesLoading ? (
-                    <div className="flex items-center justify-center py-10">
-                      <Loader2
-                        size={20}
-                        className="animate-spin"
-                        style={{ color: "var(--text-tertiary)" }}
-                      />
-                    </div>
-                  ) : recentCases.length === 0 ? (
-                    <div className="flex flex-col items-center gap-2 py-10">
-                      <FileText
-                        size={28}
-                        style={{ color: "var(--text-tertiary)" }}
-                      />
-                      <p
-                        className="text-sm"
-                        style={{ color: "var(--text-tertiary)" }}
-                      >
-                        케이스가 없습니다.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-[var(--border-default)]">
-                      {recentCases.map((c: any) => (
-                        <RecentCaseRow
-                          key={c.id}
-                          c={c}
-                          orgPrefix={orgPrefix ?? ""}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </section>
             </div>
+          </WorkspacePanel>
+        </div>
 
-            <section className="space-y-4">
-              <div>
-                <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-                  최근 인바운드
-                </h2>
-                <div
-                  className="rounded-xl"
-                  style={{
-                    backgroundColor: "var(--bg-elevated)",
-                    border: "1px solid var(--border-default)",
-                    boxShadow: "var(--shadow-sm)",
-                  }}
-                >
-                  {recentInbound.length === 0 ? (
-                    <div className="flex flex-col items-center gap-2 py-8">
-                      <Clock size={24} style={{ color: "var(--text-tertiary)" }} />
-                      <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                        최근 인바운드가 없습니다.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="px-3">
-                      {recentInbound.map((item: any, i: number) => (
-                        <ActivityRow
-                          key={item.id ?? i}
-                          event={item}
-                          orgPrefix={orgPrefix}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
+        <div className="space-y-6">
+          <WorkspacePanel className="overflow-hidden">
+            <div className="border-b px-5 py-4" style={{ borderColor: "var(--border-default)" }}>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                최근 인바운드
+              </h2>
+            </div>
+            {recentInbound.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-8">
+                <Clock size={24} style={{ color: "var(--text-tertiary)" }} />
+                <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                  최근 인바운드가 없습니다.
+                </p>
               </div>
-
-              <div>
-                <h2 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
-                  최근 문서
-                </h2>
-                <div
-                  className="rounded-xl"
-                  style={{
-                    backgroundColor: "var(--bg-elevated)",
-                    border: "1px solid var(--border-default)",
-                    boxShadow: "var(--shadow-sm)",
-                  }}
-                >
-                  {documentsLoading ? (
-                    <div className="flex items-center justify-center py-8">
-                      <Loader2 size={20} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
-                    </div>
-                  ) : recentDocuments.length === 0 ? (
-                    <div className="flex flex-col items-center gap-2 py-8">
-                      <FileText size={24} style={{ color: "var(--text-tertiary)" }} />
-                      <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                        최근 문서가 없습니다.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-[var(--border-default)]">
-                      {recentDocuments.map((document: any) => (
-                        <Link
-                          key={document.id}
-                          to={`/${orgPrefix}/documents`}
-                          className="block px-4 py-3 hover:bg-[var(--bg-secondary)] transition-colors"
-                        >
-                          <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                            {document.title}
-                          </div>
-                          <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
-                            {document.category} · {new Date(document.updatedAt).toLocaleDateString("ko-KR")}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
+            ) : (
+              <div className="px-3">
+                {recentInbound.map((item: any, i: number) => (
+                  <ActivityRow key={item.id ?? i} event={item} orgPrefix={orgPrefix} />
+                ))}
               </div>
+            )}
+          </WorkspacePanel>
 
-              <div>
-                <h2
-                  className="text-sm font-semibold mb-3"
-                  style={{ color: "var(--text-primary)" }}
-                >
-                  최근 활동
-                </h2>
-
-                <div
-                  className="rounded-xl"
-                  style={{
-                    backgroundColor: "var(--bg-elevated)",
-                    border: "1px solid var(--border-default)",
-                    boxShadow: "var(--shadow-sm)",
-                  }}
-                >
-                  {activityLoading ? (
-                    <div className="flex items-center justify-center py-10">
-                      <Loader2
-                        size={20}
-                        className="animate-spin"
-                        style={{ color: "var(--text-tertiary)" }}
-                      />
-                    </div>
-                  ) : recentActivity.length === 0 ? (
-                    <div className="flex flex-col items-center gap-2 py-10">
-                      <Clock
-                        size={28}
-                        style={{ color: "var(--text-tertiary)" }}
-                      />
-                      <p
-                        className="text-sm"
-                        style={{ color: "var(--text-tertiary)" }}
-                      >
-                        활동 내역이 없습니다.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="px-3">
-                      {recentActivity.map((item: any, i: number) => (
-                        <ActivityRow
-                          key={item.id ?? i}
-                          event={item}
-                          orgPrefix={orgPrefix}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
+          <WorkspacePanel className="overflow-hidden">
+            <div className="border-b px-5 py-4" style={{ borderColor: "var(--border-default)" }}>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                최근 문서
+              </h2>
+            </div>
+            {documentsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 size={20} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
               </div>
-            </section>
-          </div>
+            ) : recentDocuments.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-8">
+                <FileText size={24} style={{ color: "var(--text-tertiary)" }} />
+                <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                  최근 문서가 없습니다.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
+                {recentDocuments.map((document: any) => (
+                  <Link
+                    key={document.id}
+                    to={`/${orgPrefix}/documents`}
+                    className="block px-4 py-3 transition-colors"
+                  >
+                    <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                      {document.title}
+                    </div>
+                    <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                      {document.category} · {new Date(document.updatedAt).toLocaleDateString("ko-KR")}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </WorkspacePanel>
+
+          <WorkspacePanel className="overflow-hidden">
+            <div className="border-b px-5 py-4" style={{ borderColor: "var(--border-default)" }}>
+              <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                최근 활동
+              </h2>
+            </div>
+            {activityLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 size={20} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
+              </div>
+            ) : recentActivity.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-10">
+                <Clock size={28} style={{ color: "var(--text-tertiary)" }} />
+                <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                  활동 내역이 없습니다.
+                </p>
+              </div>
+            ) : (
+              <div className="px-3">
+                {recentActivity.map((item: any, i: number) => (
+                  <ActivityRow key={item.id ?? i} event={item} orgPrefix={orgPrefix} />
+                ))}
+              </div>
+            )}
+          </WorkspacePanel>
         </div>
       </div>
     </div>

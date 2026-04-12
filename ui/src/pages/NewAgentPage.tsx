@@ -1,5 +1,4 @@
-// v0.4.0 — model select, skills, title, reportsTo, proper POST payload
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
@@ -17,10 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  WorkspaceHeader,
+  WorkspacePanel,
+} from "@/components/ui/workspace-surface"
 import { Bot, Info } from "lucide-react"
-
-// ─── Config ───────────────────────────────────────────────────────────────────
 
 const ROLE_OPTIONS = [
   { value: "orchestrator", label: "오케스트레이터 (총괄 매니저)" },
@@ -38,7 +38,6 @@ const MODEL_OPTIONS = [
   { value: "claude-haiku-4-5", label: "Claude Haiku 4.5 (경량·빠름)" },
 ]
 
-// slug from name: lowercase alphanumeric + hyphens
 function toSlug(name: string): string {
   return name
     .trim()
@@ -47,7 +46,26 @@ function toSlug(name: string): string {
     .replace(/^-|-$/g, "")
 }
 
-// ─── Field label ──────────────────────────────────────────────────────────────
+function SectionTitle({
+  title,
+  description,
+}: {
+  title: string
+  description?: string
+}) {
+  return (
+    <div className="space-y-1">
+      <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+        {title}
+      </h2>
+      {description ? (
+        <p className="text-xs leading-5" style={{ color: "var(--text-tertiary)" }}>
+          {description}
+        </p>
+      ) : null}
+    </div>
+  )
+}
 
 function FieldLabel({
   children,
@@ -59,25 +77,23 @@ function FieldLabel({
   hint?: string
 }) {
   return (
-    <div className="flex flex-col gap-0.5">
+    <div className="space-y-0.5">
       <label className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
         {children}
-        {required && (
-          <span style={{ color: "var(--color-danger)" }} className="ml-0.5">
+        {required ? (
+          <span className="ml-0.5" style={{ color: "var(--color-danger)" }}>
             *
           </span>
-        )}
+        ) : null}
       </label>
-      {hint && (
+      {hint ? (
         <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
           {hint}
         </p>
-      )}
+      ) : null}
     </div>
   )
 }
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export function NewAgentPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
@@ -116,9 +132,17 @@ export function NewAgentPage() {
   })
 
   const agentList = agents as any[]
-  const skillList = skills as any[]
+  const skillList = useMemo(() => {
+    const list = Array.isArray(skills) ? (skills as any[]) : []
+    const seen = new Set<string>()
+    return list.filter((skill, index) => {
+      const key = String(skill?.slug ?? skill?.id ?? `skill-${index}`)
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [skills])
   const isFirstAgent = agentList.length === 0
-
   const isValid = name.trim().length > 0 && role.length > 0
 
   const toggleSkill = (slug: string) => {
@@ -170,279 +194,239 @@ export function NewAgentPage() {
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="p-6 max-w-2xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-8">
-          <div
-            className="flex items-center justify-center rounded-xl shrink-0"
-            style={{
-              width: 44,
-              height: 44,
-              background: "var(--color-primary-bg)",
-              color: "var(--color-teal-500)",
-            }}
-          >
-            <Bot size={22} />
-          </div>
-          <div>
-            <h1
-              className="text-xl font-bold"
-              style={{ color: "var(--text-primary)" }}
-            >
-              새 에이전트
-            </h1>
-            <p className="text-sm mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-              학원 운영을 도울 AI 에이전트를 추가합니다
-            </p>
-          </div>
-        </div>
-
-        {/* First agent banner */}
-        {isFirstAgent && (
-          <div
-            className="flex items-start gap-3 rounded-xl p-4 mb-6"
-            style={{
-              backgroundColor: "var(--color-primary-bg)",
-              border: "1px solid rgba(20,184,166,0.3)",
-            }}
-          >
-            <Info
-              size={16}
-              className="shrink-0 mt-0.5"
-              style={{ color: "var(--color-teal-500)" }}
-            />
-            <p className="text-sm" style={{ color: "var(--color-teal-500)" }}>
-              이것이 학원의{" "}
-              <strong>원장(CEO)</strong>이 됩니다. 다른 에이전트들의 작업을 조율하고
-              의사결정을 내리는 최상위 에이전트입니다.
-            </p>
-          </div>
-        )}
-
-        {/* Form */}
-        <div
-          className="rounded-2xl p-6 flex flex-col gap-5"
-          style={{
-            backgroundColor: "var(--bg-elevated)",
-            border: "1px solid var(--border-default)",
-            boxShadow: "var(--shadow-sm)",
-          }}
-        >
-          {/* 이름 */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel required>에이전트 이름</FieldLabel>
-            <Input
-              placeholder="예: 민원 처리 에이전트"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              autoFocus
-              className="text-base"
+    <div className="p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title="새 에이전트"
+        description="학원 운영을 맡는 AI 에이전트를 등록하고 역할, 모델, 스킬을 연결합니다."
+        action={
+          <>
+            <Button type="button" variant="ghost" onClick={handleCancel}>
+              취소
+            </Button>
+            <Button
+              type="submit"
+              form="new-agent-form"
+              disabled={!isValid || submitted}
+              className="gap-2"
               style={{
-                backgroundColor: "var(--bg-base)",
-                borderColor: "var(--border-default)",
-                color: "var(--text-primary)",
+                backgroundColor: isValid ? "var(--color-primary)" : undefined,
+                color: "var(--text-on-primary)",
               }}
-            />
-          </div>
-
-          {/* 직함 */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel hint="조직도에 표시될 직함 (예: 수석 상담사)">직함</FieldLabel>
-            <Input
-              placeholder="예: 수석 상담사"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              style={{
-                backgroundColor: "var(--bg-base)",
-                borderColor: "var(--border-default)",
-                color: "var(--text-primary)",
-              }}
-            />
-          </div>
-
-          {/* 역할 */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel required>역할</FieldLabel>
-            <Select value={role} onValueChange={setRole}>
-              <SelectTrigger
-                style={{
-                  backgroundColor: "var(--bg-base)",
-                  borderColor: "var(--border-default)",
-                  color: role ? "var(--text-primary)" : "var(--text-tertiary)",
-                }}
-              >
-                <SelectValue placeholder="역할을 선택하세요" />
-              </SelectTrigger>
-              <SelectContent>
-                {ROLE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* 모델 */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel hint="에이전트가 사용할 Claude 모델">모델</FieldLabel>
-            <Select value={model} onValueChange={setModel}>
-              <SelectTrigger
-                style={{
-                  backgroundColor: "var(--bg-base)",
-                  borderColor: "var(--border-default)",
-                  color: "var(--text-primary)",
-                }}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {MODEL_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* 보고 대상 */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel
-              hint={
-                isFirstAgent
-                  ? "첫 번째 에이전트는 최상위(원장)로 자동 설정됩니다"
-                  : "이 에이전트가 보고할 상위 에이전트"
-              }
             >
-              보고 대상
-            </FieldLabel>
-            <Select
-              value={reportsTo}
-              onValueChange={setReportsTo}
-              disabled={isFirstAgent}
+              {submitted ? "생성 중…" : "에이전트 생성"}
+            </Button>
+          </>
+        }
+      />
+
+      <WorkspacePanel>
+        <form id="new-agent-form" className="space-y-8 p-6 md:p-8" onSubmit={(e) => { e.preventDefault(); void handleSubmit() }}>
+          {isFirstAgent ? (
+            <div
+              className="flex items-start gap-3 rounded-lg px-4 py-3"
+              style={{ backgroundColor: "var(--bg-subtle)" }}
             >
-              <SelectTrigger
-                style={{
-                  backgroundColor: "var(--bg-base)",
-                  borderColor: "var(--border-default)",
-                  color: "var(--text-primary)",
-                  opacity: isFirstAgent ? 0.5 : 1,
-                }}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">없음 (최상위 · 원장)</SelectItem>
-                {agentList.map((agent: any) => (
-                  <SelectItem key={agent.id} value={agent.id}>
-                    {agent.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+              <Info size={16} className="mt-0.5 shrink-0" style={{ color: "var(--color-primary)" }} />
+              <p className="text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+                이것이 학원의 <strong style={{ color: "var(--text-primary)" }}>원장(CEO)</strong> 에이전트가 됩니다.
+                다른 에이전트들의 작업을 조율하고 의사결정을 내리는 최상위 에이전트입니다.
+              </p>
+            </div>
+          ) : null}
 
-          {/* 시스템 프롬프트 */}
-          <div className="flex flex-col gap-1.5">
-            <FieldLabel hint="에이전트의 행동 지침. 지식베이스 문서를 참조할 수 있습니다.">
-              시스템 프롬프트
-            </FieldLabel>
-            <Textarea
-              placeholder="예: 당신은 학원 민원을 처리하는 전문 상담사입니다. 항상 공손하고 명확하게 응답하며..."
-              value={systemPrompt}
-              onChange={(e) => setSystemPrompt(e.target.value)}
-              rows={8}
-              style={{
-                backgroundColor: "var(--bg-base)",
-                borderColor: "var(--border-default)",
-                color: "var(--text-primary)",
-                resize: "vertical",
-                fontFamily: "monospace",
-                fontSize: 13,
-              }}
+          <div className="space-y-6">
+            <SectionTitle
+              title="기본 정보"
+              description="이름과 직함은 목록과 조직도에서 가장 먼저 보이는 정보입니다."
             />
-          </div>
 
-          {/* 스킬 */}
-          {skillList.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <FieldLabel hint="이 에이전트에 장착할 k-skill">스킬</FieldLabel>
-              <div className="flex flex-col gap-1">
-                {skillList.map((skill: any) => {
-                  const slug: string = skill.slug ?? skill.id ?? ""
-                  const checked = selectedSkills.has(slug)
-                  return (
-                    <label
-                      key={slug}
-                      className="flex items-start gap-3 rounded-lg px-3 py-2.5 cursor-pointer transition-colors"
-                      style={{
-                        backgroundColor: checked
-                          ? "var(--color-primary-bg)"
-                          : "var(--bg-base)",
-                        border: `1px solid ${checked ? "rgba(20,184,166,0.4)" : "var(--border-default)"}`,
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleSkill(slug)}
-                        className="mt-0.5 shrink-0"
-                        style={{ accentColor: "var(--color-teal-500)" }}
-                      />
-                      <div className="flex flex-col">
-                        <span
-                          className="text-sm font-medium"
-                          style={{ color: "var(--text-primary)" }}
-                        >
-                          {skill.name ?? slug}
-                        </span>
-                        {skill.description && (
-                          <span
-                            className="text-xs mt-0.5"
-                            style={{ color: "var(--text-tertiary)" }}
-                          >
-                            {skill.description}
-                          </span>
-                        )}
-                      </div>
-                    </label>
-                  )
-                })}
+            <div className="grid gap-5 md:grid-cols-2">
+              <div className="space-y-2 md:col-span-2">
+                <FieldLabel required>에이전트 이름</FieldLabel>
+                <Input
+                  placeholder="예: 민원 처리 에이전트"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  autoFocus
+                  className="h-11 text-base"
+                  style={{
+                    backgroundColor: "var(--bg-muted)",
+                    borderColor: "var(--border-default)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <FieldLabel hint="조직도에 표시될 직함 (예: 수석 상담사)">직함</FieldLabel>
+                <Input
+                  placeholder="예: 수석 상담사"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="h-11"
+                  style={{
+                    backgroundColor: "var(--bg-muted)",
+                    borderColor: "var(--border-default)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel required>역할</FieldLabel>
+                <Select value={role} onValueChange={setRole}>
+                  <SelectTrigger
+                    className="h-11"
+                    style={{
+                      backgroundColor: "var(--bg-muted)",
+                      borderColor: "var(--border-default)",
+                      color: role ? "var(--text-primary)" : "var(--text-tertiary)",
+                    }}
+                  >
+                    <SelectValue placeholder="역할을 선택하세요" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ROLE_OPTIONS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <FieldLabel hint="에이전트가 사용할 Claude 모델">모델</FieldLabel>
+                <Select value={model} onValueChange={setModel}>
+                  <SelectTrigger
+                    className="h-11"
+                    style={{
+                      backgroundColor: "var(--bg-muted)",
+                      borderColor: "var(--border-default)",
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MODEL_OPTIONS.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <FieldLabel
+                  hint={
+                    isFirstAgent
+                      ? "첫 번째 에이전트는 최상위(원장)로 자동 설정됩니다"
+                      : "이 에이전트가 보고할 상위 에이전트"
+                  }
+                >
+                  보고 대상
+                </FieldLabel>
+                <Select value={reportsTo} onValueChange={setReportsTo} disabled={isFirstAgent}>
+                  <SelectTrigger
+                    className="h-11"
+                    style={{
+                      backgroundColor: "var(--bg-muted)",
+                      borderColor: "var(--border-default)",
+                      color: "var(--text-primary)",
+                      opacity: isFirstAgent ? 0.6 : 1,
+                    }}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">없음 (최상위 · 원장)</SelectItem>
+                    {agentList.map((agent: any) => (
+                      <SelectItem key={agent.id} value={agent.id}>
+                        {agent.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Error */}
-        {submitError && (
-          <p className="text-sm mt-3" style={{ color: "var(--color-danger)" }}>
-            {submitError}
-          </p>
-        )}
+          <div className="border-t pt-6" style={{ borderColor: "var(--border-default)" }}>
+            <SectionTitle
+              title="행동 설정"
+              description="프롬프트와 스킬 연결은 이 에이전트의 실제 동작을 결정합니다."
+            />
 
-        {/* Actions */}
-        <div className="flex items-center justify-end gap-3 mt-6">
-          <Button
-            variant="ghost"
-            onClick={handleCancel}
-            style={{ color: "var(--text-secondary)" }}
-          >
-            취소
-          </Button>
-          <Button
-            disabled={!isValid || submitted}
-            onClick={handleSubmit}
-            className="border-0 text-white px-6"
-            style={{
-              backgroundColor: isValid ? "var(--color-teal-500)" : undefined,
-            }}
-          >
-            {submitted ? "생성 중…" : "에이전트 생성"}
-          </Button>
-        </div>
-      </div>
-    </ScrollArea>
+            <div className="mt-5 space-y-5">
+              <div className="space-y-2">
+                <FieldLabel hint="에이전트의 행동 지침. 지식베이스 문서를 참조할 수 있습니다.">
+                  시스템 프롬프트
+                </FieldLabel>
+                <Textarea
+                  placeholder="예: 당신은 학원 민원을 처리하는 전문 상담사입니다. 항상 공손하고 명확하게 응답하며..."
+                  value={systemPrompt}
+                  onChange={(e) => setSystemPrompt(e.target.value)}
+                  rows={8}
+                  className="resize-y font-mono text-sm leading-6"
+                  style={{
+                    backgroundColor: "var(--bg-muted)",
+                    borderColor: "var(--border-default)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+              </div>
+
+              {skillList.length > 0 ? (
+                <div className="space-y-2">
+                  <FieldLabel hint="이 에이전트에 장착할 k-skill">스킬</FieldLabel>
+                  <div className="space-y-2">
+                    {skillList.map((skill: any) => {
+                      const slug: string = skill.slug ?? skill.id ?? ""
+                      const checked = selectedSkills.has(slug)
+                      return (
+                        <label
+                          key={slug}
+                          className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors"
+                          style={{
+                            backgroundColor: checked ? "var(--accent-primary-soft)" : "var(--bg-elevated)",
+                            borderColor: checked ? "var(--color-primary)" : "var(--border-default)",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleSkill(slug)}
+                            className="mt-0.5 shrink-0"
+                            style={{ accentColor: "var(--color-primary)" }}
+                          />
+                          <div className="min-w-0 space-y-1">
+                            <span className="block text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                              {skill.name ?? slug}
+                            </span>
+                            {skill.description ? (
+                              <span className="block text-xs leading-5" style={{ color: "var(--text-tertiary)" }}>
+                                {skill.description}
+                              </span>
+                            ) : null}
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </form>
+      </WorkspacePanel>
+
+      {submitError ? (
+        <p className="text-sm" style={{ color: "var(--color-danger)" }}>
+          {submitError}
+        </p>
+      ) : null}
+    </div>
   )
 }

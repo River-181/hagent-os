@@ -12,8 +12,7 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "generate": "tsc -p tsconfig.json && drizzle-kit generate",
-    "migrate": "tsx src/migrate.ts",
-    "seed": "tsx src/seed.ts"
+    "migrate": "tsx src/migrate.ts"
   },
   "dependencies": {
     "@hagent/shared": "workspace:*",

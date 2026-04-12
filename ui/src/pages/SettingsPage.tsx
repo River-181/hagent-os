@@ -89,17 +89,17 @@ function SectionCard({
   return (
     <section
       id={id}
-      className="rounded-[20px] border p-5"
+      className="rounded-lg border p-6"
       style={{
         backgroundColor: "var(--bg-elevated)",
         borderColor: "var(--border-default)",
-        boxShadow: "var(--shadow-sm)",
+        boxShadow: "var(--shadow-xs)",
       }}
     >
       <div className="mb-5">
         <div className="flex items-center gap-2">
-          <span style={{ color: "var(--color-teal-500)" }}>{icon}</span>
-          <h2 className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+          <span style={{ color: "var(--color-primary)" }}>{icon}</span>
+          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
             {title}
           </h2>
         </div>
@@ -151,8 +151,8 @@ function ToggleRow({
 }) {
   return (
     <div
-      className="flex items-start justify-between gap-4 rounded-[18px] border px-4 py-4"
-      style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+      className="flex items-start justify-between gap-4 rounded-lg border px-4 py-4"
+      style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}
     >
       <div>
         <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
@@ -176,15 +176,15 @@ function StatusPill({
 }) {
   const palette = {
     good: {
-      backgroundColor: "rgba(34,197,94,0.12)",
+      backgroundColor: "var(--status-success-soft)",
       color: "var(--color-success)",
     },
     warn: {
-      backgroundColor: "rgba(245,158,11,0.12)",
-      color: "#d97706",
+      backgroundColor: "var(--status-warning-soft)",
+      color: "var(--color-warning)",
     },
     muted: {
-      backgroundColor: "var(--bg-tertiary)",
+      backgroundColor: "var(--bg-muted)",
       color: "var(--text-secondary)",
     },
   } as const
@@ -451,13 +451,14 @@ export function SettingsPage() {
   }
 
   return (
-    <div ref={pageRef} className="mx-auto flex w-full max-w-7xl gap-6 px-6 py-8">
+    <div ref={pageRef} className="p-6 md:p-8">
+      <div className="mx-auto flex w-full max-w-7xl gap-6">
       <aside
-        className="sticky top-20 hidden h-fit w-72 shrink-0 rounded-[20px] border p-4 xl:block"
+        className="sticky top-20 hidden h-fit w-72 shrink-0 rounded-lg border p-4 xl:block"
         style={{
           backgroundColor: "var(--bg-elevated)",
           borderColor: "var(--border-default)",
-          boxShadow: "var(--shadow-sm)",
+          boxShadow: "var(--shadow-xs)",
         }}
       >
         <div className="mb-4">
@@ -479,8 +480,8 @@ export function SettingsPage() {
             <a
               key={item.href}
               href={item.href}
-              className="flex items-center gap-2 rounded-[18px] px-3 py-2 text-sm transition-colors"
-              style={{ color: "var(--text-secondary)", backgroundColor: "var(--bg-secondary)" }}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors"
+              style={{ color: "var(--text-secondary)", backgroundColor: "var(--bg-subtle)" }}
             >
               {item.icon}
               <span>{item.label}</span>
@@ -504,18 +505,16 @@ export function SettingsPage() {
       </aside>
 
       <div className="min-w-0 flex-1 space-y-6">
-        <WorkspacePanel className="p-5">
-          <WorkspaceHeader
-            title="설정"
-            description="기관 정보, Codex 실행 상태, 연결 준비 여부와 운영 기본값을 여기서 조정합니다."
-          />
-          {saveMutation.isPending ? (
-            <div className="mt-3 flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-              <Loader2 size={14} className="animate-spin" />
-              저장 중
-            </div>
-          ) : null}
-        </WorkspacePanel>
+        <WorkspaceHeader
+          title="설정"
+          description="기관 정보, Codex 실행 상태, 연결 준비 여부와 운영 기본값을 여기서 조정합니다."
+        />
+        {saveMutation.isPending ? (
+          <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+            <Loader2 size={14} className="animate-spin" />
+            저장 중
+          </div>
+        ) : null}
 
         <div className="grid gap-3 xl:grid-cols-4">
           {[
@@ -548,11 +547,11 @@ export function SettingsPage() {
           ].map((item) => (
             <div
               key={item.label}
-              className="rounded-[20px] border px-4 py-4"
+              className="rounded-lg border px-4 py-4"
               style={{
                 backgroundColor: "var(--bg-elevated)",
                 borderColor: "var(--border-default)",
-                boxShadow: "var(--shadow-sm)",
+                boxShadow: "var(--shadow-xs)",
               }}
             >
               <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
@@ -596,7 +595,7 @@ export function SettingsPage() {
           </Field>
 
           <div className="grid gap-3 lg:grid-cols-3">
-            <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <div className="rounded-lg border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
               <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
                 스킬
               </div>
@@ -607,7 +606,7 @@ export function SettingsPage() {
                 설치된 기본 스킬
               </div>
             </div>
-            <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <div className="rounded-lg border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
               <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
                 연동
               </div>
@@ -618,11 +617,11 @@ export function SettingsPage() {
                 연결 상태
               </div>
             </div>
-            <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <div className="rounded-lg border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
               <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
                 조치 필요
               </div>
-              <div className="mt-2 text-xl font-semibold" style={{ color: actionRequiredSkills.length ? "#d97706" : "var(--text-primary)" }}>
+              <div className="mt-2 text-xl font-semibold" style={{ color: actionRequiredSkills.length ? "var(--color-warning)" : "var(--text-primary)" }}>
                 {actionRequiredSkills.length}
               </div>
               <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
@@ -710,8 +709,8 @@ export function SettingsPage() {
               label="현재 실행 상태"
               hint="연결 여부는 서버 env 기준이고, 저장값은 이 기관의 기본 정책입니다."
             >
-              <div className="flex h-10 items-center gap-2 rounded-[18px] border px-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
-                {selectedAdapter?.connected ? <CheckCircle2 size={15} style={{ color: "var(--color-success)" }} /> : <TriangleAlert size={15} style={{ color: "#d97706" }} />}
+              <div className="flex h-10 items-center gap-2 rounded-lg border px-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
+                {selectedAdapter?.connected ? <CheckCircle2 size={15} style={{ color: "var(--color-success)" }} /> : <TriangleAlert size={15} style={{ color: "var(--color-warning)" }} />}
                 <span className="text-sm" style={{ color: "var(--text-primary)" }}>
                   {selectedAdapter?.connected ? "실연동 가능" : "degraded mode 예정"}
                 </span>
@@ -740,8 +739,8 @@ export function SettingsPage() {
 
           {connectionTestEntries.length > 0 ? (
             <div
-              className="rounded-[18px] border px-4 py-4"
-              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+              className="rounded-lg border px-4 py-4"
+              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}
             >
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -758,8 +757,8 @@ export function SettingsPage() {
                 {connectionTestEntries.map(([key, value]) => (
                   <div
                     key={key}
-                    className="flex items-center justify-between gap-3 rounded-[18px] px-3 py-2"
-                    style={{ backgroundColor: "var(--bg-base)" }}
+                    className="flex items-center justify-between gap-3 rounded-lg px-3 py-2"
+                    style={{ backgroundColor: "var(--bg-subtle)" }}
                   >
                     <div className="min-w-0">
                       <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
@@ -827,9 +826,9 @@ export function SettingsPage() {
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <div className="rounded-lg border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
               <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                <ShieldCheck size={14} style={{ color: "var(--color-teal-500)" }} />
+                <ShieldCheck size={14} style={{ color: "var(--color-primary)" }} />
                 Codex 연결 상태
               </div>
               <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
@@ -851,7 +850,7 @@ export function SettingsPage() {
                     key={item}
                     type="button"
                     className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs"
-                    style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+                    style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}
                     onClick={() => handleCopy(item)}
                   >
                     <Copy size={12} />
@@ -883,9 +882,9 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <div className="rounded-lg border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
               <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                <ShieldCheck size={14} style={{ color: "var(--color-teal-500)" }} />
+                <ShieldCheck size={14} style={{ color: "var(--color-primary)" }} />
                 법령 조회 상태
               </div>
               <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
@@ -903,7 +902,7 @@ export function SettingsPage() {
                     key={item}
                     type="button"
                     className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs"
-                    style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+                    style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}
                     onClick={() => handleCopy(item)}
                   >
                     <Copy size={12} />
@@ -985,8 +984,8 @@ export function SettingsPage() {
               return (
                 <div
                   key={integration.key}
-                  className="rounded-[18px] border p-4"
-                  style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+                  className="rounded-lg border p-4"
+                  style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
@@ -1056,7 +1055,7 @@ export function SettingsPage() {
                           key={item}
                           type="button"
                           className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs"
-                          style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+                          style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}
                           onClick={() => handleCopy(item)}
                         >
                           <Copy size={12} />
@@ -1137,8 +1136,8 @@ export function SettingsPage() {
             ].map((channel) => (
               <div
                 key={channel.key}
-              className="rounded-[18px] border px-4 py-4"
-              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+              className="rounded-lg border px-4 py-4"
+              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}
             >
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
@@ -1221,14 +1220,14 @@ export function SettingsPage() {
             </Select>
           </Field>
 
-          <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+          <div className="rounded-lg border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
             <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              <Cpu size={14} style={{ color: "var(--color-teal-500)" }} />
+              <Cpu size={14} style={{ color: "var(--color-primary)" }} />
               현재 로드된 모듈
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {plugins.map((plugin: any) => (
-                <Badge key={plugin.key} className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+                <Badge key={plugin.key} className="border-0" style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}>
                   {plugin.label}
                 </Badge>
               ))}
@@ -1260,15 +1259,15 @@ export function SettingsPage() {
 
         {/* Danger Zone */}
         <div
-          className="rounded-[20px] border overflow-hidden"
-          style={{ borderColor: "rgba(239,68,68,0.3)" }}
+          className="overflow-hidden rounded-lg border"
+          style={{ borderColor: "var(--color-danger)" }}
         >
           <div
             className="flex items-center gap-2 px-5 py-4"
-            style={{ borderBottom: "1px solid rgba(239,68,68,0.2)", backgroundColor: "rgba(239,68,68,0.04)" }}
+            style={{ borderBottom: "1px solid var(--border-default)", backgroundColor: "var(--status-danger-soft)" }}
           >
-            <TriangleAlert size={15} style={{ color: "#dc2626" }} />
-            <span className="text-sm font-semibold" style={{ color: "#dc2626" }}>위험 구역</span>
+            <TriangleAlert size={15} style={{ color: "var(--color-danger)" }} />
+            <span className="text-sm font-semibold" style={{ color: "var(--color-danger)" }}>위험 구역</span>
           </div>
 
           <div className="px-5 py-4 space-y-4">
@@ -1292,7 +1291,7 @@ export function SettingsPage() {
               </Button>
             </div>
 
-            <Separator style={{ backgroundColor: "rgba(239,68,68,0.15)" }} />
+            <Separator style={{ backgroundColor: "var(--border-default)" }} />
 
             {/* Delete */}
             <div className="flex items-center justify-between gap-4">
@@ -1306,7 +1305,7 @@ export function SettingsPage() {
                 variant="outline"
                 size="sm"
                 className="shrink-0 gap-1.5"
-                style={{ color: "#dc2626", borderColor: "rgba(239,68,68,0.4)" }}
+                style={{ color: "var(--color-danger)", borderColor: "var(--color-danger)" }}
                 disabled={!selectedOrgId}
                 onClick={() => setDeleteDialogOpen(true)}
               >
@@ -1323,9 +1322,9 @@ export function SettingsPage() {
 
       {/* Delete confirm dialog */}
       <Dialog open={deleteDialogOpen} onOpenChange={(open) => { if (!open) { setDeleteDialogOpen(false); setDeleteConfirmText("") } }}>
-        <DialogContent style={{ backgroundColor: "var(--bg-base)", border: "1px solid var(--border-default)" }}>
+        <DialogContent style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}>
           <DialogHeader>
-            <DialogTitle style={{ color: "#dc2626" }}>기관 삭제 확인</DialogTitle>
+            <DialogTitle style={{ color: "var(--color-danger)" }}>기관 삭제 확인</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
@@ -1338,7 +1337,7 @@ export function SettingsPage() {
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="삭제"
-              style={{ borderColor: deleteConfirmText === "삭제" ? "rgba(239,68,68,0.5)" : undefined }}
+              style={{ borderColor: deleteConfirmText === "삭제" ? "var(--color-danger)" : undefined }}
             />
           </div>
           <DialogFooter>
@@ -1347,7 +1346,7 @@ export function SettingsPage() {
             </Button>
             <Button
               className="gap-1.5"
-              style={{ backgroundColor: "#dc2626", color: "#fff" }}
+              style={{ backgroundColor: "var(--color-danger)", color: "var(--text-on-primary)" }}
               disabled={deleteConfirmText !== "삭제" || deleteMutation.isPending}
               onClick={() => deleteMutation.mutate()}
             >
@@ -1357,6 +1356,7 @@ export function SettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
     </div>
   )
 }

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
+import { WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
 
 function getSessionMeta(caseItem: any) {
   const metadata =
@@ -210,46 +211,48 @@ export function AssistantPage() {
             : null
 
   return (
-    <div className="h-full overflow-hidden px-6 py-6">
-      <div className="grid h-full gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <aside
-          className="flex min-h-0 flex-col rounded-3xl border"
-          style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)", boxShadow: "var(--shadow-sm)" }}
-        >
+    <div className="flex h-full min-h-0 flex-col gap-6 p-6 md:p-8">
+      <WorkspaceHeader
+        title="Assistant"
+        description="질문을 세션과 문서로 남기고, 이어지는 운영 맥락을 한 화면에서 처리합니다."
+        action={
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => {
+              const seed = {
+                assistantSessionId: crypto.randomUUID(),
+                threadId: crypto.randomUUID(),
+              }
+              setNewThreadSeed(seed)
+              setQuestion("")
+              setSearchParams({})
+            }}
+          >
+            <MessageSquarePlus size={13} />
+            새 대화
+          </Button>
+        }
+      />
+
+      <div className="grid min-h-0 flex-1 gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <WorkspacePanel className="flex min-h-0 flex-col overflow-hidden">
           <div className="border-b px-5 py-5" style={{ borderColor: "var(--border-default)" }}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="flex items-center gap-2 text-base font-semibold" style={{ color: "var(--text-primary)" }}>
-                  <Sparkles size={16} style={{ color: "var(--color-teal-500)" }} />
-                  Assistant
-                </div>
-                <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-                  질문을 케이스와 문서로 남기고, 심사 시나리오를 여기서 바로 시작합니다.
-                </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-base font-semibold" style={{ color: "var(--text-primary)" }}>
+                <Sparkles size={16} style={{ color: "var(--accent-primary)" }} />
+                빠른 시작
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                className="gap-1.5"
-                onClick={() => {
-                  const seed = {
-                    assistantSessionId: crypto.randomUUID(),
-                    threadId: crypto.randomUUID(),
-                  }
-                  setNewThreadSeed(seed)
-                  setQuestion("")
-                  setSearchParams({})
-                }}
-              >
-                <MessageSquarePlus size={13} />
-                새 대화
-              </Button>
+              <div className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                질문을 케이스와 문서로 남기고, 심사 시나리오를 바로 시작합니다.
+              </div>
             </div>
           </div>
 
           <div className="border-b px-4 py-4" style={{ borderColor: "var(--border-default)" }}>
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--text-tertiary)" }}>
-              심사 시작 바로가기
+              바로가기
             </div>
             <div className="space-y-2">
               {pinnedShortcuts.map((shortcut) => {
@@ -259,13 +262,13 @@ export function AssistantPage() {
                     key={shortcut.key}
                     type="button"
                     onClick={shortcut.onClick}
-                    className="w-full rounded-2xl border px-4 py-3 text-left transition-colors hover:bg-[var(--bg-secondary)]"
-                    style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-base)" }}
+                    className="w-full rounded-xl border px-4 py-3 text-left transition-colors"
+                    style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}
                   >
                     <div className="flex items-start gap-3">
                       <span
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-xl"
-                        style={{ backgroundColor: "rgba(20,184,166,0.08)", color: "var(--color-teal-500)" }}
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg"
+                        style={{ backgroundColor: "var(--accent-primary-soft)", color: "var(--accent-primary)" }}
                       >
                         <Icon size={15} />
                       </span>
@@ -292,8 +295,8 @@ export function AssistantPage() {
                 </div>
               ) : sessions.length === 0 ? (
                 <div
-                  className="rounded-2xl border px-4 py-5 text-sm"
-                  style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }}
+                  className="rounded-xl border px-4 py-5 text-sm"
+                  style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)", color: "var(--text-secondary)" }}
                 >
                   아직 Assistant 세션이 없습니다.
                 </div>
@@ -309,10 +312,10 @@ export function AssistantPage() {
                         setNewThreadSeed(null)
                         setSearchParams({ case: session.id })
                       }}
-                      className="w-full rounded-2xl border px-4 py-3 text-left transition-colors"
+                      className="w-full rounded-xl border px-4 py-3 text-left transition-colors"
                       style={{
-                        borderColor: selected ? "rgba(20,184,166,0.26)" : "var(--border-default)",
-                        backgroundColor: selected ? "rgba(20,184,166,0.08)" : "var(--bg-base)",
+                        borderColor: selected ? "var(--accent-primary)" : "var(--border-default)",
+                        backgroundColor: selected ? "var(--accent-primary-soft)" : "var(--bg-elevated)",
                       }}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -334,21 +337,17 @@ export function AssistantPage() {
               )}
             </div>
           </ScrollArea>
-        </aside>
+        </WorkspacePanel>
 
-        <section
-          className="flex min-h-0 flex-col rounded-3xl border"
-          style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)", boxShadow: "var(--shadow-sm)" }}
-        >
+        <WorkspacePanel className="flex min-h-0 flex-col overflow-hidden">
           <div className="border-b px-6 py-5" style={{ borderColor: "var(--border-default)" }}>
             <div className="flex items-start justify-between gap-4">
-              <div>
+              <div className="space-y-1">
                 <div className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
                   {selectedCase?.title ?? (newThreadSeed ? "새 질문 세션" : "질문을 선택하세요")}
                 </div>
-                <div className="mt-1 flex flex-wrap items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+                <div className="flex flex-wrap items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
                   {selectedCase?.identifier ? <span>{selectedCase.identifier}</span> : null}
-                  {selectedCase?.caseKind === "legal-inquiry" ? <Badge className="border-0">법률 질문</Badge> : null}
                   {reviewStatus ? <Badge className="border-0">{reviewStatus}</Badge> : null}
                 </div>
               </div>
@@ -369,16 +368,16 @@ export function AssistantPage() {
                   </div>
                 ) : !selectedCase ? (
                   <div
-                    className="rounded-2xl border px-5 py-8 text-sm"
-                    style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }}
+                    className="rounded-xl border px-5 py-8 text-sm"
+                    style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)", color: "var(--text-secondary)" }}
                   >
                     오른쪽 아래 Assistant로 질문을 시작하거나, 왼쪽 세션 목록에서 기존 질문을 선택하세요.
                   </div>
                 ) : (
                   <>
-                    <div className="rounded-2xl border px-5 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                    <div className="rounded-xl border px-5 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
                       <div className="mb-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                        최신 문서 결과물
+                        최신 문서
                       </div>
                       {latestDocument ? (
                         <>
@@ -396,7 +395,7 @@ export function AssistantPage() {
                       )}
                     </div>
 
-                    <div className="rounded-2xl border px-5 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                    <div className="rounded-xl border px-5 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
                       <div className="mb-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                         질문 로그
                       </div>
@@ -407,10 +406,10 @@ export function AssistantPage() {
                           return (
                             <div
                               key={comment.id}
-                              className="rounded-2xl px-4 py-3"
+                              className="rounded-xl px-4 py-3"
                               style={{
-                                backgroundColor: isAgent ? "rgba(20,184,166,0.08)" : "var(--bg-base)",
-                                border: `1px solid ${isAgent ? "rgba(20,184,166,0.2)" : "var(--border-default)"}`,
+                                backgroundColor: isAgent ? "var(--accent-primary-soft)" : "var(--bg-elevated)",
+                                border: `1px solid ${isAgent ? "var(--accent-primary)" : "var(--border-default)"}`,
                               }}
                             >
                               <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
@@ -431,7 +430,7 @@ export function AssistantPage() {
 
             <div className="border-l px-5 py-5" style={{ borderColor: "var(--border-default)" }}>
               <div className="space-y-4">
-                <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                <div className="rounded-xl border p-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
                   <div className="mb-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     후속 질문
                   </div>
@@ -449,7 +448,7 @@ export function AssistantPage() {
                     <Button
                       size="sm"
                       className="gap-1.5 border-0 text-white"
-                      style={{ backgroundColor: "var(--color-teal-500)" }}
+                      style={{ backgroundColor: "var(--accent-primary)" }}
                       disabled={!question.trim() || submitMutation.isPending || !activeOrgId}
                       onClick={() => submitMutation.mutate(undefined)}
                     >
@@ -459,7 +458,7 @@ export function AssistantPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                <div className="rounded-xl border p-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
                   <div className="mb-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     실행 컨텍스트
                   </div>
@@ -480,9 +479,9 @@ export function AssistantPage() {
                       )}
                     </div>
                     {selectedCase?.legalBasis ? (
-                      <div className="rounded-2xl border px-3 py-3 text-sm" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-base)" }}>
+                      <div className="rounded-xl border px-3 py-3 text-sm" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
                         <div className="mb-1 flex items-center gap-2 font-medium" style={{ color: "var(--text-primary)" }}>
-                          <Scale size={14} style={{ color: "var(--color-teal-500)" }} />
+                          <Scale size={14} style={{ color: "var(--accent-primary)" }} />
                           법령 근거 상태
                         </div>
                         <div style={{ color: "var(--text-secondary)" }}>
@@ -491,9 +490,9 @@ export function AssistantPage() {
                       </div>
                     ) : null}
                     {selectedCase?.skillContext ? (
-                      <div className="rounded-2xl border px-3 py-3 text-sm" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-base)" }}>
+                      <div className="rounded-xl border px-3 py-3 text-sm" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
                         <div className="mb-1 flex items-center gap-2 font-medium" style={{ color: "var(--text-primary)" }}>
-                          <Bot size={14} style={{ color: "var(--color-teal-500)" }} />
+                          <Bot size={14} style={{ color: "var(--accent-primary)" }} />
                           Skill Context
                         </div>
                         <pre className="whitespace-pre-wrap text-xs leading-relaxed" style={{ color: "var(--text-secondary)", fontFamily: "inherit" }}>
@@ -522,7 +521,7 @@ export function AssistantPage() {
               </div>
             </div>
           </div>
-        </section>
+        </WorkspacePanel>
       </div>
     </div>
   )

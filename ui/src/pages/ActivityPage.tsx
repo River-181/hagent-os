@@ -5,6 +5,14 @@ import { useOrganization } from "@/context/OrganizationContext"
 import { activityApi } from "@/api/activity"
 import { queryKeys } from "@/lib/queryKeys"
 import { Activity, Inbox } from "lucide-react"
+import { WorkspaceEmptyState, WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
+
+function formatActivityTime(value: string | null | undefined) {
+  if (!value) return ""
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString("ko-KR", { dateStyle: "medium", timeStyle: "short" })
+}
 
 export function ActivityPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
@@ -21,75 +29,62 @@ export function ActivityPage() {
   })
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6" style={{ color: "var(--text-primary)" }}>
-        처리 이력
-      </h1>
+    <div className="p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title="처리 이력"
+        description="케이스, 승인, 에이전트 실행의 최근 변화를 한 흐름으로 확인합니다."
+      />
 
-      {isLoading ? (
-        <div
-          className="rounded-xl p-8 flex items-center justify-center"
-          style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-        >
-          <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+      <WorkspacePanel className="overflow-hidden">
+        {isLoading ? (
+          <div className="p-6 text-sm" style={{ color: "var(--text-tertiary)" }}>
             로딩 중...
-          </p>
-        </div>
-      ) : isError ? (
-        <div
-          className="rounded-xl p-8 flex items-center justify-center"
-          style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-        >
-          <p className="text-sm" style={{ color: "var(--color-danger)" }}>
+          </div>
+        ) : isError ? (
+          <div className="p-6 text-sm" style={{ color: "var(--color-danger)" }}>
             활동 이력을 불러오는 데 실패했습니다.
-          </p>
-        </div>
-      ) : events.length === 0 ? (
-        <div
-          className="rounded-xl p-12 flex flex-col items-center justify-center gap-3"
-          style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-        >
-          <Inbox size={40} style={{ color: "var(--text-tertiary)" }} />
-          <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-            활동 이력이 없습니다.
-          </p>
-        </div>
-      ) : (
-        <div
-          className="rounded-xl overflow-hidden"
-          style={{
-            backgroundColor: "var(--bg-elevated)",
-            border: "1px solid var(--border-default)",
-            boxShadow: "var(--shadow-sm)",
-          }}
-        >
-          {events.map((item: any, i: number) => {
-            const actor = item.actor?.name ?? item.actorName ?? item.agent?.name ?? item.agentName ?? "시스템"
-            const action = item.action ?? item.event_type ?? item.eventType ?? "이벤트"
-            const entityTitle = item.entity?.title ?? item.entityTitle ?? item.case?.title ?? item.caseTitle ?? null
-            const timestamp = item.created_at ?? item.createdAt ?? item.at ?? item.timestamp ?? null
-            return (
-              <div
-                key={item.id ?? i}
-                className="flex items-center gap-4 px-5 py-4"
-                style={{
-                  borderBottom: i < events.length - 1 ? "1px solid var(--border-default)" : undefined,
-                }}
-              >
-                <Activity size={16} style={{ color: "var(--color-teal-500)", flexShrink: 0 }} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                    {entityTitle ? `${action} — ${entityTitle}` : action}
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-                    {actor}{timestamp ? ` · ${timestamp}` : ""}
-                  </p>
+          </div>
+        ) : events.length === 0 ? (
+          <div className="p-6">
+            <WorkspaceEmptyState
+              icon={<Inbox size={40} />}
+              title="활동 이력이 없습니다."
+              description="새로운 케이스나 에이전트 실행이 생기면 여기서 시간순으로 보입니다."
+            />
+          </div>
+        ) : (
+          <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
+            {events.map((item: any) => {
+              const actor = item.actor?.name ?? item.actorName ?? item.agent?.name ?? item.agentName ?? "시스템"
+              const action = item.action ?? item.event_type ?? item.eventType ?? "이벤트"
+              const entityTitle = item.entity?.title ?? item.entityTitle ?? item.case?.title ?? item.caseTitle ?? null
+              const timestamp = item.created_at ?? item.createdAt ?? item.at ?? item.timestamp ?? null
+
+              return (
+                <div
+                  key={item.id}
+                  className="flex items-start gap-4 px-4 py-4 md:px-6"
+                >
+                  <div
+                    className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                    style={{ backgroundColor: "var(--bg-subtle)", color: "var(--color-primary)" }}
+                  >
+                    <Activity size={16} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                      {entityTitle ? `${action} — ${entityTitle}` : action}
+                    </p>
+                    <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                      {actor}{timestamp ? ` · ${formatActivityTime(timestamp)}` : ""}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
+              )
+            })}
+          </div>
+        )}
+      </WorkspacePanel>
     </div>
   )
 }

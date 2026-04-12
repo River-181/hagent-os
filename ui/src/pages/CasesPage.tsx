@@ -9,6 +9,12 @@ import { queryKeys } from "@/lib/queryKeys"
 import { Plus, Inbox, LayoutList, LayoutGrid, Search, ChevronDown, ChevronRight, Sparkles, FolderKanban, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+import {
+  WorkspaceEmptyState,
+  WorkspaceHeader,
+  WorkspacePanel,
+} from "@/components/ui/workspace-surface"
 import { StatusIcon, CaseStatus } from "@/components/StatusIcon"
 import { Identity } from "@/components/Identity"
 import { CaseTypeBadge } from "@/components/CaseTypeBadge"
@@ -341,34 +347,53 @@ export function CasesPage() {
   const hasAny = filtered.length > 0
 
   return (
-    <div className="p-5 max-w-5xl mx-auto">
-      <div className="flex items-center gap-3 mb-5 flex-wrap">
-        <h1 className="text-xl font-bold mr-auto" style={{ color: "var(--text-primary)" }}>
-          케이스
-        </h1>
+    <div className="p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title="케이스"
+        description="채널 인입과 운영 이슈를 한 곳에서 정리하고, 리스트와 보드로 빠르게 전환합니다."
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="gap-2"
+              onClick={() => navigate(`/${orgPrefix}/assistant`)}
+            >
+              <Sparkles size={15} />
+              질문하기
+            </Button>
+            <Button type="button" className="gap-2" onClick={() => setDialogOpen(true)}>
+              <Plus size={15} />
+              새 케이스
+            </Button>
+          </div>
+        }
+      />
 
-        <div className="relative w-52">
-          <Search
-            size={14}
-            className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
-            style={{ color: "var(--text-tertiary)" }}
-          />
-          <Input
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            placeholder="검색..."
-            className="pl-8 h-8 text-sm"
-            style={{
-              backgroundColor: "var(--bg-elevated)",
-              borderColor: "var(--border-default)",
-            }}
-          />
-        </div>
+      <WorkspacePanel className="overflow-hidden">
+        <div className="flex flex-col gap-4 border-b p-4 md:flex-row md:items-center md:justify-between md:p-6" style={{ borderColor: "var(--border-default)" }}>
+          <div className="relative w-full md:max-w-xs">
+            <Search
+              size={14}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2"
+              style={{ color: "var(--text-tertiary)" }}
+            />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="케이스 검색"
+              className="h-9 pl-8 text-sm"
+              style={{
+                backgroundColor: "var(--bg-muted)",
+                borderColor: "var(--border-default)",
+              }}
+            />
+          </div>
 
-        <div
-          className="flex items-center rounded-lg overflow-hidden"
-          style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}
-        >
+          <div
+            className="flex items-center overflow-hidden rounded-lg"
+            style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}
+          >
           <button
             type="button"
             onClick={() => setViewMode("list")}
@@ -399,58 +424,10 @@ export function CasesPage() {
             <LayoutGrid size={13} />
             보드
           </button>
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => navigate(`/${orgPrefix}/assistant`)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-          style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)", border: "1px solid var(--border-default)" }}
-        >
-          <Sparkles size={13} />
-          질문하기
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setDialogOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
-          style={{ background: "var(--color-teal-500)", color: "#fff" }}
-        >
-          <Plus size={13} />
-          새 케이스
-        </button>
-      </div>
-
-      <div className="flex flex-wrap gap-3 mb-4">
-        <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-secondary)" }}>
-          <span className="font-semibold" style={{ color: "var(--text-primary)" }}>
-            {cases.length}
-          </span>
-          전체 케이스
-        </div>
-        <span style={{ color: "var(--border-default)" }}>|</span>
-        {[
-          { status: "in_progress" as CaseStatus, label: "진행 중", color: "var(--color-teal-500)" },
-          { status: "todo" as CaseStatus, label: "할 일", color: "#3b82f6" },
-          { status: "backlog" as CaseStatus, label: "백로그", color: "var(--text-tertiary)" },
-          { status: "done" as CaseStatus, label: "완료", color: "var(--color-success)" },
-        ].map(({ status, label, color }) => {
-          const count = (cases as any[]).filter((caseItem: any) => normalizeCaseStatus(caseItem.status) === status).length
-          if (count === 0) return null
-          return (
-            <div key={status} className="flex items-center gap-1 text-xs">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
-              <span style={{ color: "var(--text-tertiary)" }}>{label}</span>
-              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
-                {count}
-              </span>
-            </div>
-          )
-        })}
-      </div>
-
-      <div className="mb-4">
+        <div className="border-b p-4 md:px-6" style={{ borderColor: "var(--border-default)" }}>
         <FilterBar
           filters={filters}
           onFilterChange={setFilters}
@@ -460,57 +437,50 @@ export function CasesPage() {
             return acc
           }, [])}
         />
-      </div>
+        </div>
 
-      {isLoading ? (
-        <div
-          className="rounded-xl p-8 flex items-center justify-center"
-          style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-        >
-          <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-            로딩 중...
-          </p>
-        </div>
-      ) : isError ? (
-        <div
-          className="rounded-xl p-8 flex items-center justify-center"
-          style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-        >
-          <p className="text-sm" style={{ color: "var(--color-danger)" }}>
-            케이스를 불러오는 데 실패했습니다.
-          </p>
-        </div>
-      ) : !hasAny ? (
-        <div
-          className="rounded-xl p-12 flex flex-col items-center justify-center gap-3"
-          style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-        >
-          <Inbox size={40} style={{ color: "var(--text-tertiary)" }} />
-          <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-            {search ? "검색 결과가 없습니다." : "등록된 케이스가 없습니다."}
-          </p>
-        </div>
-      ) : viewMode === "board" ? (
-        <KanbanBoard
-          cases={filtered}
-          onDeleteCase={handleDeleteCase}
-          deletingCaseId={deleteCaseMutation.variables ?? null}
-        />
-      ) : (
-        <div>
-          {STATUS_ORDER.map((status) => (
-            <StatusGroup
-              key={status}
-              status={status}
-              cases={grouped[status]}
-              orgPrefix={orgPrefix ?? ""}
-              defaultOpen={status !== "done"}
+        <div className="p-4 md:p-6">
+          {isLoading ? (
+            <WorkspaceEmptyState
+              title="케이스를 불러오는 중입니다."
+              description="채널 인입과 운영 이슈를 정리하고 있습니다."
+              icon={<Inbox size={18} />}
+            />
+          ) : isError ? (
+            <WorkspaceEmptyState
+              title="케이스를 불러오지 못했습니다."
+              description="서버 응답을 다시 확인해 주세요."
+              icon={<Inbox size={18} />}
+            />
+          ) : !hasAny ? (
+            <WorkspaceEmptyState
+              title={search ? "검색 결과가 없습니다." : "등록된 케이스가 없습니다."}
+              description="검색어를 바꾸거나 새 케이스를 등록해 작업을 시작하세요."
+              icon={<Inbox size={18} />}
+            />
+          ) : viewMode === "board" ? (
+            <KanbanBoard
+              cases={filtered}
               onDeleteCase={handleDeleteCase}
               deletingCaseId={deleteCaseMutation.variables ?? null}
             />
-          ))}
+          ) : (
+            <div>
+              {STATUS_ORDER.map((status) => (
+                <StatusGroup
+                  key={status}
+                  status={status}
+                  cases={grouped[status]}
+                  orgPrefix={orgPrefix ?? ""}
+                  defaultOpen={status !== "done"}
+                  onDeleteCase={handleDeleteCase}
+                  deletingCaseId={deleteCaseMutation.variables ?? null}
+                />
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </WorkspacePanel>
 
       <NewCaseDialog open={dialogOpen} onOpenChange={setDialogOpen} casesCount={cases.length} />
     </div>

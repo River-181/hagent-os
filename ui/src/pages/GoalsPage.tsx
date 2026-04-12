@@ -10,6 +10,7 @@ import { queryKeys } from "@/lib/queryKeys"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { WorkspaceEmptyState, WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
 import {
   Dialog,
   DialogContent,
@@ -18,16 +19,15 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { EmptyState } from "@/components/EmptyState"
 import { Target, Plus, Loader2, Calendar, ChevronRight, FolderKanban } from "lucide-react"
 
 const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
-  active:      { label: "진행중", bg: "var(--color-primary-bg)",       color: "var(--color-teal-500)" },
-  achieved:    { label: "달성",   bg: "rgba(16,185,129,0.12)",         color: "var(--color-success)" },
-  completed:   { label: "달성",   bg: "rgba(16,185,129,0.12)",         color: "var(--color-success)" },
-  delayed:     { label: "지연",   bg: "rgba(239,68,68,0.12)",          color: "#ef4444" },
-  in_progress: { label: "진행중", bg: "var(--color-primary-bg)",       color: "var(--color-teal-500)" },
-  paused:      { label: "중단",   bg: "rgba(245,158,11,0.12)",         color: "#f59e0b" },
+  active:      { label: "진행중", bg: "var(--status-info-soft)",    color: "var(--color-info)" },
+  achieved:    { label: "달성",   bg: "var(--status-success-soft)", color: "var(--color-success)" },
+  completed:   { label: "달성",   bg: "var(--status-success-soft)", color: "var(--color-success)" },
+  delayed:     { label: "지연",   bg: "var(--status-danger-soft)",  color: "var(--color-danger)" },
+  in_progress: { label: "진행중", bg: "var(--status-info-soft)",    color: "var(--color-info)" },
+  paused:      { label: "중단",   bg: "var(--status-warning-soft)", color: "var(--color-warning)" },
 }
 
 function statusCfg(status: string) {
@@ -98,42 +98,38 @@ export function GoalsPage() {
   const list = Array.isArray(goals) ? goals : []
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-2xl px-6 py-8">
-
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>목표</h1>
-            <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-              {list.length}개
-            </p>
-          </div>
+    <div className="p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title="목표"
+        description="운영 목표를 연결 프로젝트와 함께 추적하고 상태를 한눈에 봅니다."
+        action={
           <Button
             size="sm"
-            className="border-0 text-white gap-1 text-xs"
-            style={{ backgroundColor: "var(--color-teal-500)" }}
+            className="gap-2 border-0 text-white"
+            style={{ backgroundColor: "var(--color-primary)" }}
             onClick={() => setShowNew(true)}
+            disabled={!selectedOrgId}
           >
             <Plus size={14} />
             새 목표
           </Button>
-        </div>
+        }
+      />
 
-        {/* List */}
+      <WorkspacePanel className="overflow-hidden">
         {isLoading ? (
-          <div className="flex justify-center py-16">
+          <div className="flex min-h-[220px] items-center justify-center px-6 py-12">
             <Loader2 size={20} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
           </div>
         ) : list.length === 0 ? (
-          <EmptyState
+          <WorkspaceEmptyState
             icon={<Target size={22} />}
             title="목표가 없습니다"
             description="운영 목표를 추가하고 달성 현황을 추적하세요."
-            action={{ label: "새 목표", onClick: () => setShowNew(true) }}
+            className="rounded-none border-0 bg-transparent"
           />
         ) : (
-          <div className="space-y-2">
+          <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
             {list.map((goal: any) => {
               const cfg = statusCfg(goal.status ?? "active")
               const due = formatDate(goal.targetDate)
@@ -143,46 +139,51 @@ export function GoalsPage() {
                   key={goal.id}
                   type="button"
                   onClick={() => navigate(`/${orgPrefix}/goals/${goal.id}`)}
-                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-colors group"
-                  style={{
-                    backgroundColor: "var(--bg-elevated)",
-                    border: "1px solid var(--border-default)",
+                  className="w-full px-5 py-4 text-left transition-colors"
+                  style={{ backgroundColor: "transparent" }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "var(--bg-subtle)"
                   }}
-                  onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--color-teal-500)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border-default)")}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent"
+                  }}
                 >
-                  <div className="flex-1 min-w-0">
-                    <span className="text-sm font-medium truncate block" style={{ color: "var(--text-primary)" }}>
-                      {goal.title}
-                    </span>
-                    <div className="flex items-center gap-3 mt-1">
-                      {due && (
-                        <span className="flex items-center gap-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                          <Calendar size={11} />
-                          {due}
-                        </span>
-                      )}
-                      {linkedProject && (
-                        <span className="flex items-center gap-1 text-xs" style={{ color: "var(--color-teal-500)" }}>
-                          <FolderKanban size={11} />
-                          {linkedProject.name}
-                        </span>
-                      )}
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 space-y-2">
+                      <p className="truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                        {goal.title}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                        {due ? (
+                          <span className="flex items-center gap-1">
+                            <Calendar size={11} />
+                            {due}
+                          </span>
+                        ) : null}
+                        {linkedProject ? (
+                          <span className="flex items-center gap-1">
+                            <FolderKanban size={11} />
+                            {linkedProject.name}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Badge
+                        className="border-0 px-2.5 py-1 text-xs"
+                        style={{ backgroundColor: cfg.bg, color: cfg.color }}
+                      >
+                        {cfg.label}
+                      </Badge>
+                      <ChevronRight size={14} style={{ color: "var(--text-tertiary)" }} />
                     </div>
                   </div>
-                  <Badge
-                    className="border-0 px-2 py-0.5 text-xs shrink-0"
-                    style={{ backgroundColor: cfg.bg, color: cfg.color }}
-                  >
-                    {cfg.label}
-                  </Badge>
-                  <ChevronRight size={14} style={{ color: "var(--text-tertiary)" }} className="shrink-0" />
                 </button>
               )
             })}
           </div>
         )}
-      </div>
+      </WorkspacePanel>
 
       {/* New Goal Dialog */}
       <Dialog open={showNew} onOpenChange={(o) => { if (!o) { setShowNew(false); setNewTitle(""); setNewStatus("active"); setNewDate(""); setNewProjectId("") } }}>
@@ -237,7 +238,7 @@ export function GoalsPage() {
               disabled={!newTitle.trim() || createMutation.isPending}
               onClick={() => createMutation.mutate()}
               className="border-0 text-white"
-              style={{ backgroundColor: "var(--color-teal-500)" }}
+              style={{ backgroundColor: "var(--color-primary)" }}
             >
               {createMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : "추가"}
             </Button>

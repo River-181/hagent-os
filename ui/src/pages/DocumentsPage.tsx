@@ -15,8 +15,9 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { EmptyState } from "@/components/EmptyState"
-import { Download, FileText, Loader2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react"
+import { WorkspaceEmptyState, WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Download, FileText, Loader2, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload } from "lucide-react"
 
 interface Document {
   id: string
@@ -71,11 +72,11 @@ const INITIAL_CATEGORIES: CategoryOption[] = [
 ]
 
 const CATEGORY_COLORS: Record<string, { bg: string; color: string }> = {
-  policy: { bg: "rgba(59,130,246,0.12)", color: "#3b82f6" },
-  faq: { bg: "rgba(16,185,129,0.12)", color: "var(--color-success)" },
-  manual: { bg: "rgba(168,85,247,0.12)", color: "#a855f7" },
-  script: { bg: "rgba(245,158,11,0.12)", color: "#f59e0b" },
-  general: { bg: "var(--bg-tertiary)", color: "var(--text-secondary)" },
+  policy: { bg: "var(--status-info-soft)", color: "var(--color-info)" },
+  faq: { bg: "var(--status-success-soft)", color: "var(--color-success)" },
+  manual: { bg: "var(--status-warning-soft)", color: "var(--color-warning)" },
+  script: { bg: "var(--accent-primary-soft)", color: "var(--color-primary)" },
+  general: { bg: "var(--bg-muted)", color: "var(--text-secondary)" },
 }
 
 const SCOPE_OPTIONS: ScopeOption[] = [
@@ -86,10 +87,10 @@ const SCOPE_OPTIONS: ScopeOption[] = [
 ]
 
 const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
-  knowledge_base: { bg: "rgba(59,130,246,0.10)", color: "#2563eb" },
-  project_brief: { bg: "rgba(124,58,237,0.10)", color: "#7c3aed" },
-  project_artifact: { bg: "rgba(168,85,247,0.12)", color: "#9333ea" },
-  case_artifact: { bg: "rgba(245,158,11,0.12)", color: "#d97706" },
+  knowledge_base: { bg: "var(--status-info-soft)", color: "var(--color-info)" },
+  project_brief: { bg: "var(--accent-primary-soft)", color: "var(--color-primary)" },
+  project_artifact: { bg: "var(--status-warning-soft)", color: "var(--color-warning)" },
+  case_artifact: { bg: "var(--status-warning-soft)", color: "var(--color-warning)" },
 }
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -326,7 +327,7 @@ function InlineMarkdown({ text }: { text: string }) {
         <code
           key={match.index}
           className="px-1 py-0.5 rounded text-xs font-mono"
-          style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--color-teal-500)" }}
+          style={{ backgroundColor: "var(--bg-muted)", color: "var(--color-primary)" }}
         >
           {token.slice(1, -1)}
         </code>
@@ -445,7 +446,7 @@ function NewDocDialog({
 
   return (
     <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
-      <DialogContent style={{ backgroundColor: "var(--bg-base)", border: "1px solid var(--border-default)" }}>
+      <DialogContent style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}>
         <DialogHeader>
           <DialogTitle style={{ color: "var(--text-primary)" }}>새 문서</DialogTitle>
         </DialogHeader>
@@ -484,8 +485,7 @@ function NewDocDialog({
               size="sm"
               disabled={!title.trim()}
               onClick={handleSubmit}
-              className="border-0 text-white"
-              style={{ backgroundColor: "var(--color-teal-500)" }}
+              style={{ backgroundColor: "var(--color-primary)", color: "var(--text-on-primary)" }}
             >
               저장
             </Button>
@@ -528,7 +528,7 @@ export function DocumentsPage() {
     setBreadcrumbs([{ label: "문서/지식베이스" }])
   }, [setBreadcrumbs])
 
-  const { data: apiDocs, isLoading } = useQuery({
+  const { data: apiDocs } = useQuery({
     queryKey: queryKeys.documents.list(activeOrgId ?? ""),
     queryFn: () => documentsApi.list(activeOrgId!),
     enabled: !!activeOrgId,
@@ -834,118 +834,104 @@ export function DocumentsPage() {
     if (!displayDoc) {
       return (
         <div className="space-y-4">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">문서/지식베이스 요약</p>
-            <p className="mt-1 text-sm text-slate-500">
-              문서를 선택하면 분류, 최근 수정, 연결 케이스와 운영 액션을 바로 실행할 수 있습니다.
+          <div className="space-y-1">
+            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              문서를 선택하세요
+            </p>
+            <p className="text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+              선택한 문서의 빠른 작업과 연결 정보만 보여줍니다.
             </p>
           </div>
 
-          <div className="grid gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs text-slate-500">전체 문서</p>
-              <p className="mt-1 text-xl font-semibold text-slate-900">{allDocs.length}개</p>
-            </div>
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs text-slate-500">지식베이스 문서</p>
-              <p className="mt-1 text-base font-semibold text-slate-900">
-                {allDocs.filter((doc) => doc.documentScope === "knowledge_base").length}개
-              </p>
-            </div>
+          <div className="space-y-2">
+            <Button
+              size="sm"
+              className="justify-start"
+              onClick={() => setShowNewDialog(true)}
+            >
+              새 문서 작성
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="justify-start"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              문서 가져오기
+            </Button>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-semibold text-slate-600">바로 실행</p>
-            <div className="mt-3 flex flex-col gap-2">
-              <Button size="sm" className="justify-start bg-teal-600 text-white hover:bg-teal-700" onClick={() => setShowNewDialog(true)}>
-                새 문서 작성
-              </Button>
-              <Button size="sm" variant="outline" className="justify-start" onClick={() => fileInputRef.current?.click()}>
-                문서 가져오기
-              </Button>
-            </div>
+          <div className="pt-4" style={{ borderTop: "1px solid var(--border-default)" }}>
+            <p className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
+              현재 범위
+            </p>
+            <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+              {allDocs.length}개 문서 중 {filtered.length}개가 현재 조건에 맞습니다.
+            </p>
           </div>
         </div>
       )
     }
 
-    const visibleTags = getVisibleTags(displayDoc)
-    const displayCategory = categories.find((item) => item.value === displayDoc.category)?.label ?? displayDoc.category
-
     return (
       <div className="space-y-4">
-        <div>
-          <p className="text-lg font-semibold text-slate-900">{displayDoc.title}</p>
-          <p className="mt-1 text-sm text-slate-500">
-            {displayDoc.documentRoleLabel ?? "지식베이스"} · {displayCategory}
+        <div className="space-y-1">
+          <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+            빠른 작업
+          </p>
+          <p className="text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+            현재 문서에 대한 최소한의 운영 액션만 제공합니다.
           </p>
         </div>
 
-        <div className="grid gap-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">마지막 수정</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">
-              {formatDate(displayDoc.updatedAt ?? displayDoc.updated_at)}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">연결 구조</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">{getDocumentConnectionSummary(displayDoc)}</p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-semibold text-slate-600">문서 메타데이터</p>
-          <div className="mt-3 space-y-2 text-sm text-slate-700">
-            <div className="flex items-center justify-between gap-3">
-              <span>작성자</span>
-              <span className="font-medium text-slate-900">{displayDoc.author ?? "미기록"}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>태그</span>
-              <span className="font-medium text-slate-900">{visibleTags.length}개</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>프로젝트</span>
-              <span className="font-medium text-slate-900">{displayDoc.linkedProject?.name ?? "미연결"}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-600">운영 액션</p>
-          <div className="mt-3 flex flex-col gap-2">
-            {["FAQ로 활용", "상담 답변 초안 생성", "관련 케이스에 연결", "AI 팀에게 보완 요청"].map((label) => (
-              <Button key={label} size="sm" variant="outline" className="justify-start" onClick={() => triggerKnowledgeAction(label)}>
-                {label}
-              </Button>
-            ))}
-            {projectId && (
-              <Button
-                size="sm"
-                variant="outline"
-                className="justify-start"
-                onClick={() => window.location.assign(`/${orgPrefix}/projects/${projectId}`)}
-              >
-                연결 프로젝트 보기
-              </Button>
-            )}
-          </div>
+        <div className="space-y-2">
+          {["FAQ로 활용", "상담 답변 초안 생성", "관련 케이스에 연결", "AI 팀에게 보완 요청"].map((label) => (
+            <Button
+              key={label}
+              size="sm"
+              variant="outline"
+              className="justify-start"
+              onClick={() => triggerKnowledgeAction(label)}
+            >
+              {label}
+            </Button>
+          ))}
+          {projectId && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="justify-start"
+              onClick={() => window.location.assign(`/${orgPrefix}/projects/${projectId}`)}
+            >
+              연결 프로젝트 보기
+            </Button>
+          )}
+          {caseId && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="justify-start"
+              onClick={() => window.location.assign(`/${orgPrefix}/cases/${caseId}`)}
+            >
+              관련 케이스 보기
+            </Button>
+          )}
         </div>
       </div>
     )
-  }, [allDocs, caseId, categories, displayDoc, orgPrefix, projectId, setShowNewDialog])
+  }, [allDocs.length, caseId, displayDoc, filtered.length, orgPrefix, projectId, setShowNewDialog, triggerKnowledgeAction])
 
   const panelContentKey = useMemo(
     () =>
       JSON.stringify({
         displayDocId: displayDoc?.id ?? null,
         allDocCount: allDocs.length,
+        filteredCount: filtered.length,
         categoryCount: categories.length,
         caseId: caseId ?? null,
         projectId: projectId ?? null,
       }),
-    [allDocs.length, caseId, categories.length, displayDoc?.id, projectId],
+    [allDocs.length, caseId, categories.length, displayDoc?.id, filtered.length, projectId],
   )
 
   useEffect(() => {
@@ -958,349 +944,383 @@ export function DocumentsPage() {
   }, [panelContentKey, setPanelContent])
 
   return (
-    <div className="h-full flex flex-col">
-      <div
-        className="flex items-center justify-between px-6 py-4 shrink-0"
-        style={{ borderBottom: "1px solid var(--border-default)" }}
-      >
-        <div>
-          <h1 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
-            문서/지식베이스
-          </h1>
-          <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-            {allDocs.length}개 문서
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {isLoading && (
-            <Loader2 size={16} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
-          )}
-          <Button size="sm" variant="outline" className="text-xs gap-1" onClick={handleExport}>
-            <Download size={14} />
-            Markdown 내보내기
-          </Button>
-          <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => fileInputRef.current?.click()} disabled={isImporting}>
-            <Upload size={14} />
-            문서 가져오기
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".json,.md,.markdown,.txt,.docx"
-            multiple
-            className="hidden"
-            onChange={handleImportFile}
-          />
-          <Button
-            size="sm"
-            className="border-0 text-white text-xs gap-1"
-            style={{ backgroundColor: "var(--color-teal-500)" }}
-            onClick={() => setShowNewDialog(true)}
-          >
-            <Plus size={14} />
-            새 문서
-          </Button>
-        </div>
-      </div>
+    <div className="h-full p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title="문서/지식베이스"
+        description="운영용 문서를 분류하고 케이스와 프로젝트에 연결합니다."
+        action={
+          <>
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={() => fileInputRef.current?.click()} disabled={isImporting}>
+              <Upload size={14} />
+              문서 가져오기
+            </Button>
+            <Button size="sm" className="gap-1.5" onClick={() => setShowNewDialog(true)}>
+              <Plus size={14} />
+              새 문서
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="outline" aria-label="문서 더보기">
+                  <MoreHorizontal size={16} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-[180px]">
+                <DropdownMenuItem onClick={handleExport}>
+                  <Download size={14} />
+                  Markdown 내보내기
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleAddCategory}>카테고리 추가</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
+        }
+      />
 
-      <div
-        className="flex items-center justify-between gap-3 px-6 py-2 shrink-0"
-        style={{ borderBottom: "1px solid var(--border-default)" }}
-      >
-        <div className="flex flex-col gap-2 overflow-x-auto">
-          <div className="flex gap-1 overflow-x-auto">
-            {SCOPE_OPTIONS.map((scope) => (
-              <button
-                key={scope.value}
-                onClick={() => setActiveScope(scope.value)}
-                className="px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap"
-                style={
-                  activeScope === scope.value
-                    ? { backgroundColor: "var(--text-primary)", color: "#fff" }
-                    : { backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }
-                }
-              >
-                {scope.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex gap-1 overflow-x-auto">
-          {categories.map((category) => (
-            <button
-              key={category.value}
-              onClick={() => setActiveCategory(category.value)}
-              className="px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap"
-              style={
-                activeCategory === category.value
-                  ? { backgroundColor: "var(--color-teal-500)", color: "#fff" }
-                  : { backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }
-              }
-            >
-              {category.label}
-            </button>
-          ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="text-xs shrink-0"
-            onClick={() => setHideCaseArtifacts((current) => !current)}
-          >
-            {hideCaseArtifacts ? "케이스 산출물 숨김" : "케이스 산출물 포함"}
-          </Button>
-          <Button size="sm" variant="outline" className="text-xs shrink-0" onClick={handleAddCategory}>
-            카테고리 추가
-          </Button>
-        </div>
-      </div>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,.md,.markdown,.txt,.docx"
+        multiple
+        className="hidden"
+        onChange={handleImportFile}
+      />
 
-      <div className="flex flex-1 min-h-0">
-        <ScrollArea
-          className="shrink-0"
-          style={{ width: 320, borderRight: "1px solid var(--border-default)" }}
-        >
-          <div className="px-2 pt-2">
-            <div className="relative mb-3">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-tertiary)" }} />
+      <div className="grid flex-1 min-h-0 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <WorkspacePanel className="flex min-h-0 flex-col overflow-hidden">
+          <div className="space-y-4 border-b p-4" style={{ borderColor: "var(--border-default)" }}>
+            <div className="relative">
+              <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-tertiary)" }} />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder="문서 검색..."
-                className="w-full pl-9 pr-3 py-2 rounded-lg text-sm bg-transparent focus:outline-none focus:ring-2 focus:ring-teal-500/30"
-                style={{ border: "1px solid var(--border-default)", color: "var(--text-primary)" }}
+                placeholder="문서 검색"
+                className="w-full rounded-md border px-9 py-2 text-sm outline-none transition-colors"
+                style={{
+                  backgroundColor: "var(--bg-muted)",
+                  borderColor: "var(--border-default)",
+                  color: "var(--text-primary)",
+                }}
               />
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {SCOPE_OPTIONS.map((scope) => (
+                <button
+                  key={scope.value}
+                  onClick={() => setActiveScope(scope.value)}
+                  className="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
+                  style={
+                    activeScope === scope.value
+                      ? {
+                          backgroundColor: "var(--accent-primary-soft)",
+                          color: "var(--color-primary)",
+                        }
+                      : {
+                          backgroundColor: "var(--bg-muted)",
+                          color: "var(--text-secondary)",
+                        }
+                  }
+                >
+                  {scope.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {categories.map((category) => (
+                <button
+                  key={category.value}
+                  onClick={() => setActiveCategory(category.value)}
+                  className="whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-medium transition-colors"
+                  style={
+                    activeCategory === category.value
+                      ? {
+                          backgroundColor: "var(--color-primary)",
+                          color: "var(--text-on-primary)",
+                        }
+                      : {
+                          backgroundColor: "var(--bg-muted)",
+                          color: "var(--text-secondary)",
+                        }
+                  }
+                >
+                  {category.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                {hideCaseArtifacts ? "케이스 산출물 숨김" : "케이스 산출물 포함"} · {filtered.length}개
+              </p>
+              <Button size="sm" variant="ghost" className="px-2" onClick={() => setHideCaseArtifacts((current) => !current)}>
+                {hideCaseArtifacts ? "포함" : "숨김"}
+              </Button>
             </div>
           </div>
 
-          {filtered.length === 0 ? (
-            <EmptyState
-              icon={<FileText size={22} />}
-              title="아직 문서가 없습니다"
-              description="첫 문서를 작성하세요. 운영 정책, FAQ 등을 등록하면 에이전트가 활용합니다."
-              action={{ label: "새 문서 작성", onClick: () => setShowNewDialog(true) }}
-            />
-          ) : (
-            <div className="p-2 flex flex-col gap-4">
-              {groupedDocs.map((section) => (
-                <div key={section.value} className="space-y-2">
-                  <div className="px-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-tertiary)" }}>
+          <ScrollArea className="min-h-0 flex-1">
+            {filtered.length === 0 ? (
+              <div className="p-4">
+                <WorkspaceEmptyState
+                  icon={<FileText size={20} />}
+                  title="문서가 없습니다"
+                  description="필터를 바꾸거나 새 문서를 만들어 운영 문서를 채우세요."
+                  className="min-h-[240px]"
+                />
+              </div>
+            ) : (
+              <div className="p-2">
+                {groupedDocs.map((section) => (
+                  <div key={section.value} className="space-y-2 py-2 first:pt-0">
+                    <div className="flex items-center justify-between gap-2 px-2">
+                      <p className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
                         {section.label}
                       </p>
                       <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
                         {section.docs.length}개
                       </span>
                     </div>
-                  </div>
-                  {section.docs.map((doc) => {
-                    const updatedAt = doc.updatedAt ?? doc.updated_at
-                    const isActive = displayDoc?.id === doc.id
-                    return (
-                      <div
-                        key={doc.id}
-                        className="rounded-lg px-3 py-3 transition-colors"
-                        style={{
-                          backgroundColor: isActive ? "var(--color-primary-bg)" : "transparent",
-                          border: isActive ? "1px solid rgba(20,184,166,0.25)" : "1px solid var(--border-default)",
-                        }}
-                      >
-                        <button
-                          onClick={() => setSelectedDocId(doc.id)}
-                          className="w-full text-left"
-                        >
-                          <div className="flex items-start justify-between gap-2 mb-1">
-                            <p
-                              className="text-sm font-medium truncate flex-1"
-                              style={{ color: isActive ? "var(--color-teal-500)" : "var(--text-primary)" }}
-                            >
-                              {doc.title}
-                            </p>
-                            <CategoryBadge category={doc.category} categories={categories} />
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            <RoleBadge doc={doc} />
-                            {isAiGenerated(doc) && (
-                              <Badge className="text-xs border-0 px-1.5 py-0" style={{ backgroundColor: "rgba(20,184,166,0.1)", color: "var(--color-teal-500)" }}>
-                                AI 생성
-                              </Badge>
-                            )}
-                          </div>
-                          <p className="text-xs truncate mb-1" style={{ color: "var(--text-secondary)" }}>
-                            {getDocumentConnectionSummary(doc)}
-                          </p>
-                          {updatedAt && (
-                            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                              {formatDate(updatedAt)}
-                            </p>
-                          )}
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
 
-        <ScrollArea className="flex-1">
-          {displayDoc ? (
-            <div className="p-6 max-w-2xl">
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div className="flex-1 min-w-0">
-                  {isEditing ? (
-                    <Input
-                      value={editTitle}
-                      onChange={(event) => setEditTitle(event.target.value)}
-                      style={{ backgroundColor: "var(--bg-elevated)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}
-                    />
-                  ) : (
-                    <h2 className="text-xl font-bold leading-snug" style={{ color: "var(--text-primary)" }}>
-                      {displayDoc.title}
-                    </h2>
-                  )}
-                </div>
+                    <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
+                      {section.docs.map((doc) => {
+                        const updatedAt = doc.updatedAt ?? doc.updated_at
+                        const isActive = displayDoc?.id === doc.id
 
-                <div className="flex items-center gap-2">
-                  {isEditing ? (
-                    <>
-                      <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
-                        취소
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="border-0 text-white"
-                        style={{ backgroundColor: "var(--color-teal-500)" }}
-                        disabled={isSaving || !editTitle.trim()}
-                        onClick={() => void handleSaveDocument()}
-                      >
-                        {isSaving && <Loader2 size={14} className="animate-spin" />}
-                        저장
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setIsEditing(true)}>
-                        <Pencil size={13} />
-                        편집
-                      </Button>
-                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowDeleteDialog(true)}>
-                        <Trash2 size={13} />
-                        삭제
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </div>
+                        return (
+                          <button
+                            key={doc.id}
+                            type="button"
+                            onClick={() => setSelectedDocId(doc.id)}
+                            className="w-full px-3 py-3 text-left transition-colors"
+                            style={{
+                              backgroundColor: isActive ? "var(--accent-primary-soft)" : "transparent",
+                              boxShadow: isActive ? "inset 2px 0 0 var(--color-primary)" : "none",
+                            }}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1 space-y-1">
+                                <p
+                                  className="truncate text-sm font-medium"
+                                  style={{ color: isActive ? "var(--color-primary)" : "var(--text-primary)" }}
+                                >
+                                  {doc.title}
+                                </p>
+                                <p className="truncate text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
+                                  {getDocumentConnectionSummary(doc)}
+                                </p>
+                                <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                                  <span>{doc.documentRoleLabel ?? "지식베이스"}</span>
+                                  {updatedAt ? <span>· {formatDate(updatedAt)}</span> : null}
+                                </div>
+                              </div>
 
-              <div className="flex items-center gap-2 flex-wrap mb-5">
-                <RoleBadge doc={displayDoc} />
-                <CategoryBadge category={displayDoc.category} categories={categories} />
-                {isAiGenerated(displayDoc) && (
-                  <Badge
-                    className="text-xs border-0 px-2 py-0.5"
-                    style={{ backgroundColor: "rgba(20,184,166,0.1)", color: "var(--color-teal-500)" }}
-                  >
-                    AI 생성
-                  </Badge>
-                )}
-                {displayDoc.author && (
-                  <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                    {displayDoc.author}
-                  </span>
-                )}
-                {(displayDoc.updatedAt ?? displayDoc.updated_at) && (
-                  <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                    마지막 수정: {formatDate(displayDoc.updatedAt ?? displayDoc.updated_at)}
-                  </span>
-                )}
-                {caseId && (
-                  <button
-                    className="text-xs underline underline-offset-2"
-                    style={{ color: "var(--color-teal-500)" }}
-                    onClick={() => window.location.assign(`/${orgPrefix}/cases/${caseId}`)}
-                  >
-                    관련 케이스 보기
-                  </button>
-                )}
-                {projectId && (
-                  <button
-                    className="text-xs underline underline-offset-2"
-                    style={{ color: "var(--color-teal-500)" }}
-                    onClick={() => window.location.assign(`/${orgPrefix}/projects/${projectId}`)}
-                  >
-                    연결 프로젝트 보기
-                  </button>
-                )}
-              </div>
-
-              {!isEditing && (
-                <div className="mb-5 flex flex-wrap gap-2">
-                  {["FAQ로 활용", "상담 답변 초안 생성", "관련 케이스에 연결", "AI 팀에게 보완 요청", "법령 검토", "공지 초안"].map((label) => (
-                    <Button key={label} size="sm" variant="outline" onClick={() => triggerKnowledgeAction(label)}>
-                      {label}
-                    </Button>
-                  ))}
-                </div>
-              )}
-
-              {isEditing ? (
-                <div className="flex flex-col gap-3 mb-5">
-                  <Select value={editCategory} onValueChange={setEditCategory}>
-                    <SelectTrigger
-                      style={{ backgroundColor: "var(--bg-elevated)", borderColor: "var(--border-default)", color: "var(--text-primary)" }}
-                    >
-                      <SelectValue placeholder="카테고리 선택" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categories.filter((item) => item.value !== "all").map((item) => (
-                        <SelectItem key={item.value} value={item.value}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Textarea
-                    value={editBody}
-                    onChange={(event) => setEditBody(event.target.value)}
-                    rows={18}
-                    style={{ backgroundColor: "var(--bg-elevated)", borderColor: "var(--border-default)", color: "var(--text-primary)", resize: "vertical" }}
-                  />
-                </div>
-              ) : (
-                <>
-                  {getVisibleTags(displayDoc).length > 0 && (
-                    <div className="flex gap-1.5 flex-wrap mb-5">
-                      {getVisibleTags(displayDoc).map((tag) => (
-                        <Badge
-                          key={tag}
-                          className="text-xs border-0 px-2 py-0.5"
-                          style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
-                        >
-                          {tag}
-                        </Badge>
-                      ))}
+                              <div className="flex shrink-0 flex-col items-end gap-2">
+                                <CategoryBadge category={doc.category} categories={categories} />
+                                {isAiGenerated(doc) ? (
+                                  <Badge
+                                    className="border-0 px-2 py-0.5 text-xs"
+                                    style={{ backgroundColor: "var(--accent-primary-soft)", color: "var(--color-primary)" }}
+                                  >
+                                    AI 생성
+                                  </Badge>
+                                ) : null}
+                              </div>
+                            </div>
+                          </button>
+                        )
+                      })}
                     </div>
-                  )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </WorkspacePanel>
 
-                  <div className="mb-5" style={{ borderTop: "1px solid var(--border-default)" }} />
-                  <MarkdownBody text={displayDoc.body} />
-                </>
-              )}
-            </div>
+        <WorkspacePanel className="flex min-h-0 flex-col overflow-hidden">
+          {displayDoc ? (
+            <>
+              <div className="border-b p-6 md:p-8" style={{ borderColor: "var(--border-default)" }}>
+                <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1 space-y-4">
+                    <div className="flex flex-wrap gap-2">
+                      <RoleBadge doc={displayDoc} />
+                      <CategoryBadge category={displayDoc.category} categories={categories} />
+                      {isAiGenerated(displayDoc) ? (
+                        <Badge
+                          className="border-0 px-2 py-0.5 text-xs"
+                          style={{ backgroundColor: "var(--accent-primary-soft)", color: "var(--color-primary)" }}
+                        >
+                          AI 생성
+                        </Badge>
+                      ) : null}
+                    </div>
+
+                    {isEditing ? (
+                      <Input
+                        value={editTitle}
+                        onChange={(event) => setEditTitle(event.target.value)}
+                        style={{
+                          backgroundColor: "var(--bg-elevated)",
+                          borderColor: "var(--border-default)",
+                          color: "var(--text-primary)",
+                        }}
+                      />
+                    ) : (
+                      <h2 className="text-[28px] font-semibold tracking-[-0.02em]" style={{ color: "var(--text-primary)" }}>
+                        {displayDoc.title}
+                      </h2>
+                    )}
+
+                    <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                      <span>작성자 {displayDoc.author ?? "미기록"}</span>
+                      <span>수정 {formatDate(displayDoc.updatedAt ?? displayDoc.updated_at) || "미기록"}</span>
+                      {caseId ? (
+                        <button
+                          type="button"
+                          className="underline underline-offset-2"
+                          style={{ color: "var(--color-primary)" }}
+                          onClick={() => window.location.assign(`/${orgPrefix}/cases/${caseId}`)}
+                        >
+                          관련 케이스 보기
+                        </button>
+                      ) : null}
+                      {projectId ? (
+                        <button
+                          type="button"
+                          className="underline underline-offset-2"
+                          style={{ color: "var(--color-primary)" }}
+                          onClick={() => window.location.assign(`/${orgPrefix}/projects/${projectId}`)}
+                        >
+                          연결 프로젝트 보기
+                        </button>
+                      ) : null}
+                    </div>
+
+                    <p className="max-w-3xl text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+                      {displayDoc.documentScopeLabel ?? "지식베이스"} · {displayDoc.linkedProject?.name ?? "프로젝트 미연결"}
+                    </p>
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    {isEditing ? (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => setIsEditing(false)}>
+                          취소
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={isSaving || !editTitle.trim()}
+                          onClick={() => void handleSaveDocument()}
+                          style={{ backgroundColor: "var(--color-primary)", color: "var(--text-on-primary)" }}
+                        >
+                          {isSaving ? <Loader2 size={14} className="animate-spin" /> : null}
+                          저장
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setIsEditing(true)}>
+                          <Pencil size={13} />
+                          편집
+                        </Button>
+                        <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setShowDeleteDialog(true)}>
+                          <Trash2 size={13} />
+                          삭제
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="space-y-6 p-6 md:p-8">
+                  {isEditing ? (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
+                          카테고리
+                        </p>
+                        <Select value={editCategory} onValueChange={setEditCategory}>
+                          <SelectTrigger
+                            style={{
+                              backgroundColor: "var(--bg-elevated)",
+                              borderColor: "var(--border-default)",
+                              color: "var(--text-primary)",
+                            }}
+                          >
+                            <SelectValue placeholder="카테고리 선택" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories.filter((item) => item.value !== "all").map((item) => (
+                              <SelectItem key={item.value} value={item.value}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <p className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
+                          본문
+                        </p>
+                        <Textarea
+                          value={editBody}
+                          onChange={(event) => setEditBody(event.target.value)}
+                          rows={18}
+                          style={{
+                            backgroundColor: "var(--bg-elevated)",
+                            borderColor: "var(--border-default)",
+                            color: "var(--text-primary)",
+                            resize: "vertical",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {getVisibleTags(displayDoc).length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {getVisibleTags(displayDoc).map((tag) => (
+                            <Badge
+                              key={tag}
+                              className="border-0 px-2 py-0.5 text-xs"
+                              style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}
+                            >
+                              {tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      <div className="space-y-3">
+                        <p className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
+                          본문
+                        </p>
+                        <div style={{ borderTop: "1px solid var(--border-default)" }} />
+                        <MarkdownBody text={displayDoc.body} />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </ScrollArea>
+            </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full py-24">
-              <FileText size={40} style={{ color: "var(--text-tertiary)" }} />
-              <p className="mt-3 text-sm" style={{ color: "var(--text-tertiary)" }}>
-                왼쪽에서 문서를 선택하세요
-              </p>
+            <div className="flex min-h-[520px] items-center justify-center p-6 md:p-8">
+              <WorkspaceEmptyState
+                icon={<FileText size={20} />}
+                title="왼쪽에서 문서를 선택하세요"
+                description="선택한 문서의 상세, 편집, 연결 작업을 한 화면에서 다룹니다."
+                className="min-h-[240px] w-full max-w-lg"
+              />
             </div>
           )}
-        </ScrollArea>
+        </WorkspacePanel>
       </div>
 
       <NewDocDialog
@@ -1316,7 +1336,7 @@ export function DocumentsPage() {
       />
 
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent style={{ backgroundColor: "var(--bg-base)", border: "1px solid var(--border-default)" }}>
+        <DialogContent style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}>
           <DialogHeader>
             <DialogTitle style={{ color: "var(--text-primary)" }}>문서를 삭제할까요?</DialogTitle>
           </DialogHeader>
@@ -1336,7 +1356,7 @@ export function DocumentsPage() {
       </Dialog>
 
       <Dialog open={showImportPreview} onOpenChange={setShowImportPreview}>
-        <DialogContent style={{ backgroundColor: "var(--bg-base)", border: "1px solid var(--border-default)" }}>
+        <DialogContent style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}>
           <DialogHeader>
             <DialogTitle style={{ color: "var(--text-primary)" }}>Import 미리보기</DialogTitle>
           </DialogHeader>
@@ -1369,8 +1389,7 @@ export function DocumentsPage() {
             </Button>
             <Button
               size="sm"
-              className="border-0 text-white"
-              style={{ backgroundColor: "var(--color-teal-500)" }}
+              style={{ backgroundColor: "var(--color-primary)", color: "var(--text-on-primary)" }}
               disabled={previewImportDocs.length === 0 || isImporting}
               onClick={() => void confirmImport()}
             >

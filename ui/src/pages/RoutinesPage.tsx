@@ -8,7 +8,6 @@ import { agentsApi } from "@/api/agents"
 import { orchestratorApi } from "@/api/orchestrator"
 import { queryKeys } from "@/lib/queryKeys"
 import { Button } from "@/components/ui/button"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Switch } from "@/components/ui/switch"
 import {
   Dialog,
@@ -34,6 +33,7 @@ import {
 } from "@/components/ui/select"
 import { EmptyState } from "@/components/EmptyState"
 import { Badge } from "@/components/ui/badge"
+import { WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
 import { Clock, Plus, Loader2, Bot, Play, CalendarClock, Zap, ChevronDown, ChevronRight } from "lucide-react"
 
 type TriggerType = "매일" | "매주" | "매월" | "이벤트"
@@ -256,7 +256,7 @@ function AddRoutineDialog({
               onClick={handleSubmit}
               disabled={!name.trim() || isSubmitting}
               className="border-0 text-white"
-              style={{ backgroundColor: "var(--color-teal-500)" }}
+              style={{ backgroundColor: "var(--accent-primary)" }}
             >
               {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : "추가"}
             </Button>
@@ -418,57 +418,42 @@ export function RoutinesPage() {
     }
   }
 
-  const enabledCount = routines.filter((routine) => routine.isActive).length
-
   return (
-    <ScrollArea className="h-full">
-      <div className="mx-auto max-w-4xl p-6">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>
-              루틴
-            </h1>
-            <p className="mt-0.5 text-sm" style={{ color: "var(--text-tertiary)" }}>
-              {enabledCount}/{routines.length} 활성화됨
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            {isLoading && (
-              <Loader2
-                size={16}
-                className="animate-spin"
-                style={{ color: "var(--text-tertiary)" }}
-              />
-            )}
-            <Button
-              size="sm"
-              onClick={() => setShowDialog(true)}
-              className="gap-1 border-0 text-xs text-white"
-              style={{ backgroundColor: "var(--color-teal-500)" }}
-            >
-              <Plus size={14} />
-              루틴 추가
-            </Button>
-          </div>
-        </div>
+    <div className="p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title="루틴"
+        description="정기 실행 자동화를 한 화면에서 관리합니다."
+        action={
+          <Button
+            size="sm"
+            onClick={() => setShowDialog(true)}
+            className="gap-1 border-0 text-xs text-white"
+            style={{ backgroundColor: "var(--accent-primary)" }}
+          >
+            <Plus size={14} />
+            루틴 추가
+          </Button>
+        }
+      />
 
+      <WorkspacePanel className="overflow-hidden">
         {routines.length === 0 ? (
-          <EmptyState
-            icon={<Clock size={22} />}
-            title="등록된 루틴이 없습니다"
-            description="정기적으로 실행할 자동화 루틴을 추가하세요."
-            action={{ label: "루틴 추가", onClick: () => setShowDialog(true) }}
-          />
+          <div className="p-6">
+            <EmptyState
+              icon={<Clock size={22} />}
+              title="등록된 루틴이 없습니다"
+              description="정기적으로 실행할 자동화 루틴을 추가하세요."
+            />
+          </div>
         ) : (
-          <div className="grid gap-3">
+          <div className="grid gap-3 p-4">
             {routines.map((routine) => (
               <div
                 key={routine.id}
-                className="rounded-2xl p-5"
+                className="rounded-xl border p-5"
                 style={{
                   backgroundColor: "var(--bg-elevated)",
-                  border: "1px solid var(--border-default)",
-                  boxShadow: "var(--shadow-sm)",
+                  borderColor: "var(--border-default)",
                   opacity: routine.isActive ? 1 : 0.72,
                 }}
               >
@@ -485,10 +470,10 @@ export function RoutinesPage() {
                       className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
                       style={{
                         backgroundColor: routine.isActive
-                          ? "var(--color-primary-bg)"
-                          : "var(--bg-tertiary)",
+                          ? "var(--accent-primary-soft)"
+                          : "var(--bg-muted)",
                         color: routine.isActive
-                          ? "var(--color-teal-500)"
+                          ? "var(--accent-primary)"
                           : "var(--text-tertiary)",
                       }}
                     >
@@ -503,10 +488,10 @@ export function RoutinesPage() {
                           className="border-0 px-2 py-0.5 text-xs"
                           style={{
                             backgroundColor: routine.isActive
-                              ? "var(--color-primary-bg)"
-                              : "var(--bg-tertiary)",
+                              ? "var(--accent-primary-soft)"
+                              : "var(--bg-muted)",
                             color: routine.isActive
-                              ? "var(--color-teal-500)"
+                              ? "var(--accent-primary)"
                               : "var(--text-tertiary)",
                           }}
                         >
@@ -581,7 +566,7 @@ export function RoutinesPage() {
                   <SheetDescription>{selectedRoutine.description}</SheetDescription>
                 </SheetHeader>
                 <div className="grid gap-5 p-4">
-                  <div className="rounded-xl p-4" style={{ backgroundColor: "var(--bg-secondary)" }}>
+                  <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--bg-subtle)", borderColor: "var(--border-default)" }}>
                     <p className="mb-3 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                       실행 조건
                     </p>
@@ -594,7 +579,7 @@ export function RoutinesPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-xl p-4" style={{ backgroundColor: "var(--bg-secondary)" }}>
+                    <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--bg-subtle)", borderColor: "var(--border-default)" }}>
                       <p className="mb-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
                         예상 소요 시간
                       </p>
@@ -602,7 +587,7 @@ export function RoutinesPage() {
                         {selectedRoutine.estimatedDuration}
                       </p>
                     </div>
-                    <div className="rounded-xl p-4" style={{ backgroundColor: "var(--bg-secondary)" }}>
+                    <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--bg-subtle)", borderColor: "var(--border-default)" }}>
                       <p className="mb-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
                         평균 비용
                       </p>
@@ -623,17 +608,17 @@ export function RoutinesPage() {
                         const isExpanded = expandedRunId === history.id
 
                         const dotColor = isFailed
-                          ? "#ef4444"
+                          ? "var(--color-danger)"
                           : isWarning
-                          ? "#f59e0b"
-                          : "#10b981"
+                          ? "var(--color-warning)"
+                          : "var(--color-success)"
 
                         const rowBg = isFailed
-                          ? "rgba(239,68,68,0.06)"
-                          : "var(--bg-secondary)"
+                          ? "var(--status-danger-soft)"
+                          : "var(--bg-subtle)"
 
                         const rowBorder = isFailed
-                          ? "1px solid rgba(239,68,68,0.25)"
+                          ? "1px solid var(--color-danger)"
                           : "1px solid var(--border-default)"
 
                         return (
@@ -643,7 +628,7 @@ export function RoutinesPage() {
                               onClick={() =>
                                 setExpandedRunId((prev) => (prev === history.id ? null : history.id))
                               }
-                              className="flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors hover:brightness-95"
+                              className="flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors"
                               style={{ backgroundColor: rowBg }}
                             >
                               <span
@@ -666,7 +651,7 @@ export function RoutinesPage() {
                               <div
                                 className="px-4 py-3 grid gap-1.5 text-xs"
                                 style={{
-                                  backgroundColor: "var(--bg-tertiary)",
+                                  backgroundColor: "var(--bg-subtle)",
                                   borderTop: "1px solid var(--border-default)",
                                   color: "var(--text-secondary)",
                                 }}
@@ -680,10 +665,10 @@ export function RoutinesPage() {
                                   <span
                                     style={{
                                       color: isFailed
-                                        ? "#ef4444"
+                                        ? "var(--color-danger)"
                                         : isWarning
-                                        ? "#f59e0b"
-                                        : "#10b981",
+                                        ? "var(--color-warning)"
+                                        : "var(--color-success)",
                                     }}
                                   >
                                     {history.status}
@@ -715,8 +700,8 @@ export function RoutinesPage() {
                   <Button
                     onClick={() => handleManualRun(selectedRoutine)}
                     disabled={runningRoutineId === selectedRoutine.id}
-                    className="gap-1 border-0 text-white"
-                    style={{ backgroundColor: "var(--color-teal-500)" }}
+                    variant="outline"
+                    className="gap-1"
                   >
                     {runningRoutineId === selectedRoutine.id ? (
                       <Loader2 size={14} className="animate-spin" />
@@ -730,7 +715,7 @@ export function RoutinesPage() {
             )}
           </SheetContent>
         </Sheet>
-      </div>
-    </ScrollArea>
+      </WorkspacePanel>
+    </div>
   )
 }

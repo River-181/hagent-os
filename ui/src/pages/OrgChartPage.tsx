@@ -9,9 +9,13 @@ import { instructorsApi } from "@/api/students"
 import { queryKeys } from "@/lib/queryKeys"
 import { Identity } from "@/components/Identity"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import {
-  Upload,
-  Download,
+  WorkspaceEmptyState,
+  WorkspaceHeader,
+  WorkspacePanel,
+} from "@/components/ui/workspace-surface"
+import {
   Loader2,
   Bot,
   User,
@@ -24,7 +28,6 @@ import {
   Cog,
   Lightbulb,
 } from "lucide-react"
-import { Button } from "@/components/ui/button"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -55,10 +58,10 @@ const ICON_MAP: Record<string, React.ElementType> = {
 
 function StatusDot({ status }: { status: AgentStatus }) {
   const colorMap: Record<AgentStatus, string> = {
-    running: "var(--color-teal-500)",
+    running: "var(--color-primary)",
     error: "var(--color-danger)",
-    paused: "#f59e0b",
-    idle: "#6b7280",
+    paused: "var(--color-warning)",
+    idle: "var(--text-tertiary)",
   }
 
   return (
@@ -106,7 +109,7 @@ function AgentNode({
     <div
       className="flex flex-col items-center gap-2 rounded-xl cursor-pointer hover:scale-105 transition-transform"
       style={{
-        backgroundColor: "var(--bg-elevated)",
+        backgroundColor: "var(--bg-subtle)",
         border: "1px solid var(--border-default)",
         borderRadius: "var(--radius-lg, 12px)",
         padding: size === "lg" ? "20px 24px" : "16px",
@@ -122,7 +125,7 @@ function AgentNode({
             width: size === "lg" ? 40 : 32,
             height: size === "lg" ? 40 : 32,
             borderRadius: "50%",
-            backgroundColor: "var(--color-primary-bg)",
+            backgroundColor: "var(--color-primary-soft)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -130,7 +133,7 @@ function AgentNode({
         >
           <IconComponent
             size={size === "lg" ? 20 : 16}
-            style={{ color: "var(--color-teal-500)" }}
+            style={{ color: "var(--color-primary)" }}
           />
         </div>
       ) : (
@@ -157,8 +160,8 @@ function AgentNode({
       <Badge
         className="text-xs border-0 px-2 py-0.5"
         style={{
-          backgroundColor: "var(--color-primary-bg)",
-          color: "var(--color-teal-500)",
+          backgroundColor: "var(--color-primary-soft)",
+          color: "var(--color-primary)",
         }}
       >
         {agentType}
@@ -195,7 +198,7 @@ function InstructorCard({ instructor }: { instructor: Instructor }) {
     <div
       className="flex flex-col items-center gap-2 rounded-xl"
       style={{
-        backgroundColor: "rgba(59,130,246,0.06)",
+        backgroundColor: "var(--bg-subtle)",
         border: "1px solid var(--border-default)",
         borderRadius: "var(--radius-lg, 12px)",
         padding: "16px",
@@ -209,13 +212,13 @@ function InstructorCard({ instructor }: { instructor: Instructor }) {
           width: 36,
           height: 36,
           borderRadius: "50%",
-          backgroundColor: "rgba(59,130,246,0.15)",
+          backgroundColor: "var(--color-primary-soft)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <User size={18} style={{ color: "#3b82f6" }} />
+        <User size={18} style={{ color: "var(--color-primary)" }} />
       </div>
       <div>
         <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -228,8 +231,8 @@ function InstructorCard({ instructor }: { instructor: Instructor }) {
       <Badge
         className="text-xs border-0 px-2 py-0.5"
         style={{
-          backgroundColor: "rgba(59,130,246,0.12)",
-          color: "#3b82f6",
+          backgroundColor: "var(--color-primary-soft)",
+          color: "var(--color-primary)",
         }}
       >
         {roleLabel}
@@ -317,29 +320,14 @@ function OrgTreeNode({
 
 // ─── Empty state ──────────────────────────────────────────────────────────────
 
-function EmptyOrg({ onNavigate }: { onNavigate?: () => void }) {
+function EmptyOrg() {
   return (
-    <div className="flex flex-col items-center gap-4 py-20">
-      <Bot size={40} style={{ color: "var(--text-tertiary)" }} />
-      <div className="text-center">
-        <p className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-          아직 에이전트가 없습니다
-        </p>
-        <p className="text-xs mt-1" style={{ color: "var(--text-tertiary)" }}>
-          첫 에이전트를 생성하면 조직도가 표시됩니다.
-        </p>
-      </div>
-      {onNavigate && (
-        <Button
-          size="sm"
-          className="text-xs border-0 text-white"
-          style={{ backgroundColor: "var(--color-teal-500)" }}
-          onClick={onNavigate}
-        >
-          첫 에이전트 생성
-        </Button>
-      )}
-    </div>
+    <WorkspaceEmptyState
+      title="아직 에이전트가 없습니다"
+      description="첫 에이전트를 생성하면 조직도가 표시됩니다."
+      icon={<Bot size={40} />}
+      className="py-20"
+    />
   )
 }
 
@@ -393,159 +381,142 @@ export function OrgChartPage() {
   }, [navigate, orgPrefix])
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <div className="flex-1 overflow-auto">
-        <div className="mx-auto max-w-6xl p-6">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h1
-                className="text-xl font-bold"
-                style={{ color: "var(--text-primary)" }}
-              >
-                에이전트 조직도
-              </h1>
-              <p className="text-sm mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-                에이전트 계층 구조 및 역할 시각화
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled
-                className="text-xs gap-1.5"
-              >
-                <Upload size={13} />
-                Import company
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled
-                className="text-xs gap-1.5"
-              >
-                <Download size={13} />
-                Export company
-              </Button>
-            </div>
-          </div>
+    <div className="p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title="에이전트 조직도"
+        description="에이전트 계층 구조와 역할을 한 화면에서 확인합니다."
+        action={
+          <Button className="gap-2" onClick={handleCreateAgent} disabled={!orgPrefix}>
+            <Bot size={14} />
+            새 에이전트
+          </Button>
+        }
+      />
 
-          {/* Chart area */}
-          <div
-            className="overflow-auto rounded-2xl border bg-[var(--bg-elevated)]"
-            style={{
-              borderColor: "var(--border-default)",
-              minHeight: 320,
-              height: "70vh",
-              width: "100%",
-              maxWidth: "100%",
-              WebkitOverflowScrolling: "touch",
-            }}
-          >
-            {isLoading ? (
-              <div className="flex items-center justify-center py-20">
-                <Loader2
-                  size={24}
-                  className="animate-spin"
-                  style={{ color: "var(--text-tertiary)" }}
+      <WorkspacePanel className="overflow-hidden">
+        <div
+          className="flex items-center justify-between gap-3 border-b px-6 py-4"
+          style={{ borderColor: "var(--border-default)" }}
+        >
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+              조직도
+            </h2>
+            <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+              계층이 없으면 평면 목록으로, 있으면 트리 형태로 보여줍니다.
+            </p>
+          </div>
+          <div className="flex items-center gap-6 text-xs" style={{ color: "var(--text-tertiary)" }}>
+            {(
+              [
+                { status: "idle" as AgentStatus, label: "대기" },
+                { status: "running" as AgentStatus, label: "실행 중" },
+                { status: "error" as AgentStatus, label: "오류" },
+                { status: "paused" as AgentStatus, label: "일시정지" },
+              ] as { status: AgentStatus; label: string }[]
+            ).map(({ status, label }) => (
+              <div key={status} className="flex items-center gap-1.5">
+                <StatusDot status={status} />
+                <span>{label}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div
+          className="overflow-auto"
+          style={{
+            minHeight: 320,
+            height: "70vh",
+            width: "100%",
+            maxWidth: "100%",
+            WebkitOverflowScrolling: "touch",
+          }}
+        >
+          {isLoading ? (
+            <div className="flex h-full items-center justify-center py-20">
+              <Loader2 size={24} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
+            </div>
+          ) : agentList.length === 0 ? (
+            <EmptyOrg />
+          ) : roots.length === 0 ? (
+            <div className="flex min-w-max flex-wrap justify-center gap-6 p-6 sm:p-8">
+              {agentList.map((agent: any) => (
+                <AgentNode
+                  key={agent.id}
+                  agent={agent}
+                  onClick={() => handleAgentClick(agent)}
                 />
-              </div>
-            ) : agentList.length === 0 ? (
-              <EmptyOrg onNavigate={handleCreateAgent} />
-            ) : roots.length === 0 ? (
-              /* All agents have reportsTo but none match — render flat */
-              <div className="flex min-w-max flex-wrap justify-center gap-6 p-6 sm:p-8">
-                {agentList.map((agent: any) => (
-                  <AgentNode
-                    key={agent.id}
-                    agent={agent}
-                    onClick={() => handleAgentClick(agent)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="flex min-w-max flex-col items-center gap-12 p-6 pb-8 sm:p-8">
-                {roots.map((root: any) => (
-                  <OrgTreeNode
-                    key={root.id}
-                    agent={root}
-                    allAgents={agentList}
-                    onAgentClick={handleAgentClick}
-                    isRoot
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Legend */}
-          {!isLoading && agentList.length > 0 && (
-            <div className="mt-4 flex items-center gap-6">
-              {(
-                [
-                  { status: "idle" as AgentStatus, label: "대기" },
-                  { status: "running" as AgentStatus, label: "실행 중" },
-                  { status: "error" as AgentStatus, label: "오류" },
-                  { status: "paused" as AgentStatus, label: "일시정지" },
-                ] as { status: AgentStatus; label: string }[]
-              ).map(({ status, label }) => (
-                <div key={status} className="flex items-center gap-1.5">
-                  <StatusDot status={status} />
-                  <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                    {label}
-                  </span>
-                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex min-w-max flex-col items-center gap-12 p-6 pb-8 sm:p-8">
+              {roots.map((root: any) => (
+                <OrgTreeNode
+                  key={root.id}
+                  agent={root}
+                  allAgents={agentList}
+                  onAgentClick={handleAgentClick}
+                  isRoot
+                />
               ))}
             </div>
           )}
+        </div>
+      </WorkspacePanel>
 
-          {/* Human staff section */}
-          <div className="mt-8">
-            <div className="mb-4">
-              <h2
-                className="text-base font-semibold"
-                style={{ color: "var(--text-primary)" }}
-              >
-                직원/강사
-              </h2>
-              <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-                운영 인력과 강사 역할을 나눠서 확인합니다
-              </p>
-            </div>
-            <div
-              className="rounded-2xl p-6"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                border: "1px solid var(--border-default)",
-              }}
+      <WorkspacePanel className="space-y-5 p-6">
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            직원/강사
+          </h2>
+          <p className="text-xs leading-6" style={{ color: "var(--text-tertiary)" }}>
+            운영 인력과 강사 역할을 나눠서 확인합니다.
+          </p>
+        </div>
+
+        <div className="space-y-5">
+          <div>
+            <p
+              className="mb-3 text-xs font-semibold uppercase tracking-[0.12em]"
+              style={{ color: "var(--text-tertiary)" }}
             >
-              <div className="space-y-5">
-                <div>
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">운영 인력</p>
-                  <div className="flex flex-wrap gap-4">
-                    {staffInstructors.length > 0 ? staffInstructors.map((instructor) => (
-                      <InstructorCard key={instructor.id} instructor={instructor} />
-                    )) : (
-                      <p className="text-sm text-slate-500">등록된 운영 인력이 없습니다.</p>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">강사진</p>
-                  <div className="flex flex-wrap gap-4">
-                    {teacherInstructors.length > 0 ? teacherInstructors.map((instructor) => (
-                      <InstructorCard key={instructor.id} instructor={instructor} />
-                    )) : (
-                      <p className="text-sm text-slate-500">등록된 강사가 없습니다.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
+              운영 인력
+            </p>
+            <div className="flex flex-wrap gap-4">
+              {staffInstructors.length > 0 ? (
+                staffInstructors.map((instructor) => (
+                  <InstructorCard key={instructor.id} instructor={instructor} />
+                ))
+              ) : (
+                <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                  등록된 운영 인력이 없습니다.
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <p
+              className="mb-3 text-xs font-semibold uppercase tracking-[0.12em]"
+              style={{ color: "var(--text-tertiary)" }}
+            >
+              강사진
+            </p>
+            <div className="flex flex-wrap gap-4">
+              {teacherInstructors.length > 0 ? (
+                teacherInstructors.map((instructor) => (
+                  <InstructorCard key={instructor.id} instructor={instructor} />
+                ))
+              ) : (
+                <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                  등록된 강사가 없습니다.
+                </p>
+              )}
             </div>
           </div>
         </div>
-      </div>
+      </WorkspacePanel>
     </div>
   )
 }

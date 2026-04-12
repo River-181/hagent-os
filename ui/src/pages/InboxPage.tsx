@@ -15,6 +15,7 @@ import { queryKeys } from "@/lib/queryKeys"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
 import { cn, timeAgo } from "@/lib/utils"
 import {
   AlertTriangle,
@@ -208,12 +209,12 @@ function getNotificationCategory(item: NotificationItem): FeedItem["category"] |
 
 function feedIcon(item: FeedItem) {
   if (item.kind === "approval") {
-    return <CheckCircle2 size={18} style={{ color: "#16a34a" }} />
+    return <CheckCircle2 size={18} style={{ color: "var(--color-success)" }} />
   }
 
   switch (item.category) {
     case "agent_completed":
-      return <Bot size={18} style={{ color: "var(--color-teal-500)" }} />
+      return <Bot size={18} style={{ color: "var(--color-primary)" }} />
     case "case_updates":
       return <FileText size={18} style={{ color: "var(--text-secondary)" }} />
     default:
@@ -740,73 +741,54 @@ export function InboxPage() {
   return (
     <div className="h-full min-h-0">
       <ScrollArea className="h-full">
-        <div className="p-6 max-w-3xl mx-auto space-y-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
-                  알림함
-                </h1>
-                {totalUnreadCount > 0 && (
-                  <Badge
-                    className="text-xs font-bold px-2 py-0.5 border-0"
-                    style={{ background: "var(--color-teal-500)", color: "#fff" }}
-                  >
-                    {totalUnreadCount}
-                  </Badge>
-                )}
-              </div>
-              <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-                승인 요청과 운영 알림을 한 곳에서 확인합니다.
-              </p>
-            </div>
-            {totalUnreadCount > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={markAllRead}
-                className="text-xs"
-              >
+        <div className="p-6 md:p-8 space-y-6 max-w-5xl mx-auto">
+          <WorkspaceHeader
+            title="알림함"
+            description="승인 요청과 운영 알림을 한 곳에서 확인합니다."
+            action={totalUnreadCount > 0 ? (
+              <Button variant="outline" size="sm" onClick={markAllRead}>
                 모두 읽음
               </Button>
-            )}
-          </div>
+            ) : undefined}
+          />
 
-          <div className="flex flex-wrap gap-2">
-            {FILTERS.map((filter) => {
-              const count =
-                filter.key === "all"
-                  ? feedItems.length
-                  : feedItems.filter((item) => item.category === filter.key).length
+          <WorkspacePanel className="overflow-hidden">
+            <div className="flex flex-wrap gap-2 border-b p-4" style={{ borderColor: "var(--border-default)" }}>
+              {FILTERS.map((filter) => {
+                const count =
+                  filter.key === "all"
+                    ? feedItems.length
+                    : feedItems.filter((item) => item.category === filter.key).length
 
-              return (
-                <button
-                  key={filter.key}
-                  onClick={() => setActiveFilter(filter.key)}
-                  className="px-3 py-1.5 rounded-full text-sm font-medium transition-colors"
-                  style={{
-                    backgroundColor:
-                      activeFilter === filter.key ? "var(--color-teal-500)" : "var(--bg-tertiary)",
-                    color: activeFilter === filter.key ? "#fff" : "var(--text-secondary)",
-                  }}
-                >
-                  {filter.label} {count > 0 ? `(${count})` : ""}
-                </button>
-              )
-            })}
-          </div>
+                return (
+                  <button
+                    key={filter.key}
+                    onClick={() => setActiveFilter(filter.key)}
+                    className="rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
+                    style={{
+                      backgroundColor:
+                        activeFilter === filter.key ? "var(--color-primary)" : "var(--bg-muted)",
+                      color: activeFilter === filter.key ? "var(--text-on-primary)" : "var(--text-secondary)",
+                    }}
+                  >
+                    {filter.label} {count > 0 ? `(${count})` : ""}
+                  </button>
+                )
+              })}
+            </div>
 
-          <div className="flex items-center justify-between">
-            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              {unreadCount > 0 ? `선택한 탭에 읽지 않은 항목 ${unreadCount}개` : "읽지 않은 항목이 없습니다"}
-            </p>
-            {orgPrefix ? (
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/${orgPrefix}/assistant`)}>
-                <Sparkles size={13} />
-                Assistant 열기
-              </Button>
-            ) : null}
-          </div>
+            <div className="flex items-center justify-between gap-3 p-4">
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                {unreadCount > 0 ? `선택한 탭에 읽지 않은 항목 ${unreadCount}개` : "읽지 않은 항목이 없습니다"}
+              </p>
+              {orgPrefix ? (
+                <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/${orgPrefix}/assistant`)}>
+                  <Sparkles size={13} />
+                  Assistant 열기
+                </Button>
+              ) : null}
+            </div>
+          </WorkspacePanel>
 
           <div
             className="rounded-xl border p-4"
@@ -823,7 +805,7 @@ export function InboxPage() {
                   채널 인입, 운영 질문, 프로젝트 산출물, 운영자 발송 브리지를 한 화면에서 시작합니다.
                 </div>
               </div>
-              <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+              <Badge className="border-0" style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}>
                 심사 시작점
               </Badge>
             </div>
@@ -836,7 +818,7 @@ export function InboxPage() {
                 {replayInboundMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                 Replay Telegram 상담
               </Button>
-              <Button size="sm" className="gap-2 text-white" style={{ backgroundColor: "var(--color-teal-500)" }} disabled={!activeOrgId || sampleProjectMutation.isPending} onClick={() => sampleProjectMutation.mutate("project")}>
+              <Button size="sm" className="gap-2" style={{ backgroundColor: "var(--color-primary)", color: "var(--text-on-primary)" }} disabled={!activeOrgId || sampleProjectMutation.isPending} onClick={() => sampleProjectMutation.mutate("project")}>
                 {sampleProjectMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
                 상반기 프로모션 생성
               </Button>
@@ -880,7 +862,7 @@ export function InboxPage() {
                         <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{channel.label}</div>
                         <div className="text-xs" style={{ color: "var(--text-secondary)" }}>{channel.detail}</div>
                       </div>
-                      <Badge className="border-0" style={{ backgroundColor: channel.enabled ? "var(--color-primary-bg)" : "var(--bg-tertiary)", color: channel.enabled ? "var(--color-teal-500)" : "var(--text-secondary)" }}>
+                      <Badge className="border-0" style={{ backgroundColor: channel.enabled ? "var(--color-primary-soft)" : "var(--bg-muted)", color: channel.enabled ? "var(--color-primary)" : "var(--text-secondary)" }}>
                         {channel.readiness}
                       </Badge>
                     </div>
@@ -1003,7 +985,7 @@ export function InboxPage() {
                 </div>
                 <div className="rounded-lg border px-3 py-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
                   <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>운영 조치</div>
-                  <div className="mt-1 flex items-center gap-1 text-sm font-medium" style={{ color: "#d97706" }}>
+                  <div className="mt-1 flex items-center gap-1 text-sm font-medium" style={{ color: "var(--color-warning)" }}>
                     <AlertTriangle size={13} />
                     문안 복사 후 전송
                   </div>
@@ -1033,8 +1015,8 @@ export function InboxPage() {
                         <Badge
                           className="border-0"
                           style={{
-                            backgroundColor: item.status === "failed" ? "rgba(239,68,68,0.12)" : "rgba(245,158,11,0.12)",
-                            color: item.status === "failed" ? "var(--color-danger)" : "#d97706",
+                            backgroundColor: item.status === "failed" ? "var(--status-danger-soft)" : "var(--status-warning-soft)",
+                            color: item.status === "failed" ? "var(--color-danger)" : "var(--color-warning)",
                           }}
                         >
                           {item.status === "failed" ? "실패" : "발송 준비"}
@@ -1072,7 +1054,7 @@ export function InboxPage() {
                         <Button
                           size="sm"
                           className="text-white"
-                          style={{ backgroundColor: "var(--color-teal-500)" }}
+                          style={{ backgroundColor: "var(--color-primary)", color: "var(--text-on-primary)" }}
                           disabled={outboundMutation.isPending}
                           onClick={() => outboundMutation.mutate({ id: item.approvalId, mode: "confirm_bridge" })}
                         >
@@ -1094,7 +1076,7 @@ export function InboxPage() {
                 <div
                   key={index}
                   className="h-24 rounded-xl animate-pulse"
-                  style={{ backgroundColor: "var(--bg-tertiary)" }}
+                  style={{ backgroundColor: "var(--bg-muted)" }}
                 />
               ))}
             </div>
@@ -1154,7 +1136,7 @@ export function InboxPage() {
                             {isUnread && (
                               <span
                                 className="w-2 h-2 rounded-full shrink-0"
-                                style={{ backgroundColor: "var(--color-teal-500)" }}
+                                style={{ backgroundColor: "var(--color-primary)", color: "var(--text-on-primary)" }}
                               />
                             )}
                           </div>
@@ -1175,7 +1157,7 @@ export function InboxPage() {
                               size="sm"
                               variant="outline"
                               className="text-xs"
-                              style={{ color: "#dc2626", borderColor: "rgba(220,38,38,0.25)" }}
+                              style={{ color: "var(--color-danger)", borderColor: "var(--status-danger-soft)" }}
                               disabled={isCurrentApprovalPending}
                               onClick={() => {
                                 markAsRead(item.id)
@@ -1191,7 +1173,7 @@ export function InboxPage() {
                             <Button
                               size="sm"
                               className="text-xs text-white"
-                              style={{ backgroundColor: "#16a34a" }}
+                              style={{ backgroundColor: "var(--color-success)", color: "var(--text-on-primary)" }}
                               disabled={isCurrentApprovalPending}
                               onClick={() => {
                                 markAsRead(item.id)
@@ -1208,7 +1190,7 @@ export function InboxPage() {
                         ) : (
                           <span
                             className="text-xs px-2 py-0.5 rounded"
-                            style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--color-teal-500)" }}
+                            style={{ backgroundColor: "var(--bg-muted)", color: "var(--color-primary)" }}
                           >
                             보기
                           </span>

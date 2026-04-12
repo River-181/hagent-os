@@ -9,6 +9,7 @@ import { installSkillForOrganization, updateAgentSkillMounts } from "./skills.js
 import { createCaseWithRetry } from "../lib/case-create.js"
 import { inferInstructorRoleFromSubject } from "../lib/instructor-roles.js"
 import { TANZANIA_PRESET } from "../data/tanzania-preset.js"
+import { RICH_CASES, CEO_MEMORY } from "../data/rich-demo-seed.js"
 
 const AGENT_DATA_DIR = path.join(import.meta.dirname, "../../data/agents")
 
@@ -1239,6 +1240,11 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
       setupDocuments.push(document)
     }
 
+    // demo 모드: 풍부한 케이스 이력 + CEO 메모리 시드
+    if (input.mode === "demo") {
+      await seedRichDemoData(db, organization.id, createdAgents)
+    }
+
     return {
       organization: updatedOrganization,
       agents: createdAgents,
@@ -1286,5 +1292,67 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
       await deleteOrganizationCascade(db, organizationId).catch(() => undefined)
     }
     throw error
+  }
+}
+
+/**
+ * 심사용 풍부한 데모 데이터 시드
+ * bootstrapOrganization(mode==="demo") 에서 호출된다.
+ */
+async function seedRichDemoData(
+  db: Db,
+  organizationId: string,
+  agents: Array<{ id: string; slug: string; agentType?: string }>,
+) {
+  const ceoAgent = agents.find((a) => a.slug === "ceo" || a.agentType === "ceo" || a.slug === "orchestrator")
+  const complaintAgent = agents.find((a) => a.slug === "complaint" || a.slug === "counseling")
+  const schedulerAgent = agents.find((a) => a.slug === "scheduler")
+
+  for (const seed of RICH_CASES) {
+    const daysAgo = seed.daysAgo ?? 0
+    const createdAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+
+    const assigneeAgent =
+      seed.type === "schedule" ? schedulerAgent :
+      seed.type === "complaint" || seed.type === "refund" || seed.type === "churn" ? complaintAgent :
+      ceoAgent
+
+    try {
+      const caseRecord = await createCaseWithRetry(db, {
+        organizationId,
+        title: seed.title,
+        type: seed.type,
+        status: seed.status,
+        severity: seed.severity,
+        source: seed.source as "manual" | "kakao" | "telegram" | "web",
+        agentDraft: seed.agentDraft,
+        assigneeAgentId: assigneeAgent?.id ?? null,
+        metadata: { caseKind: seed.caseKind, seeded: true } as Record<string, unknown>,
+        createdAt,
+        updatedAt: new Date(createdAt.getTime() + (seed.comments.length > 0 ? seed.comments[seed.comments.length - 1].offsetHours * 3600000 : 0)),
+      })
+
+      for (const comment of seed.comments) {
+        const commentAt = new Date(createdAt.getTime() + comment.offsetHours * 3600000)
+        await db.insert(schema.caseComments).values({
+          caseId: caseRecord.id,
+          authorType: comment.authorType,
+          authorId: comment.authorType === "agent" ? (assigneeAgent?.id ?? "system") : "system",
+          content: comment.content,
+          createdAt: commentAt,
+        }).catch(() => null) // caseComments 테이블 없으면 무시
+      }
+    } catch {
+      // 개별 케이스 실패 시 전체 시드 중단하지 않음
+    }
+  }
+
+  // CEO 에이전트 메모리 업데이트
+  if (ceoAgent) {
+    await db
+      .update(schema.agents)
+      .set({ memory: CEO_MEMORY as unknown as Record<string, unknown> })
+      .where(eq(schema.agents.id, ceoAgent.id))
+      .catch(() => null)
   }
 }

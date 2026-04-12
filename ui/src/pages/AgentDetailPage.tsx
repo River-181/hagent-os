@@ -12,13 +12,16 @@ import { costsApi } from "@/api/costs"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
-import { Identity } from "@/components/Identity"
-import { StatusBadge } from "@/components/StatusBadge"
 import { CapabilityWorkspacePanel } from "@/components/capabilities/CapabilityWorkspacePanel"
+import {
+  WorkspaceHeader,
+  WorkspacePanel,
+  WorkspaceSubtle,
+  WorkspaceEmptyState,
+} from "@/components/ui/workspace-surface"
 import {
   Bot,
   Loader2,
@@ -33,13 +36,11 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Play,
   Square,
   ClipboardList,
   Heart,
   PauseCircle,
   PlayCircle,
-  TrendingUp,
 } from "lucide-react"
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
@@ -68,7 +69,7 @@ function formatDate(iso: string): string {
 }
 
 function statusColor(status: string): string {
-  if (status === "running") return "var(--color-teal-500)"
+  if (status === "running") return "var(--accent-primary)"
   if (status === "error") return "var(--color-danger)"
   return "var(--text-tertiary)"
 }
@@ -137,7 +138,7 @@ function ChatBubble({ role, content }: { role: "user" | "agent"; content: string
       <div
         className="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap"
         style={{
-          backgroundColor: isAgent ? "rgba(20,184,166,0.08)" : "var(--bg-tertiary)",
+          backgroundColor: isAgent ? "var(--accent-primary-soft)" : "var(--bg-tertiary)",
           color: "var(--text-primary)",
           borderBottomLeftRadius: isAgent ? 4 : undefined,
           borderBottomRightRadius: isAgent ? undefined : 4,
@@ -162,7 +163,7 @@ function RunRow({ run, expanded, onToggle, showRerun }: { run: any; expanded?: b
 
   const icon =
     runStatus === "running" ? (
-      <Loader2 size={14} className="animate-spin" style={{ color: "var(--color-teal-500)" }} />
+      <Loader2 size={14} className="animate-spin" style={{ color: "var(--accent-primary)" }} />
     ) : runStatus === "completed" ? (
       <CheckCircle2 size={14} style={{ color: "var(--color-success)" }} />
     ) : runStatus === "failed" ? (
@@ -220,10 +221,10 @@ function RunRow({ run, expanded, onToggle, showRerun }: { run: any; expanded?: b
               className="px-1.5 py-0.5 rounded text-xs font-medium"
               style={{
                 backgroundColor: runStatus === "completed"
-                  ? "rgba(34,197,94,0.1)"
+                  ? "var(--status-success-soft)"
                   : runStatus === "failed"
-                  ? "rgba(239,68,68,0.1)"
-                  : "rgba(107,114,128,0.1)",
+                  ? "var(--status-danger-soft)"
+                  : "var(--bg-muted)",
                 color: runStatus === "completed"
                   ? "var(--color-success)"
                   : runStatus === "failed"
@@ -296,7 +297,7 @@ function RunRow({ run, expanded, onToggle, showRerun }: { run: any; expanded?: b
                       <ul className="space-y-0.5">
                         {(outputData.signals as string[]).map((s, i) => (
                           <li key={i} className="text-xs flex items-start gap-1.5">
-                            <span style={{ color: "var(--color-teal-500)" }}>•</span>
+                            <span style={{ color: "var(--accent-primary)" }}>•</span>
                             {s}
                           </li>
                         ))}
@@ -339,7 +340,7 @@ function RunRow({ run, expanded, onToggle, showRerun }: { run: any; expanded?: b
 
           {/* Re-run link */}
           {showRerun && run.status !== "running" && (
-            <p className="text-xs mt-2" style={{ color: "var(--color-teal-500)", cursor: "pointer" }}>
+            <p className="text-xs mt-2" style={{ color: "var(--accent-primary)", cursor: "pointer" }}>
               이 케이스 다시 실행 →
             </p>
           )}
@@ -365,8 +366,8 @@ function BudgetBar({
     pct >= 90
       ? "var(--color-danger)"
       : pct >= 70
-      ? "#d97706"
-      : "var(--color-teal-500)"
+      ? "var(--status-warning)"
+      : "var(--accent-primary)"
 
   return (
     <div className="space-y-1.5">
@@ -411,7 +412,7 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
   })
   const recentRuns = sortedRuns.slice(0, 5)
   const [expandedRunId, setExpandedRunId] = useState<string | null>(
-    recentRuns.length > 0 ? (recentRuns[0].id ?? null) : null
+    recentRuns.length > 0 ? (recentRuns[0].id ?? null) : null,
   )
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [assignInstruction, setAssignInstruction] = useState("")
@@ -423,14 +424,20 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
   const allowedEntityScopes = Array.isArray(agent.adapterConfig?.allowedEntityScopes)
     ? agent.adapterConfig.allowedEntityScopes.filter((item: unknown): item is string => typeof item === "string")
     : []
-  const recentEstimatedCost = sortedRuns.reduce((sum: number, run: any) => sum + Number(run.estimatedCostKrw ?? run.usage?.estimatedCost ?? 0), 0)
+  const recentEstimatedCost = sortedRuns.reduce(
+    (sum: number, run: any) => sum + Number(run.estimatedCostKrw ?? run.usage?.estimatedCost ?? 0),
+    0,
+  )
 
-  // Stats
   const totalRuns = runs.length
   const completedRuns = runs.filter((r) => r.status === "completed").length
   const successRate = totalRuns > 0 ? Math.round((completedRuns / totalRuns) * 100) : 0
   const totalTokens = runs.reduce((s: number, r: any) => s + (r.tokensUsed ?? r.tokens_used ?? 0), 0)
   const lastRun = sortedRuns[0]
+  const tokenLimit = agent.tokenLimit ?? agent.token_limit ?? 0
+  const tokensUsed = agent.tokensUsed ?? agent.tokens_used ?? agent.tokensThisMonth ?? totalTokens
+  const costLimit = agent.costLimit ?? agent.cost_limit ?? 0
+  const costUsed = agent.costUsed ?? agent.cost_used ?? 0
 
   const wakeupMutation = useMutation({
     mutationFn: () => agentsApi.wakeup(agent.id),
@@ -474,157 +481,357 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
     },
   })
 
+  const statItems = [
+    { label: "총 실행", value: totalRuns },
+    { label: "성공률", value: `${successRate}%` },
+    { label: "총 토큰", value: totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : totalTokens },
+    { label: "마지막 실행", value: lastRun ? timeAgo(lastRun.startedAt ?? lastRun.createdAt ?? "") : "-" },
+  ]
+
   return (
     <div className="space-y-5">
-      {/* Agent identity block */}
-      <div
-        className="rounded-xl p-5 flex items-start gap-4"
-        style={{
-          backgroundColor: "var(--bg-elevated)",
-          border: "1px solid var(--border-default)",
-        }}
-      >
-        <div
-          className="flex items-center justify-center rounded-xl shrink-0"
-          style={{
-            width: 48,
-            height: 48,
-            background: "var(--color-primary-bg)",
-          }}
-        >
-          <Bot size={24} style={{ color: "var(--color-teal-500)" }} />
+      <WorkspaceSubtle className="p-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {statItems.map((item) => (
+            <div key={item.label} className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
+                {item.label}
+              </p>
+              <p className="text-base font-semibold tabular-nums" style={{ color: "var(--text-primary)" }}>
+                {String(item.value)}
+              </p>
+            </div>
+          ))}
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap mb-1">
-            <h2
-              className="text-base font-semibold"
-              style={{ color: "var(--text-primary)" }}
-            >
-              {agent.name}
-            </h2>
-            {isRunning ? (
-              <span
-                className="text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1"
-                style={{
-                  backgroundColor: "rgba(20,184,166,0.12)",
-                  color: "var(--color-teal-500)",
-                }}
-              >
-                <span className="inline-block w-1.5 h-1.5 rounded-full bg-current animate-pulse" />
-                실행 중...
-              </span>
+      </WorkspaceSubtle>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.15fr)_340px]">
+        <div className="space-y-5">
+          <section className="space-y-3">
+            <div className="flex items-end justify-between gap-3">
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  현재 실행
+                </h3>
+                <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  최근 활성 run을 바로 확인합니다.
+                </p>
+              </div>
+            </div>
+            {currentRun ? (
+              <WorkspaceSubtle className="p-4">
+                <div className="flex items-start gap-3">
+                  <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin" style={{ color: "var(--accent-primary)" }} />
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                        {currentRun.case?.title ?? currentRun.caseTitle ?? "케이스 처리 중"}
+                      </p>
+                      <Badge
+                        className="border-0 text-xs"
+                        style={{ backgroundColor: "var(--accent-primary-soft)", color: "var(--accent-primary)" }}
+                      >
+                        실행 중
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                      {currentRun.startedAt ?? currentRun.createdAt ? (
+                        <span>시작: {new Date(currentRun.startedAt ?? currentRun.createdAt).toLocaleString("ko-KR")}</span>
+                      ) : null}
+                      {currentRun.tokensUsed ?? currentRun.tokens_used ? (
+                        <span>토큰: {(currentRun.tokensUsed ?? currentRun.tokens_used).toLocaleString()}</span>
+                      ) : null}
+                      {currentRun.durationMs ?? currentRun.duration_ms ? (
+                        <span>소요: {(((currentRun.durationMs ?? currentRun.duration_ms) as number) / 1000).toFixed(1)}초</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </WorkspaceSubtle>
             ) : (
-              <span
-                className="text-xs font-medium px-2 py-0.5 rounded-full"
+              <WorkspaceEmptyState
+                title="현재 실행 중인 run이 없습니다."
+                description="에이전트를 깨우거나 태스크를 지시하면 여기서 상태를 바로 추적할 수 있습니다."
+              />
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex items-end justify-between gap-3">
+              <div className="space-y-1">
+                <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  최근 실행
+                </h3>
+                <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  최근 5개 run만 보여줍니다.
+                </p>
+              </div>
+            </div>
+            {recentRuns.length === 0 ? (
+              <WorkspaceEmptyState
+                title="실행 이력이 없습니다."
+                description="에이전트가 동작하면 이 영역에 요약과 상세 로그가 쌓입니다."
+              />
+            ) : (
+              <WorkspaceSubtle className="overflow-hidden p-0">
+                <div className="divide-y divide-[var(--border-default)]">
+                  {recentRuns.map((run: any, i: number) => {
+                    const runId = run.id ?? String(i)
+                    const isExpanded = expandedRunId === runId
+                    return (
+                      <RunRow
+                        key={runId}
+                        run={run}
+                        expanded={isExpanded}
+                        onToggle={() => setExpandedRunId(isExpanded ? null : runId)}
+                        showRerun
+                      />
+                    )
+                  })}
+                </div>
+              </WorkspaceSubtle>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <div className="space-y-1">
+              <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                에이전트 메모리
+              </h3>
+              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                정체성, 최근 메모, 학습된 패턴을 한 곳에서 봅니다.
+              </p>
+            </div>
+            {!memory || Object.keys(memory).length === 0 ? (
+              <WorkspaceEmptyState
+                title="메모리 데이터가 없습니다."
+                description="메모리가 쌓이면 정체성과 패턴이 여기에 나타납니다."
+              />
+            ) : (
+              <div className="space-y-3">
+                {memory?.soul ? (
+                  <WorkspaceSubtle className="p-4">
+                    <p className="text-xs font-medium" style={{ color: "var(--accent-primary)" }}>
+                      정체성
+                    </p>
+                    <p className="mt-1 text-sm leading-6" style={{ color: "var(--text-primary)" }}>
+                      {memory.soul}
+                    </p>
+                  </WorkspaceSubtle>
+                ) : null}
+
+                {memory?.dailyNotes && Object.keys(memory.dailyNotes).length > 0 ? (
+                  <WorkspaceSubtle className="p-4">
+                    <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                      최근 메모
+                    </p>
+                    <div className="mt-2 space-y-2">
+                      {Object.entries(memory.dailyNotes as Record<string, string>)
+                        .sort(([a], [b]) => b.localeCompare(a))
+                        .slice(0, 3)
+                        .map(([date, note]) => (
+                          <div key={date} className="space-y-0.5">
+                            <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                              {date}
+                            </span>
+                            <p className="text-sm leading-6" style={{ color: "var(--text-primary)" }}>
+                              {note}
+                            </p>
+                          </div>
+                        ))}
+                    </div>
+                  </WorkspaceSubtle>
+                ) : null}
+
+                {(memory?.learnedPatterns as string[] | undefined)?.length ? (
+                  <WorkspaceSubtle className="p-4">
+                    <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                      학습된 패턴
+                    </p>
+                    <ul className="mt-2 space-y-1.5">
+                      {(memory.learnedPatterns as string[]).map((p, i) => (
+                        <li key={i} className="flex items-start gap-2 text-sm leading-6" style={{ color: "var(--text-primary)" }}>
+                          <span style={{ color: "var(--accent-primary)" }}>•</span>
+                          <span>{p}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </WorkspaceSubtle>
+                ) : null}
+              </div>
+            )}
+          </section>
+        </div>
+
+        <div className="space-y-5">
+          <WorkspaceSubtle className="p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-1">
+                <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  운영 제어
+                </p>
+                <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  태스크 지시와 런타임 제어를 한 곳에 모읍니다.
+                </p>
+              </div>
+              <Badge
+                className="border-0 text-xs"
                 style={{
-                  backgroundColor: `color-mix(in srgb, ${statusColor(agent.status)} 12%, transparent)`,
-                  color: statusColor(agent.status),
+                  backgroundColor: isRunning ? "var(--accent-primary-soft)" : "var(--bg-muted)",
+                  color: isRunning ? "var(--accent-primary)" : "var(--text-tertiary)",
                 }}
               >
                 {statusLabel(agent.status ?? "idle")}
-              </span>
+              </Badge>
+            </div>
+            <div className="mt-4 space-y-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full justify-start gap-1.5 text-xs h-8"
+                onClick={() => setAssignDialogOpen(true)}
+              >
+                <ClipboardList size={13} />
+                태스크 지시
+              </Button>
+
+              {isRunning ? (
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  className="w-full justify-start gap-1.5 text-xs h-8"
+                  disabled={stopMutation.isPending}
+                  onClick={() => stopMutation.mutate()}
+                >
+                  {stopMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Square size={13} />}
+                  중지
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  className="w-full justify-start gap-1.5 text-xs h-8"
+                  style={{ backgroundColor: "var(--accent-primary)", color: "var(--text-on-primary)" }}
+                  disabled={wakeupMutation.isPending}
+                  onClick={() => wakeupMutation.mutate()}
+                >
+                  {wakeupMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Heart size={13} />}
+                  하트비트 실행
+                </Button>
+              )}
+
+              {agent.status === "paused" ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full justify-start gap-1.5 text-xs h-8"
+                  style={{ color: "var(--status-success)" }}
+                  disabled={resumeMutation.isPending}
+                  onClick={() => resumeMutation.mutate()}
+                >
+                  {resumeMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <PlayCircle size={13} />}
+                  재개
+                </Button>
+              ) : !isRunning ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full justify-start gap-1.5 text-xs h-8"
+                  disabled={pauseMutation.isPending}
+                  onClick={() => pauseMutation.mutate()}
+                >
+                  {pauseMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <PauseCircle size={13} />}
+                  일시정지
+                </Button>
+              ) : null}
+            </div>
+          </WorkspaceSubtle>
+
+          <WorkspaceSubtle className="p-4">
+            <div className="mb-2 flex items-center gap-2">
+              <Zap size={14} style={{ color: "var(--accent-primary)" }} />
+              <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                Runtime Skill Bundle
+              </p>
+            </div>
+            {runtimeSkills.length === 0 ? (
+              <p className="text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+                현재 장착된 스킬이 없습니다.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  {runtimeSkills.slice(0, 6).map((skill: any) => (
+                    <Badge
+                      key={skill.slug ?? skill.name}
+                      className="border-0 text-xs"
+                      style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}
+                    >
+                      {skill.displayName ?? skill.name ?? skill.slug}
+                    </Badge>
+                  ))}
+                </div>
+                <div className="space-y-2">
+                  {runtimeSkills.slice(0, 2).map((skill: any) => (
+                    <div key={skill.slug ?? skill.name} className="space-y-1 rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
+                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                        {skill.displayName ?? skill.name ?? skill.slug}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {skill.requiredIntegrations?.slice?.(0, 3)?.map?.((integration: string) => (
+                          <Badge
+                            key={`${skill.slug ?? skill.name}-${integration}`}
+                            className="border-0 text-[11px]"
+                            style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-tertiary)" }}
+                          >
+                            {integration}
+                          </Badge>
+                        )) ?? null}
+                      </div>
+                      <p className="text-xs leading-6" style={{ color: "var(--text-secondary)" }}>
+                        {skill.summary ?? "실행 시 output requirement와 integration requirement를 함께 주입합니다."}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
-          </div>
-          {agent.description && (
-            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              {agent.description}
-            </p>
-          )}
-          <div
-            className="flex items-center gap-4 mt-2 text-xs"
-            style={{ color: "var(--text-tertiary)" }}
-          >
-            {agent.role && <span>역할: {agent.role}</span>}
-            <span>어댑터: {agent.adapterType ?? "codex_qauth"}</span>
-            <span>모델: {adapterModel}</span>
-            {agent.createdAt && <span>생성: {formatDate(agent.createdAt)}</span>}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
-              스킬 {runtimeSkills.length}개
-            </Badge>
-            <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
-              채널 {allowedChannels.length > 0 ? allowedChannels.join(", ") : "제한 없음"}
-            </Badge>
-            <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
-              엔터티 {allowedEntityScopes.length > 0 ? allowedEntityScopes.join(", ") : "제한 없음"}
-            </Badge>
-          </div>
-        </div>
+          </WorkspaceSubtle>
 
-        {/* Control buttons */}
-        <div className="flex flex-col items-end gap-1.5 shrink-0">
-          {/* Assign Task */}
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1.5 text-xs h-8 w-full"
-            onClick={() => setAssignDialogOpen(true)}
-          >
-            <ClipboardList size={13} />
-            태스크 지시
-          </Button>
-
-          {/* Run Heartbeat / Stop */}
-          {isRunning ? (
-            <Button
-              size="sm"
-              variant="destructive"
-              className="gap-1.5 text-xs h-8 w-full"
-              disabled={stopMutation.isPending}
-              onClick={() => stopMutation.mutate()}
-            >
-              {stopMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Square size={13} />}
-              중지
-            </Button>
-          ) : (
-            <Button
-              size="sm"
-              className="gap-1.5 text-xs h-8 w-full"
-              style={{ backgroundColor: "var(--color-teal-500)", color: "#fff" }}
-              disabled={wakeupMutation.isPending}
-              onClick={() => wakeupMutation.mutate()}
-            >
-              {wakeupMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Heart size={13} />}
-              하트비트 실행
-            </Button>
-          )}
-
-          {/* Pause / Resume */}
-          {agent.status === "paused" ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs h-8 w-full"
-              style={{ color: "var(--color-success)" }}
-              disabled={resumeMutation.isPending}
-              onClick={() => resumeMutation.mutate()}
-            >
-              {resumeMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <PlayCircle size={13} />}
-              재개
-            </Button>
-          ) : !isRunning ? (
-            <Button
-              size="sm"
-              variant="outline"
-              className="gap-1.5 text-xs h-8 w-full"
-              disabled={pauseMutation.isPending}
-              onClick={() => pauseMutation.mutate()}
-            >
-              {pauseMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <PauseCircle size={13} />}
-              일시정지
-            </Button>
-          ) : null}
+          <WorkspaceSubtle className="p-4">
+            <BudgetBar
+              used={tokensUsed}
+              limit={tokenLimit > 0 ? tokenLimit : Math.max(tokensUsed, 1)}
+              label="이번 달 토큰 사용량"
+            />
+            <div className="mt-3">
+              {costLimit > 0 ? (
+                <BudgetBar used={costUsed} limit={costLimit} label="이번 달 비용 (원)" />
+              ) : (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                      최근 실행 추정 비용
+                    </span>
+                    <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                      {Math.round(recentEstimatedCost).toLocaleString("ko-KR")}원
+                    </span>
+                  </div>
+                  <p className="text-xs leading-6" style={{ color: "var(--text-tertiary)" }}>
+                    월 예산이 없으면 최근 run의 추정 비용만 보여줍니다.
+                  </p>
+                </div>
+              )}
+            </div>
+          </WorkspaceSubtle>
         </div>
       </div>
 
-      {/* Assign Task Dialog */}
       <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{agent.name}에게 태스크 지시</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 mt-2">
+          <div className="mt-2 space-y-3">
             <Textarea
               placeholder="이 에이전트에게 처리할 태스크를 지시하세요..."
               rows={4}
@@ -632,212 +839,21 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
               onChange={(e) => setAssignInstruction(e.target.value)}
             />
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>취소</Button>
+              <Button variant="outline" onClick={() => setAssignDialogOpen(false)}>
+                취소
+              </Button>
               <Button
-                style={{ backgroundColor: "var(--color-teal-500)", color: "#fff" }}
+                style={{ backgroundColor: "var(--accent-primary)", color: "var(--text-on-primary)" }}
                 disabled={!assignInstruction.trim() || dispatchMutation.isPending}
                 onClick={() => dispatchMutation.mutate()}
               >
-                {dispatchMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+                {dispatchMutation.isPending ? <Loader2 size={13} className="mr-1 animate-spin" /> : null}
                 실행
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Stats cards */}
-      <div className="grid grid-cols-2 gap-2">
-          {[
-            { label: "총 실행", value: totalRuns },
-            { label: "성공률", value: `${successRate}%` },
-            { label: "총 토큰", value: totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : totalTokens },
-            { label: "마지막 실행", value: lastRun ? timeAgo(lastRun.startedAt ?? lastRun.createdAt ?? "") : "-" },
-            { label: "최근 비용", value: `${Math.round(recentEstimatedCost).toLocaleString("ko-KR")}원` },
-            { label: "연결 케이스", value: runs.filter((run: any) => Boolean(run.case?.id ?? run.caseId)).length },
-          ].map(({ label, value }) => (
-            <div
-              key={label}
-              className="rounded-xl p-3 flex flex-col gap-0.5"
-              style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-            >
-              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>{label}</p>
-              <p className="text-base font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>{String(value)}</p>
-            </div>
-          ))}
-      </div>
-
-      <div
-        className="rounded-xl p-4"
-        style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-      >
-        <div className="mb-2 flex items-center gap-2">
-          <Zap size={14} style={{ color: "var(--color-teal-500)" }} />
-          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-            Runtime Skill Bundle
-          </p>
-        </div>
-        {runtimeSkills.length === 0 ? (
-          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            현재 장착된 스킬이 없습니다.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              {runtimeSkills.slice(0, 6).map((skill: any) => (
-                <Badge key={skill.slug ?? skill.name} className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
-                  {skill.displayName ?? skill.name ?? skill.slug}
-                </Badge>
-              ))}
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              {runtimeSkills.slice(0, 2).map((skill: any) => (
-                <div
-                  key={skill.slug ?? skill.name}
-                  className="rounded-xl border px-4 py-3"
-                  style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
-                >
-                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                    {skill.displayName ?? skill.name ?? skill.slug}
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {skill.requiredIntegrations?.slice?.(0, 3)?.map?.((integration: string) => (
-                      <Badge
-                        key={`${skill.slug ?? skill.name}-${integration}`}
-                        className="border-0 text-[11px]"
-                        style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-tertiary)" }}
-                      >
-                        {integration}
-                      </Badge>
-                    )) ?? null}
-                  </div>
-                  <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                    {skill.summary ?? "실행 시 output requirement와 integration requirement를 함께 주입합니다."}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Current case */}
-      {currentRun && (
-        <div
-          className="rounded-xl px-4 py-3 flex items-center gap-3"
-          style={{
-            backgroundColor: "rgba(20,184,166,0.06)",
-            border: "1px solid rgba(20,184,166,0.2)",
-          }}
-        >
-          <Loader2
-            size={15}
-            className="animate-spin shrink-0"
-            style={{ color: "var(--color-teal-500)" }}
-          />
-          <div className="flex-1 min-w-0">
-            <p className="text-xs" style={{ color: "var(--color-teal-500)" }}>
-              현재 실행 중
-            </p>
-            <p
-              className="text-sm font-medium truncate"
-              style={{ color: "var(--text-primary)" }}
-            >
-              {currentRun.case?.title ?? currentRun.caseTitle ?? "케이스 처리 중"}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Recent runs */}
-      <div>
-        <h3
-          className="text-sm font-semibold mb-2"
-          style={{ color: "var(--text-primary)" }}
-        >
-          최근 실행
-        </h3>
-        <div
-          className="rounded-xl px-3"
-          style={{
-            backgroundColor: "var(--bg-elevated)",
-            border: "1px solid var(--border-default)",
-          }}
-        >
-          {recentRuns.length === 0 ? (
-            <p
-              className="text-sm py-4 text-center"
-              style={{ color: "var(--text-tertiary)" }}
-            >
-              실행 이력이 없습니다.
-            </p>
-          ) : (
-            <div className="divide-y divide-[var(--border-default)]">
-              {recentRuns.map((run: any, i: number) => {
-                const runId = run.id ?? String(i)
-                const isExpanded = expandedRunId === runId
-                return (
-                  <RunRow
-                    key={runId}
-                    run={run}
-                    expanded={isExpanded}
-                    onToggle={() => setExpandedRunId(isExpanded ? null : runId)}
-                    showRerun
-                  />
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Agent Memory */}
-      {memory && Object.keys(memory).length > 0 && (
-        <div>
-          <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
-            에이전트 메모리
-          </h3>
-          <div className="space-y-2">
-            {/* Soul / Identity */}
-            {memory?.soul && (
-              <div className="rounded-xl p-4" style={{ backgroundColor: "rgba(20,184,166,0.04)", border: "1px solid rgba(20,184,166,0.2)" }}>
-                <p className="text-xs font-medium mb-1" style={{ color: "var(--color-teal-500)" }}>정체성</p>
-                <p className="text-sm" style={{ color: "var(--text-primary)" }}>{memory.soul}</p>
-              </div>
-            )}
-
-            {/* Daily Notes */}
-            {memory?.dailyNotes && Object.keys(memory.dailyNotes).length > 0 && (
-              <div className="rounded-xl p-4" style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}>
-                <p className="text-xs font-medium mb-2" style={{ color: "var(--text-secondary)" }}>최근 메모</p>
-                {Object.entries(memory.dailyNotes as Record<string, string>)
-                  .sort(([a], [b]) => b.localeCompare(a))
-                  .slice(0, 3)
-                  .map(([date, note]) => (
-                    <div key={date} className="mb-2 last:mb-0">
-                      <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>{date}</span>
-                      <p className="text-sm" style={{ color: "var(--text-primary)" }}>{note}</p>
-                    </div>
-                  ))}
-              </div>
-            )}
-
-            {/* Learned Patterns */}
-            {(memory?.learnedPatterns as string[] | undefined)?.length ? (
-              <div className="rounded-xl p-4" style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}>
-                <p className="text-xs font-medium mb-2" style={{ color: "var(--text-secondary)" }}>학습된 패턴</p>
-                <ul className="space-y-1">
-                  {(memory.learnedPatterns as string[]).map((p, i) => (
-                    <li key={i} className="text-sm flex items-start gap-2" style={{ color: "var(--text-primary)" }}>
-                      <span style={{ color: "var(--color-teal-500)" }}>•</span> {p}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -978,7 +994,7 @@ function InstructionsTab({ agent, instructionFiles }: { agent: any; instructionF
                 <Button
                   size="sm"
                   className="gap-1.5 text-xs"
-                  style={{ backgroundColor: "var(--color-teal-500)", color: "#fff" }}
+                  style={{ backgroundColor: "var(--accent-primary)", color: "var(--text-on-primary)" }}
                   disabled={isCreating}
                   onClick={() => createFileMutation.mutate({ filename: fname })}
                 >
@@ -992,7 +1008,7 @@ function InstructionsTab({ agent, instructionFiles }: { agent: any; instructionF
                   <div
                     className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-xl px-4 py-3"
                     style={{
-                      backgroundColor: "rgba(var(--bg-elevated-rgb, 255,255,255), 0.9)",
+                      backgroundColor: "var(--bg-elevated)",
                       backdropFilter: "blur(8px)",
                       border: "1px solid var(--border-default)",
                       boxShadow: "var(--shadow-md)",
@@ -1011,7 +1027,7 @@ function InstructionsTab({ agent, instructionFiles }: { agent: any; instructionF
                       <Button
                         size="sm"
                         className="text-xs h-7 gap-1.5"
-                        style={{ backgroundColor: "var(--color-teal-500)", color: "#fff" }}
+                        style={{ backgroundColor: "var(--accent-primary)", color: "var(--text-on-primary)" }}
                         disabled={isSaving}
                         onClick={() => saveFileMutation.mutate({ filename: fname, content: currentValue })}
                       >
@@ -1025,7 +1041,7 @@ function InstructionsTab({ agent, instructionFiles }: { agent: any; instructionF
                   value={currentValue}
                   onChange={(e) => setFileValues((prev) => ({ ...prev, [fname]: e.target.value }))}
                   rows={20}
-                  className="w-full rounded-xl p-4 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                  className="w-full rounded-xl p-4 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[var(--border-focus)]"
                   style={{
                     backgroundColor: "var(--bg-secondary)",
                     border: "1px solid var(--border-default)",
@@ -1048,7 +1064,7 @@ function InstructionsTab({ agent, instructionFiles }: { agent: any; instructionF
             <div
               className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-xl px-4 py-3 mb-2"
               style={{
-                backgroundColor: "rgba(var(--bg-elevated-rgb, 255,255,255), 0.9)",
+                backgroundColor: "var(--bg-elevated)",
                 backdropFilter: "blur(8px)",
                 border: "1px solid var(--border-default)",
                 boxShadow: "var(--shadow-md)",
@@ -1067,7 +1083,7 @@ function InstructionsTab({ agent, instructionFiles }: { agent: any; instructionF
                 <Button
                   size="sm"
                   className="text-xs h-7 gap-1.5"
-                  style={{ backgroundColor: "var(--color-teal-500)", color: "#fff" }}
+                  style={{ backgroundColor: "var(--accent-primary)", color: "var(--text-on-primary)" }}
                   disabled={systemSaveMutation.isPending}
                   onClick={() => systemSaveMutation.mutate()}
                 >
@@ -1088,7 +1104,7 @@ function InstructionsTab({ agent, instructionFiles }: { agent: any; instructionF
             value={systemPromptValue}
             onChange={(e) => setSystemPromptValue(e.target.value)}
             rows={20}
-            className="w-full rounded-xl p-4 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+            className="w-full rounded-xl p-4 text-sm leading-relaxed resize-y focus:outline-none focus:ring-2 focus:ring-[var(--border-focus)]"
             style={{
               backgroundColor: "var(--bg-secondary)",
               border: "1px solid var(--border-default)",
@@ -1237,8 +1253,8 @@ function SkillsTab({ agent }: { agent: any }) {
                   type="button"
                   className="w-full flex items-center gap-3 rounded-xl px-4 py-3 text-left"
                   style={{
-                    backgroundColor: isPreview ? "rgba(20,184,166,0.08)" : "var(--bg-elevated)",
-                    border: `1px solid ${isPreview ? "rgba(20,184,166,0.24)" : "var(--border-default)"}`,
+                    backgroundColor: isPreview ? "var(--accent-primary-soft)" : "var(--bg-elevated)",
+                    border: `1px solid ${isPreview ? "color-mix(in srgb, var(--accent-primary) 24%, transparent)" : "var(--border-default)"}`,
                     opacity: skill.enabled === false ? 0.6 : 1,
                   }}
                   onClick={() => setPreviewSlug(skill.slug)}
@@ -1248,10 +1264,10 @@ function SkillsTab({ agent }: { agent: any }) {
                     style={{
                       width: 32,
                       height: 32,
-                      backgroundColor: isPreview ? "rgba(20,184,166,0.12)" : "var(--bg-tertiary)",
+                      backgroundColor: isPreview ? "var(--accent-primary-soft)" : "var(--bg-tertiary)",
                     }}
                   >
-                    <Zap size={15} style={{ color: isPreview ? "var(--color-teal-500)" : "var(--text-tertiary)" }} />
+                    <Zap size={15} style={{ color: isPreview ? "var(--accent-primary)" : "var(--text-tertiary)" }} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
@@ -1314,8 +1330,8 @@ function SkillsTab({ agent }: { agent: any }) {
                       key={item.key}
                       className="text-xs border-0"
                       style={{
-                        backgroundColor: item.ready ? "rgba(20,184,166,0.1)" : "rgba(245,158,11,0.12)",
-                        color: item.ready ? "var(--color-teal-500)" : "#d97706",
+                        backgroundColor: item.ready ? "var(--accent-primary-soft)" : "var(--status-warning-soft)",
+                        color: item.ready ? "var(--accent-primary)" : "var(--status-warning)",
                       }}
                     >
                       {item.label}
@@ -1399,10 +1415,10 @@ function SkillsTab({ agent }: { agent: any }) {
                       style={{
                         width: 32,
                         height: 32,
-                        backgroundColor: "rgba(20,184,166,0.1)",
+                        backgroundColor: "var(--accent-primary-soft)",
                       }}
                     >
-                      <Zap size={15} style={{ color: "var(--color-teal-500)" }} />
+                      <Zap size={15} style={{ color: "var(--accent-primary)" }} />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
@@ -1422,7 +1438,7 @@ function SkillsTab({ agent }: { agent: any }) {
                       style={
                         isEquipped
                           ? { color: "var(--text-tertiary)" }
-                          : { backgroundColor: "var(--color-teal-500)", color: "#fff" }
+                          : { backgroundColor: "var(--accent-primary)", color: "var(--text-on-primary)" }
                       }
                       onClick={() => !isEquipped && addSkillMutation.mutate(skill)}
                     >
@@ -1537,9 +1553,9 @@ function SettingsTab({ agent }: { agent: any }) {
       {agent.description && (
         <div
           className="rounded-xl p-4"
-          style={{ backgroundColor: "rgba(20,184,166,0.04)", border: "1px solid rgba(20,184,166,0.2)" }}
+          style={{ backgroundColor: "var(--accent-primary-soft)", border: "1px solid color-mix(in srgb, var(--accent-primary) 20%, transparent)" }}
         >
-          <p className="text-xs font-medium mb-1" style={{ color: "var(--color-teal-500)" }}>설명</p>
+          <p className="text-xs font-medium mb-1" style={{ color: "var(--accent-primary)" }}>설명</p>
           <p className="text-sm" style={{ color: "var(--text-primary)" }}>{agent.description}</p>
         </div>
       )}
@@ -1561,7 +1577,7 @@ function SettingsTab({ agent }: { agent: any }) {
               {liveReady ? (
                 <CheckCircle2 size={14} style={{ color: "var(--color-success)" }} />
               ) : (
-                <AlertCircle size={14} style={{ color: "#d97706" }} />
+                <AlertCircle size={14} style={{ color: "var(--status-warning)" }} />
               )}
               <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                 {liveReady ? "실연동 가능" : "degraded mode 예정"}
@@ -1596,7 +1612,7 @@ function SettingsTab({ agent }: { agent: any }) {
               {lawIntegration?.connected ? (
                 <CheckCircle2 size={14} style={{ color: "var(--color-success)" }} />
               ) : (
-                <AlertCircle size={14} style={{ color: "#d97706" }} />
+                <AlertCircle size={14} style={{ color: "var(--status-warning)" }} />
               )}
               <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                 {lawIntegration?.connected ? "법령 조회 사용 가능" : "LAW_OC 필요"}
@@ -1632,7 +1648,7 @@ function SettingsTab({ agent }: { agent: any }) {
                 setModel(nextDefaultModel)
               }
             }}
-            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--border-focus)]"
             style={{
               backgroundColor: "var(--bg-secondary)",
               border: "1px solid var(--border-default)",
@@ -1650,7 +1666,7 @@ function SettingsTab({ agent }: { agent: any }) {
           <select
             value={model}
             onChange={(e) => setModel(e.target.value)}
-            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--border-focus)]"
             style={{
               backgroundColor: "var(--bg-secondary)",
               border: "1px solid var(--border-default)",
@@ -1673,7 +1689,7 @@ function SettingsTab({ agent }: { agent: any }) {
             max={200000}
             step={256}
             onChange={(e) => setMaxTokens(Number(e.target.value))}
-            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--border-focus)]"
             style={{
               backgroundColor: "var(--bg-secondary)",
               border: "1px solid var(--border-default)",
@@ -1695,7 +1711,7 @@ function SettingsTab({ agent }: { agent: any }) {
 
         <Button
           className="w-full gap-1.5 text-xs h-9"
-          style={{ backgroundColor: "var(--color-teal-500)", color: "#fff" }}
+          style={{ backgroundColor: "var(--accent-primary)", color: "var(--text-on-primary)" }}
           disabled={configMutation.isPending}
           onClick={() => configMutation.mutate()}
         >
@@ -1706,12 +1722,12 @@ function SettingsTab({ agent }: { agent: any }) {
         {!!selectedAdapter?.missingEnv?.length && (
           <div
             className="rounded-xl border px-4 py-3"
-            style={{ borderColor: "rgba(217,119,6,0.24)", backgroundColor: "rgba(245,158,11,0.08)" }}
-          >
-            <p className="text-xs font-medium" style={{ color: "#d97706" }}>실연동에 필요한 환경변수</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              {selectedAdapter.missingEnv.map((item: string) => (
-                <Badge key={item} className="border-0" style={{ backgroundColor: "rgba(217,119,6,0.12)", color: "#b45309" }}>
+          style={{ borderColor: "var(--status-warning-soft)", backgroundColor: "var(--status-warning-soft)" }}
+        >
+          <p className="text-xs font-medium" style={{ color: "var(--status-warning)" }}>실연동에 필요한 환경변수</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {selectedAdapter.missingEnv.map((item: string) => (
+                <Badge key={item} className="border-0" style={{ backgroundColor: "var(--status-warning-soft)", color: "var(--status-warning)" }}>
                   {item}
                 </Badge>
               ))}
@@ -1866,8 +1882,8 @@ function BudgetTab({ agent }: { agent: any }) {
       <div
         className="rounded-xl p-4"
         style={{
-          backgroundColor: "rgba(20,184,166,0.04)",
-          border: "1px solid rgba(20,184,166,0.2)",
+          backgroundColor: "var(--accent-primary-soft)",
+          border: "1px solid color-mix(in srgb, var(--accent-primary) 20%, transparent)",
         }}
       >
         <p className="text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
@@ -1885,7 +1901,7 @@ export function AgentDetailPage() {
   const { selectedOrgId } = useOrganization()
   const { setPanelContent, openPanel } = usePanel()
   const { orgPrefix, id } = useParams<{ orgPrefix: string; id: string }>()
-  const [activeTab, setActiveTab] = useState<"overview" | "instructions" | "skills" | "settings" | "history" | "budget">("overview")
+  const [activeTab, setActiveTab] = useState<"overview" | "instructions" | "skills" | "settings">("overview")
 
   useEffect(() => {
     setBreadcrumbs([
@@ -1973,59 +1989,74 @@ export function AgentDetailPage() {
   useEffect(() => {
     if (!agentId) {
       setPanelContent(
-        <div className="space-y-4">
-          <div>
-            <p className="text-sm font-semibold text-slate-900">AI 팀 요약</p>
-            <p className="mt-1 text-sm text-slate-500">
-              AI 팀을 선택하면 최근 실행, 연결 스킬, 예산, 처리 중 케이스를 확인할 수 있습니다.
-            </p>
-          </div>
-        </div>,
+        <WorkspaceSubtle className="space-y-3 p-4">
+          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            AI 팀 요약
+          </p>
+          <p className="text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+            AI 팀을 선택하면 최근 실행, 연결 스킬, 예산, 처리 중 케이스를 확인할 수 있습니다.
+          </p>
+        </WorkspaceSubtle>,
       )
       return () => setPanelContent(null)
     }
 
     setPanelContent(
       <div className="space-y-4">
-        <div>
-          <p className="text-lg font-semibold text-slate-900">{agentName}</p>
-          <p className="mt-1 text-sm text-slate-500">
-            {agentRole} · {statusLabel(agentStatus)}
+        <WorkspaceSubtle className="p-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
+                최근 실행
+              </p>
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {lastRunStartedAt ? timeAgo(lastRunStartedAt) : "없음"}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
+                연결 스킬
+              </p>
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {connectedSkillCount}개
+              </p>
+            </div>
+            <div className="space-y-1">
+              <p className="text-xs uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
+                운영 상태
+              </p>
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {agentAdapterType} · {statusLabel(agentStatus)}
+              </p>
+            </div>
+          </div>
+        </WorkspaceSubtle>
+
+        <WorkspaceSubtle className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
+            운영 연결
           </p>
-        </div>
-
-        <div className="grid gap-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">최근 실행</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">
-              {lastRunStartedAt ? timeAgo(lastRunStartedAt) : "없음"}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">연결 스킬</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">{connectedSkillCount}개</p>
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-semibold text-slate-600">운영 연결</p>
-          <div className="mt-3 space-y-2 text-sm text-slate-700">
+          <div className="mt-3 space-y-2 text-sm">
             <div className="flex items-center justify-between gap-3">
-              <span>처리 중/연결 케이스</span>
-              <span className="font-medium text-slate-900">{relatedCaseCount}건</span>
+              <span style={{ color: "var(--text-secondary)" }}>처리 중/연결 케이스</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                {relatedCaseCount}건
+              </span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span>실행 어댑터</span>
-              <span className="font-medium text-slate-900">{agentAdapterType}</span>
+              <span style={{ color: "var(--text-secondary)" }}>실행 어댑터</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                {agentAdapterType}
+              </span>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span>예산 상태</span>
-              <span className="font-medium text-slate-900">
+              <span style={{ color: "var(--text-secondary)" }}>예산 상태</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
                 {budgetLimit > 0 ? `${budgetUsed} / ${budgetLimit}` : `${budgetUsed}`}
               </span>
             </div>
           </div>
-        </div>
+        </WorkspaceSubtle>
 
         <CapabilityWorkspacePanel
           title="스킬 관리"
@@ -2082,56 +2113,57 @@ export function AgentDetailPage() {
   }
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div
-        className="px-6 pt-4"
-        style={{ borderBottom: "1px solid var(--border-default)" }}
-      >
-        <div className="flex h-9 gap-1">
-          {(
-            [
-              { value: "overview", label: "대시보드", icon: <Bot size={14} /> },
-              { value: "instructions", label: "지침", icon: <FileText size={14} /> },
-              { value: "skills", label: "스킬", icon: <Zap size={14} /> },
-              { value: "settings", label: "설정", icon: <Settings size={14} /> },
-              { value: "history", label: "실행", icon: <History size={14} /> },
-              { value: "budget", label: "예산", icon: <Wallet size={14} /> },
-            ] as const
-          ).map(({ value, label, icon }) => {
-            const isActive = activeTab === value
-            return (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setActiveTab(value)}
-                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors"
-                style={{
-                  backgroundColor: isActive ? "var(--bg-tertiary)" : "transparent",
-                  color: isActive ? "var(--text-primary)" : "var(--text-tertiary)",
-                }}
-              >
-                {icon}
-                {label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
+    <div className="p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title={agentName}
+        description={
+          <span>
+            {agentRole} · {statusLabel(agentStatus)} · {agentAdapterType}
+            {agent?.model ? ` · ${agent.model}` : ""}
+          </span>
+        }
+      />
 
-      <div className="flex-1 overflow-hidden">
-        <ScrollArea className="h-full">
-          <div className="p-6 max-w-2xl mx-auto">
-            {activeTab === "overview" ? <OverviewTab agent={agent} runs={agentRuns} memory={memory} /> : null}
-            {activeTab === "instructions" ? (
-              <InstructionsTab agent={agent} instructionFiles={(instructionFiles as any).files ?? []} />
-            ) : null}
-            {activeTab === "skills" ? <SkillsTab agent={agent} /> : null}
-            {activeTab === "settings" ? <SettingsTab agent={agent} /> : null}
-            {activeTab === "history" ? <RunHistoryTab runs={agentRuns} /> : null}
-            {activeTab === "budget" ? <BudgetTab agent={agent} /> : null}
+      <WorkspacePanel className="overflow-hidden">
+        <div className="border-b px-6 pt-4" style={{ borderColor: "var(--border-default)" }}>
+          <div className="flex h-9 gap-1 overflow-x-auto">
+            {(
+              [
+                { value: "overview", label: "대시보드", icon: <Bot size={14} /> },
+                { value: "instructions", label: "지침", icon: <FileText size={14} /> },
+                { value: "skills", label: "스킬", icon: <Zap size={14} /> },
+                { value: "settings", label: "설정", icon: <Settings size={14} /> },
+              ] as const
+            ).map(({ value, label, icon }) => {
+              const isActive = activeTab === value
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setActiveTab(value)}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: isActive ? "var(--bg-muted)" : "transparent",
+                    color: isActive ? "var(--text-primary)" : "var(--text-tertiary)",
+                  }}
+                >
+                  {icon}
+                  {label}
+                </button>
+              )
+            })}
           </div>
-        </ScrollArea>
-      </div>
+        </div>
+
+        <div className="p-6 md:p-8">
+          {activeTab === "overview" ? <OverviewTab agent={agent} runs={agentRuns} memory={memory} /> : null}
+          {activeTab === "instructions" ? (
+            <InstructionsTab agent={agent} instructionFiles={(instructionFiles as any).files ?? []} />
+          ) : null}
+          {activeTab === "skills" ? <SkillsTab agent={agent} /> : null}
+          {activeTab === "settings" ? <SettingsTab agent={agent} /> : null}
+        </div>
+      </WorkspacePanel>
     </div>
   )
 }

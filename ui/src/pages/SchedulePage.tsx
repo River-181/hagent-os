@@ -10,8 +10,15 @@ import { casesApi } from "@/api/cases"
 import { instructorsApi } from "@/api/students"
 import { api } from "@/api/client"
 import { queryKeys } from "@/lib/queryKeys"
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import {
   Dialog,
   DialogContent,
@@ -19,7 +26,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
-import { ChevronLeft, ChevronRight, Loader2, Plus, CalendarDays, Pencil, Trash2 } from "lucide-react"
+import { WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
+import { ChevronDown, ChevronLeft, ChevronRight, Loader2, Plus, Pencil, Trash2, CalendarDays } from "lucide-react"
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,15 +76,15 @@ const DAY_INDEX_MAP: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6:
 type ScheduleType = "regular" | "special" | "makeup" | "counseling" | "event" | "admin" | "legal" | "shuttle" | "leave"
 
 const TYPE_COLORS: Record<string, { bg: string; text: string; dot: string; label: string; icon: string }> = {
-  regular:    { bg: "#ccfbf1", text: "#0f766e", dot: "#14b8a6", label: "수업", icon: "📚" },
-  special:    { bg: "#fef3c7", text: "#92400e", dot: "#f59e0b", label: "특강", icon: "⭐" },
-  makeup:     { bg: "#dbeafe", text: "#1e40af", dot: "#3b82f6", label: "보강", icon: "🔄" },
-  counseling: { bg: "#fef9c4", text: "#854d0e", dot: "#ca8a04", label: "상담", icon: "💬" },
-  event:      { bg: "#ede9fe", text: "#6d28d9", dot: "#8b5cf6", label: "이벤트", icon: "🎉" },
-  admin:      { bg: "#f3f4f6", text: "#374151", dot: "#6b7280", label: "행정", icon: "📋" },
-  legal:      { bg: "#fee2e2", text: "#991b1b", dot: "#ef4444", label: "법정기한", icon: "⚖️" },
-  shuttle:    { bg: "#e0e7ff", text: "#3730a3", dot: "#6366f1", label: "등하원", icon: "🚐" },
-  leave:      { bg: "#fef3c7", text: "#92400e", dot: "#d97706", label: "휴가", icon: "🏖️" },
+  regular:    { bg: "var(--color-primary-soft)", text: "var(--color-primary)", dot: "var(--color-primary)", label: "수업", icon: "📚" },
+  special:    { bg: "var(--status-warning-soft)", text: "var(--color-warning)", dot: "var(--color-warning)", label: "특강", icon: "⭐" },
+  makeup:     { bg: "var(--status-info-soft)", text: "var(--color-info)", dot: "var(--color-info)", label: "보강", icon: "🔄" },
+  counseling: { bg: "var(--status-success-soft)", text: "var(--color-success)", dot: "var(--color-success)", label: "상담", icon: "💬" },
+  event:      { bg: "var(--bg-muted)", text: "var(--color-primary)", dot: "var(--color-primary)", label: "이벤트", icon: "🎉" },
+  admin:      { bg: "var(--bg-muted)", text: "var(--text-secondary)", dot: "var(--text-tertiary)", label: "행정", icon: "📋" },
+  legal:      { bg: "var(--status-danger-soft)", text: "var(--color-danger)", dot: "var(--color-danger)", label: "법정기한", icon: "⚖️" },
+  shuttle:    { bg: "var(--status-info-soft)", text: "var(--color-info)", dot: "var(--color-info)", label: "등하원", icon: "🚐" },
+  leave:      { bg: "var(--status-warning-soft)", text: "var(--color-warning)", dot: "var(--color-warning)", label: "휴가", icon: "🏖️" },
 }
 
 function getTypeColor(type: string) {
@@ -424,7 +432,7 @@ function ScheduleDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-md" style={{ backgroundColor: "var(--bg-base)", border: "1px solid var(--border-default)" }}>
+      <DialogContent className="max-w-md" style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}>
         <DialogHeader>
           <div className="flex items-center gap-2 mb-1">
             <span
@@ -435,7 +443,7 @@ function ScheduleDetailDialog({
               {colors.label}
             </span>
             {isLegal && (
-              <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "rgba(239,68,68,0.1)", color: "#ef4444" }}>
+              <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: "var(--status-danger-soft)", color: "var(--color-danger)" }}>
                 필수
               </span>
             )}
@@ -494,7 +502,7 @@ function ScheduleDetailDialog({
               <Button variant="outline" size="sm" onClick={() => setIsEditing(false)} className="text-xs">취소</Button>
               <Button size="sm" disabled={!editTitle.trim() || updateMutation.isPending}
                 onClick={handleSave}
-                className="text-xs text-white" style={{ backgroundColor: "var(--color-teal-500)" }}>
+                className="text-xs text-white" style={{ backgroundColor: "var(--color-primary)" }}>
                 {updateMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
                 저장
               </Button>
@@ -524,7 +532,7 @@ function ScheduleDetailDialog({
               {!isShuttle && !isLeave && schedule.instructor && (
                 <div className="flex items-center gap-3 px-4 py-2.5" style={{ borderBottom: "1px solid var(--border-default)" }}>
                   <span className="text-xs w-20 shrink-0" style={{ color: "var(--text-tertiary)" }}>담당 직원/강사</span>
-                  <span className="text-sm font-medium" style={{ color: "var(--color-teal-500)" }}>
+                  <span className="text-sm font-medium" style={{ color: "var(--color-primary)" }}>
                     {schedule.instructor.name}
                   </span>
                   <span className="text-xs ml-auto" style={{ color: "var(--text-tertiary)" }}>
@@ -549,7 +557,7 @@ function ScheduleDetailDialog({
                         disabled={updateMutation.isPending || editInstructorId === (schedule.instructorId ?? "")}
                         onClick={() => updateMutation.mutate({ instructorId: editInstructorId || null })}
                         className="text-xs text-white"
-                        style={{ backgroundColor: "var(--color-teal-500)" }}
+                        style={{ backgroundColor: "var(--color-primary)" }}
                       >
                         {updateMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
                         담당 저장
@@ -584,14 +592,14 @@ function ScheduleDetailDialog({
             {/* Context-specific notes */}
             {isLegal && (
               <div className="rounded-lg px-4 py-3 text-xs"
-                style={{ backgroundColor: "rgba(239,68,68,0.06)", color: "#991b1b", border: "1px solid rgba(239,68,68,0.15)" }}>
+                style={{ backgroundColor: "var(--status-danger-soft)", color: "var(--color-danger)", border: "1px solid var(--border-default)" }}>
                 법정 기한입니다. 기한 내 처리하지 않으면 과태료가 부과될 수 있습니다.
                 에이전트가 D-3일에 자동 알림을 보냅니다.
               </div>
             )}
             {isShuttle && (
               <div className="rounded-lg px-4 py-3 text-xs"
-                style={{ backgroundColor: "rgba(99,102,241,0.06)", color: "#3730a3", border: "1px solid rgba(99,102,241,0.15)" }}>
+                style={{ backgroundColor: "var(--status-info-soft)", color: "var(--color-info)", border: "1px solid var(--border-default)" }}>
                 차량 운행 일정입니다. 학생 탑승 명단은 학생 관리에서 확인하세요.
               </div>
             )}
@@ -618,13 +626,13 @@ function ScheduleDetailDialog({
             {/* Action buttons */}
             {confirmDelete ? (
               <div className="rounded-lg px-4 py-3 text-xs space-y-2"
-                style={{ backgroundColor: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.2)" }}>
-                <p style={{ color: "#991b1b" }}>이 일정을 삭제하시겠습니까?</p>
+                style={{ backgroundColor: "var(--status-danger-soft)", border: "1px solid var(--border-default)" }}>
+                <p style={{ color: "var(--color-danger)" }}>이 일정을 삭제하시겠습니까?</p>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => setConfirmDelete(false)} className="text-xs h-7">취소</Button>
                   <Button size="sm" disabled={deleteMutation.isPending}
                     onClick={() => deleteMutation.mutate()}
-                    className="text-xs h-7 text-white" style={{ backgroundColor: "#ef4444" }}>
+                    className="text-xs h-7 text-white" style={{ backgroundColor: "var(--color-danger)" }}>
                     {deleteMutation.isPending ? <Loader2 size={12} className="animate-spin mr-1" /> : null}
                     삭제 확인
                   </Button>
@@ -633,7 +641,7 @@ function ScheduleDetailDialog({
             ) : (
               <div className="flex justify-end gap-2 pt-1">
                 <Button variant="outline" size="sm" onClick={() => setConfirmDelete(true)}
-                  className="text-xs gap-1" style={{ color: "#ef4444", borderColor: "rgba(239,68,68,0.3)" }}>
+                  className="text-xs gap-1" style={{ color: "var(--color-danger)", borderColor: "var(--border-default)" }}>
                   <Trash2 size={12} />
                   삭제
                 </Button>
@@ -692,7 +700,7 @@ function NewScheduleDialog({ open, onClose }: { open: boolean; onClose: () => vo
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent style={{ backgroundColor: "var(--bg-base)", border: "1px solid var(--border-default)" }}>
+      <DialogContent style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}>
         <DialogHeader>
           <DialogTitle style={{ color: "var(--text-primary)" }}>새 일정 추가</DialogTitle>
         </DialogHeader>
@@ -762,7 +770,7 @@ function NewScheduleDialog({ open, onClose }: { open: boolean; onClose: () => vo
             <Button variant="outline" size="sm" onClick={onClose} className="text-xs">취소</Button>
             <Button size="sm" disabled={!title.trim() || createMutation.isPending}
               onClick={() => createMutation.mutate()}
-              className="text-xs text-white" style={{ backgroundColor: "var(--color-teal-500)" }}>
+              className="text-xs text-white" style={{ backgroundColor: "var(--color-primary)" }}>
               {createMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
               추가
             </Button>
@@ -833,11 +841,8 @@ function WeeklyView({
   return (
     <div
       ref={scrollRef}
-      className="rounded-xl overflow-auto"
-      style={{
-        border: "1px solid var(--border-default)",
-        boxShadow: "var(--shadow-sm)",
-      }}
+      className="overflow-auto"
+      style={{ backgroundColor: "var(--bg-elevated)" }}
     >
       <div className="min-w-[1080px]">
         <div
@@ -865,16 +870,16 @@ function WeeklyView({
                 className="px-2 py-3 text-center"
                 style={{
                   borderLeft: idx > 0 ? "1px solid var(--border-default)" : undefined,
-                  backgroundColor: isToday ? "rgba(20,184,166,0.06)" : "var(--bg-secondary)",
-                  color: isToday ? "#0f766e" : "var(--text-secondary)",
+                  backgroundColor: isToday ? "var(--color-primary-soft)" : "var(--bg-secondary)",
+                  color: isToday ? "var(--color-primary)" : "var(--text-secondary)",
                 }}
               >
                 <div className="text-xs font-semibold">{WEEK_DAYS[idx]}</div>
                 <div
                   className="mt-1 inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold"
                   style={{
-                    backgroundColor: isToday ? "#14b8a6" : "transparent",
-                    color: isToday ? "#fff" : "inherit",
+                    backgroundColor: isToday ? "var(--color-primary)" : "transparent",
+                    color: isToday ? "var(--text-on-primary)" : "inherit",
                   }}
                 >
                   {date.getDate()}
@@ -913,10 +918,10 @@ function WeeklyView({
                     height: SLOT_HEIGHT,
                     borderTop:
                       minute === 0
-                        ? "1px solid rgba(100,116,139,0.35)"
+                        ? "1px solid var(--border-default)"
                         : minute === 30
-                          ? "1px solid rgba(148,163,184,0.12)"
-                          : "1px solid rgba(148,163,184,0.04)",
+                          ? "1px solid var(--border-default)"
+                          : "1px solid var(--border-default)",
                   }}
                 >
                   {minute === 0 ? (
@@ -941,7 +946,7 @@ function WeeklyView({
                 style={{
                   height: totalHeight,
                   borderLeft: idx > 0 ? "1px solid var(--border-default)" : undefined,
-                  backgroundColor: isTodayColumn ? "rgba(20,184,166,0.035)" : "var(--bg-elevated)",
+                  backgroundColor: isTodayColumn ? "var(--color-primary-soft)" : "var(--bg-elevated)",
                 }}
                 onDragOver={(event) => {
                   if (!draggedOperation) return
@@ -978,10 +983,10 @@ function WeeklyView({
                         height: SLOT_HEIGHT,
                         borderTop:
                           parseMinute(slot) === 0
-                            ? "1px solid rgba(100,116,139,0.35)"
+                            ? "1px solid var(--border-default)"
                             : parseMinute(slot) === 30
-                              ? "1px solid rgba(148,163,184,0.12)"
-                              : "1px solid rgba(148,163,184,0.04)",
+                              ? "1px solid var(--border-default)"
+                              : "1px solid var(--border-default)",
                       }}
                     />
                   )
@@ -993,14 +998,14 @@ function WeeklyView({
                       className="pointer-events-none absolute inset-x-0 z-10"
                       style={{
                         top: currentLineTop,
-                        borderTop: "2px solid #ef4444",
-                        boxShadow: "0 0 0 1px rgba(239,68,68,0.18)",
+                        borderTop: "2px solid var(--color-danger)",
+                        boxShadow: "0 0 0 1px var(--status-danger-soft)",
                         zIndex: 4,
                       }}
                     />
                     <span
                       className="pointer-events-none absolute left-2 z-10 -translate-y-1/2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white"
-                      style={{ top: currentLineTop, backgroundColor: "#ef4444", zIndex: 5 }}
+                      style={{ top: currentLineTop, backgroundColor: "var(--color-danger)", zIndex: 5 }}
                     >
                       지금 {minutesToTime(currentMinutes)}
                     </span>
@@ -1032,7 +1037,7 @@ function WeeklyView({
                         background: `linear-gradient(180deg, ${colors.bg}cc 0%, ${colors.bg}80 100%)`,
                         color: colors.text,
                         border: `1px solid ${colors.dot}35`,
-                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.45)",
+                        boxShadow: "var(--shadow-xs)",
                         overflow: "hidden",
                         zIndex: 6,
                         padding: "8px 10px",
@@ -1114,7 +1119,7 @@ function WeeklyView({
                         backgroundColor: colors.bg,
                         color: colors.text,
                         border: `1px solid ${colors.dot}40`,
-                        boxShadow: "0 4px 12px rgba(15,23,42,0.08)",
+                        boxShadow: "var(--shadow-sm)",
                         overflow: "hidden",
                         zIndex: 12,
                         padding: ultraCompactCard ? "6px 7px" : "8px 9px",
@@ -1219,11 +1224,8 @@ function MonthlyView({
 
   return (
     <div
-      className="rounded-xl overflow-hidden"
-      style={{
-        border: "1px solid var(--border-default)",
-        boxShadow: "var(--shadow-sm)",
-      }}
+      className="overflow-hidden"
+      style={{ backgroundColor: "var(--bg-elevated)" }}
     >
       {/* Day headers */}
       <div
@@ -1268,7 +1270,7 @@ function MonthlyView({
                 className="min-h-[132px] p-2 text-left"
                 onClick={() => dayItems.length > 0 && onDayClick(date, dayItems)}
                 style={{
-                  backgroundColor: isToday ? "rgba(20,184,166,0.04)" : "var(--bg-elevated)",
+                  backgroundColor: isToday ? "var(--color-primary-soft)" : "var(--bg-elevated)",
                   borderLeft: ci > 0 ? "1px solid var(--border-default)" : undefined,
                   cursor: dayItems.length > 0 ? "pointer" : "default",
                 }}
@@ -1281,8 +1283,8 @@ function MonthlyView({
                   }}
                   className="mb-2 inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition-colors focus:outline-none"
                   style={{
-                    backgroundColor: isToday ? "#14b8a6" : "transparent",
-                    color: isToday ? "#fff" : inMonth ? "var(--text-primary)" : "var(--text-tertiary)",
+                    backgroundColor: isToday ? "var(--color-primary)" : "transparent",
+                    color: isToday ? "var(--text-on-primary)" : inMonth ? "var(--text-primary)" : "var(--text-tertiary)",
                   }}
                 >
                   {date.getDate()}
@@ -1348,7 +1350,7 @@ function DayScheduleDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-sm" style={{ backgroundColor: "var(--bg-base)", border: "1px solid var(--border-default)" }}>
+      <DialogContent className="max-w-sm" style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}>
         <DialogHeader>
           <DialogTitle style={{ color: "var(--text-primary)" }}>{dateLabel} 일정</DialogTitle>
           <DialogDescription>{sorted.length}개 일정</DialogDescription>
@@ -1680,6 +1682,7 @@ export function SchedulePage() {
   const dateLabel = viewMode === "weekly"
     ? formatWeekLabel(weekDates)
     : formatMonthLabel(currentDate)
+  const selectedTypeLabel = typeFilter ? (TYPE_COLORS[typeFilter]?.label ?? "전체") : "전체"
 
   useEffect(() => {
     if (!selectedSchedule) {
@@ -1732,13 +1735,13 @@ export function SchedulePage() {
               <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>전체 일정</p>
               <p className="mt-1 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>{activeSchedules.length}개</p>
             </div>
-            <div className="rounded-xl p-4" style={{ border: "1px solid rgba(245,158,11,0.3)", backgroundColor: "rgba(245,158,11,0.08)" }}>
-              <p className="text-xs" style={{ color: "#f59e0b" }}>상담 일정</p>
-              <p className="mt-1 text-xl font-semibold" style={{ color: "#f59e0b" }}>{counselingCount}개</p>
+            <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--status-warning-soft)" }}>
+              <p className="text-xs" style={{ color: "var(--color-warning)" }}>상담 일정</p>
+              <p className="mt-1 text-xl font-semibold" style={{ color: "var(--color-warning)" }}>{counselingCount}개</p>
             </div>
-            <div className="rounded-xl p-4" style={{ border: "1px solid rgba(239,68,68,0.3)", backgroundColor: "rgba(239,68,68,0.08)" }}>
-              <p className="text-xs" style={{ color: "#ef4444" }}>담당 미지정</p>
-              <p className="mt-1 text-xl font-semibold" style={{ color: "#ef4444" }}>{unassignedSchedules.length}개</p>
+            <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--status-danger-soft)" }}>
+              <p className="text-xs" style={{ color: "var(--color-danger)" }}>담당 미지정</p>
+              <p className="mt-1 text-xl font-semibold" style={{ color: "var(--color-danger)" }}>{unassignedSchedules.length}개</p>
             </div>
           </div>
 
@@ -1768,8 +1771,8 @@ export function SchedulePage() {
           </div>
 
           {unassignedSchedules.length > 0 ? (
-            <div className="rounded-xl p-4" style={{ border: "1px solid rgba(239,68,68,0.3)", backgroundColor: "rgba(239,68,68,0.08)" }}>
-              <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>우선 확인</p>
+            <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--status-danger-soft)" }}>
+              <p className="text-xs font-semibold" style={{ color: "var(--color-danger)" }}>우선 확인</p>
               <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
                 담당 미지정 일정이 {unassignedSchedules.length}개 있습니다. 담당 직원/강사를 연결해야 실제 운영에 바로 쓸 수 있습니다.
               </p>
@@ -1777,7 +1780,7 @@ export function SchedulePage() {
                 <Button
                   size="sm"
                   className="border-0 text-white"
-                  style={{ backgroundColor: "#ef4444" }}
+                  style={{ backgroundColor: "var(--color-danger)" }}
                   onClick={() => {
                     setSelectedSchedule(unassignedSchedules[0] ?? null)
                     setDetailStartsEditing(true)
@@ -1839,13 +1842,13 @@ export function SchedulePage() {
               <button
                 type="button"
                 className="mt-2 text-xs font-medium"
-                style={{ color: "var(--color-teal-500)" }}
+                style={{ color: "var(--color-primary)" }}
                 onClick={() => orgPrefix && navigate(`/${orgPrefix}/instructors?detail=${selectedSchedule.instructor?.id}`)}
               >
                 직원/강사 상세로 이동
               </button>
             ) : (
-              <p className="mt-2 text-xs font-medium" style={{ color: "#ef4444" }}>담당 직원/강사를 지정해야 실제 운영 일정으로 쓰기 쉽습니다.</p>
+              <p className="mt-2 text-xs font-medium" style={{ color: "var(--color-danger)" }}>담당 직원/강사를 지정해야 실제 운영 일정으로 쓰기 쉽습니다.</p>
             )}
           </div>
           <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
@@ -1879,7 +1882,7 @@ export function SchedulePage() {
               value={quickInstructorId}
               onChange={(event) => setQuickInstructorId(event.target.value)}
               className="w-full rounded-xl border px-3 py-2 text-sm"
-              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-base)", color: "var(--text-primary)" }}
+              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)", color: "var(--text-primary)" }}
             >
               <option value="">담당 미지정</option>
               {instructorOptions.map((instructor) => (
@@ -1892,7 +1895,7 @@ export function SchedulePage() {
               <Button
                 size="sm"
                 className="border-0 text-white"
-                style={{ backgroundColor: "var(--color-teal-500)" }}
+                style={{ backgroundColor: "var(--color-primary)" }}
                 disabled={reassignInstructorMutation.isPending || quickInstructorId === (selectedSchedule.instructorId ?? "")}
                 onClick={() =>
                   reassignInstructorMutation.mutate({
@@ -1942,7 +1945,7 @@ export function SchedulePage() {
           <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>관련 케이스 바로가기</p>
           <div className="mt-3 space-y-2">
             {linkedCases.length > 0 ? linkedCases.map((item: any) => (
-              <button
+                  <button
                 key={item.id}
                 type="button"
                 onClick={() => orgPrefix && navigate(`/${orgPrefix}/cases/${item.id}`)}
@@ -1984,182 +1987,154 @@ export function SchedulePage() {
   }, [panelContentKey, setPanelContent])
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
-            일정
-          </h1>
-          <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            수업, 상담, 보강, 차량, 행정 일정을 한 화면에서 운영합니다.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Today button */}
-          <Button
-            variant="outline"
-            size="sm"
-            className="text-xs gap-1.5"
-            onClick={() => setCurrentDate(new Date())}
-            style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}
-          >
-            <CalendarDays size={13} />
-            오늘
-          </Button>
-
-          {/* Add schedule button */}
-          <Button
-            size="sm"
-            className="text-xs gap-1.5 text-white"
-            style={{ backgroundColor: "var(--color-teal-500)" }}
-            onClick={() => setNewScheduleOpen(true)}
-          >
-            <Plus size={13} />
+    <div className="p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title="일정"
+        description="수업, 상담, 보강, 차량, 행정 일정을 한 화면에서 운영합니다."
+        action={
+          <Button className="gap-2" onClick={() => setNewScheduleOpen(true)}>
+            <Plus size={15} />
             일정 추가
           </Button>
+        }
+      />
 
-          {/* View toggle */}
-          <div
-            className="flex rounded-lg overflow-hidden text-sm"
-            style={{ border: "1px solid var(--border-default)" }}
-          >
-            {(["weekly", "monthly"] as const).map((mode) => (
+      <WorkspacePanel className="overflow-hidden">
+        <div className="border-b p-4 md:p-5 space-y-4" style={{ borderColor: "var(--border-default)" }}>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5"
+              onClick={() => setCurrentDate(new Date())}
+              style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}
+            >
+              <CalendarDays size={13} />
+              오늘
+            </Button>
+
+            <div
+              className="inline-flex rounded-lg border p-1"
+              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-muted)" }}
+            >
+              {(["weekly", "monthly"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  onClick={() => setViewMode(mode)}
+                  className="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                  style={{
+                    backgroundColor: viewMode === mode ? "var(--bg-elevated)" : "transparent",
+                    color: viewMode === mode ? "var(--text-primary)" : "var(--text-tertiary)",
+                    boxShadow: viewMode === mode ? "var(--shadow-xs)" : "none",
+                  }}
+                >
+                  {mode === "weekly" ? "주간" : "월간"}
+                </button>
+              ))}
+            </div>
+
+            <div className="ml-auto flex items-center gap-1">
               <button
-                key={mode}
-                onClick={() => setViewMode(mode)}
-                className="px-3 py-1.5 font-medium transition-colors"
-                style={{
-                  backgroundColor: viewMode === mode ? "var(--color-primary-bg)" : "var(--bg-secondary)",
-                  color: viewMode === mode ? "var(--color-teal-500)" : "var(--text-tertiary)",
-                }}
+                onClick={handlePrev}
+                className="rounded-lg p-1.5 transition-colors"
+                style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}
+                aria-label="이전"
               >
-                {mode === "weekly" ? "주간" : "월간"}
+                <ChevronLeft size={16} />
               </button>
-            ))}
-          </div>
-
-          {/* Date navigation */}
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handlePrev}
-              className="p-1.5 rounded-lg transition-colors hover:bg-opacity-80"
-              style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }}
-              aria-label="이전"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <span
-              className="px-3 py-1.5 text-sm font-medium min-w-[200px] text-center"
-              style={{ color: "var(--text-primary)" }}
-            >
-              {dateLabel}
-            </span>
-            <button
-              onClick={handleNext}
-              className="p-1.5 rounded-lg transition-colors hover:bg-opacity-80"
-              style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }}
-              aria-label="다음"
-            >
-              <ChevronRight size={16} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Loading / Error states */}
-      {isLoading && (
-        <div className="flex items-center gap-2 py-8 justify-center" style={{ color: "var(--text-tertiary)" }}>
-          <Loader2 size={16} className="animate-spin" />
-          <span className="text-sm">일정을 불러오는 중...</span>
-        </div>
-      )}
-
-      {isError && (
-        <div
-          className="rounded-xl px-4 py-3 text-sm mb-4"
-          style={{ backgroundColor: "#fee2e2", color: "#991b1b" }}
-        >
-          일정을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
-        </div>
-      )}
-
-      {/* Type filter pills */}
-      {!isLoading && !isError && (
-        <div className="space-y-3 mb-4">
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl px-4 py-3" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
-              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>담당 미지정</p>
-              <p className="mt-1 text-lg font-semibold" style={{ color: unassignedSchedules.length > 0 ? "#ef4444" : "var(--text-primary)" }}>{unassignedSchedules.length}개</p>
-            </div>
-            <div className="rounded-xl px-4 py-3" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
-              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>상담 일정</p>
-              <p className="mt-1 text-lg font-semibold" style={{ color: "#f59e0b" }}>{counselingCount}개</p>
-            </div>
-            <div className="rounded-xl px-4 py-3" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
-              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>연결 학생</p>
-              <p className="mt-1 text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{linkedStudentTotal}명</p>
-            </div>
-          </div>
-
-          {filteredInstructorName ? (
-            <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm" style={{ border: "1px solid var(--color-teal-500)", backgroundColor: "var(--color-primary-bg)", color: "var(--color-teal-500)" }}>
-              <span className="font-medium">{filteredInstructorName}</span>
-              <span>담당 일정만 보고 있습니다.</span>
-              <Button
-                size="sm"
-                variant="outline"
-                className="ml-auto"
-                onClick={() => setSearchParams((current) => {
-                  const next = new URLSearchParams(current)
-                  next.delete("instructor")
-                  return next
-                })}
-              >
-                필터 해제
-              </Button>
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap gap-1.5">
-          <button
-            onClick={() => setTypeFilter(null)}
-            className="px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
-            style={{
-              backgroundColor: !typeFilter ? "var(--color-teal-500)" : "var(--bg-tertiary)",
-              color: !typeFilter ? "#fff" : "var(--text-secondary)",
-            }}
-          >
-            전체 ({(schedules as any[]).length})
-          </button>
-          {Object.entries(TYPE_COLORS).map(([type, c]) => {
-            const count = (schedules as ScheduleItem[]).filter((s) => s.type === type).length
-            if (count === 0) return null
-            const isActive = typeFilter === type
-            return (
+              <span className="min-w-[200px] px-3 py-1.5 text-center text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                {dateLabel}
+              </span>
               <button
-                key={type}
-                onClick={() => setTypeFilter(isActive ? null : type)}
-                className="px-2.5 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1"
-                style={{
-                  backgroundColor: isActive ? c.bg : "var(--bg-tertiary)",
-                  color: isActive ? c.text : "var(--text-secondary)",
-                  border: isActive ? `1px solid ${c.dot}40` : "1px solid transparent",
-                }}
+                onClick={handleNext}
+                className="rounded-lg p-1.5 transition-colors"
+                style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}
+                aria-label="다음"
               >
-                <span>{c.icon}</span>
-                {c.label} ({count})
+                <ChevronRight size={16} />
               </button>
-            )
-          })}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2"
+                  style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}
+                >
+                  일정 유형
+                  <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                    {selectedTypeLabel}
+                  </span>
+                  <ChevronDown size={13} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="min-w-56">
+                <DropdownMenuRadioGroup value={typeFilter ?? "__all__"} onValueChange={(value) => setTypeFilter(value === "__all__" ? null : value)}>
+                  <DropdownMenuRadioItem value="__all__">전체 ({(schedules as any[]).length})</DropdownMenuRadioItem>
+                  <DropdownMenuSeparator />
+                  {Object.entries(TYPE_COLORS).map(([type, tone]) => {
+                    const count = (schedules as ScheduleItem[]).filter((item) => item.type === type).length
+                    if (count === 0) return null
+                    return (
+                      <DropdownMenuRadioItem key={type} value={type}>
+                        <span className="mr-2">{tone.icon}</span>
+                        {tone.label} ({count})
+                      </DropdownMenuRadioItem>
+                    )
+                  })}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            {filteredInstructorName ? (
+              <div
+                className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm"
+                style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}
+              >
+                <span className="font-medium" style={{ color: "var(--text-primary)" }}>{filteredInstructorName}</span>
+                <span>담당 일정만 표시 중</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="ml-1"
+                  onClick={() => setSearchParams((current) => {
+                    const next = new URLSearchParams(current)
+                    next.delete("instructor")
+                    return next
+                  })}
+                >
+                  필터 해제
+                </Button>
+              </div>
+            ) : null}
           </div>
         </div>
-      )}
 
-      {!isLoading && !isError && (
-        <>
-          {viewMode === "weekly" ? (
+        {isLoading ? (
+          <div className="flex items-center justify-center gap-2 py-16" style={{ color: "var(--text-tertiary)" }}>
+            <Loader2 size={16} className="animate-spin" />
+            <span className="text-sm">일정을 불러오는 중...</span>
+          </div>
+        ) : isError ? (
+          <div className="p-4 md:p-5">
+            <div
+              className="rounded-lg border px-4 py-3 text-sm"
+              style={{
+                borderColor: "var(--status-danger-soft)",
+                backgroundColor: "var(--status-danger-soft)",
+                color: "var(--color-danger)",
+              }}
+            >
+              일정을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-5 p-4 md:p-5">
+            {viewMode === "weekly" ? (
               <WeeklyView
                 schedules={filteredSchedules}
                 weekDates={weekDates}
@@ -2167,36 +2142,32 @@ export function SchedulePage() {
                 onMoveSchedule={handleMoveSchedule}
                 onResizeSchedule={handleResizeSchedule}
               />
-          ) : (
-            <MonthlyView
-              schedules={filteredSchedules}
-              year={currentDate.getFullYear()}
-              month={currentDate.getMonth()}
-              onDayClick={handleDayClick}
-              onSelectSchedule={handleSelectSchedule}
-            />
-          )}
+            ) : (
+              <MonthlyView
+                schedules={filteredSchedules}
+                year={currentDate.getFullYear()}
+                month={currentDate.getMonth()}
+                onDayClick={handleDayClick}
+                onSelectSchedule={handleSelectSchedule}
+              />
+            )}
 
-          {/* Bottom section */}
-          <div className="mt-6 flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <p className="text-xs font-medium mb-2" style={{ color: "var(--text-tertiary)" }}>
-                담당 직원/강사
-              </p>
-              <InstructorList schedules={schedules as ScheduleItem[]} />
-            </div>
-            <div className="sm:text-right">
-              <p className="text-xs mb-1" style={{ color: "var(--text-tertiary)" }}>
-                총 {(schedules as any[]).length}개 일정
-                {typeFilter && ` (${filteredSchedules.length}개 필터됨)`}
-              </p>
-              <p className="text-xs" style={{ color: "var(--text-disabled)" }}>
-                일정 추가/수정은 에이전트에게 지시하거나 대시보드에서 가능합니다.
-              </p>
+            <div className="border-t pt-4" style={{ borderColor: "var(--border-default)" }}>
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
+                    담당 직원/강사
+                  </p>
+                  <InstructorList schedules={schedules as ScheduleItem[]} />
+                </div>
+                <p className="max-w-md text-xs leading-6" style={{ color: "var(--text-tertiary)" }}>
+                  일정 추가와 담당 변경은 이 화면에서 바로 처리하고, 세부 수정은 선택한 일정 패널에서 이어갑니다.
+                </p>
+              </div>
             </div>
           </div>
-        </>
-      )}
+        )}
+      </WorkspacePanel>
 
       {/* New schedule dialog */}
       <NewScheduleDialog open={newScheduleOpen} onClose={() => setNewScheduleOpen(false)} />

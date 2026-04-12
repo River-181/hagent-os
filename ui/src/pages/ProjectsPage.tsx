@@ -9,6 +9,7 @@ import { queryKeys } from "@/lib/queryKeys"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
+import { WorkspaceEmptyState, WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
 import {
   Dialog,
   DialogContent,
@@ -18,7 +19,6 @@ import {
 } from "@/components/ui/dialog"
 import { FolderKanban, Plus, Sparkles } from "lucide-react"
 import { useParams } from "react-router-dom"
-import { EmptyState } from "@/components/EmptyState"
 
 // ─── Color options ────────────────────────────────────────────────────────────
 
@@ -32,6 +32,30 @@ const COLOR_OPTIONS = [
   "#f97316", // orange
   "#ec4899", // pink
 ]
+
+function projectStatus(project: any) {
+  const activeCases = Number(project.activeCases ?? 0)
+  const caseCount = Number(project.caseCount ?? 0)
+  if (activeCases > 0) {
+    return {
+      label: `진행 ${activeCases}`,
+      bg: "var(--status-info-soft)",
+      color: "var(--color-info)",
+    }
+  }
+  if (caseCount > 0) {
+    return {
+      label: "대기",
+      bg: "var(--bg-muted)",
+      color: "var(--text-secondary)",
+    }
+  }
+  return {
+    label: "비어 있음",
+    bg: "var(--status-warning-soft)",
+    color: "var(--color-warning)",
+  }
+}
 
 // ─── New Project Dialog ───────────────────────────────────────────────────────
 
@@ -183,7 +207,7 @@ function NewProjectDialog({
             disabled={!isValid || submitting}
             onClick={handleSubmit}
             className="border-0 text-white"
-            style={{ backgroundColor: isValid ? "var(--color-teal-500)" : undefined }}
+            style={{ backgroundColor: isValid ? "var(--color-primary)" : undefined }}
           >
             {submitting ? "생성 중…" : "프로젝트 생성"}
           </Button>
@@ -254,7 +278,7 @@ function CreateFromInstructionDialog({
           <Button variant="ghost" onClick={handleClose} disabled={submitting} style={{ color: "var(--text-secondary)" }}>
             취소
           </Button>
-          <Button onClick={handleSubmit} disabled={!instruction.trim() || submitting} className="border-0 text-white" style={{ backgroundColor: "var(--color-teal-500)" }}>
+          <Button onClick={handleSubmit} disabled={!instruction.trim() || submitting} className="border-0 text-white" style={{ backgroundColor: "var(--color-primary)" }}>
             {submitting ? "생성 중…" : "생성"}
           </Button>
         </DialogFooter>
@@ -290,150 +314,108 @@ export function ProjectsPage() {
     })
   }
 
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <div
-          className="h-8 w-48 rounded animate-pulse mb-6"
-          style={{ background: "var(--bg-tertiary)" }}
-        />
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="h-32 rounded-xl animate-pulse"
-              style={{ background: "var(--bg-tertiary)" }}
-            />
-          ))}
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1
-            className="text-2xl font-bold"
-            style={{ color: "var(--text-primary)" }}
-          >
-            프로젝트
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-            {projects.length > 0
-              ? `${projects.length}개의 프로젝트`
-              : "프로젝트가 없습니다"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            className="flex items-center gap-2 text-sm"
-            onClick={() => setInstructionDialogOpen(true)}
-            disabled={!selectedOrgId}
-          >
-            <Sparkles size={14} />
-            Instruction으로 생성
-          </Button>
-          <Button
-            size="sm"
-            className="flex items-center gap-2 text-sm border-0 text-white"
-            style={{ background: "var(--color-teal-500)" }}
-            onClick={() => setDialogOpen(true)}
-            disabled={!selectedOrgId}
-          >
-            <Plus size={14} />
-            새 프로젝트
-          </Button>
-        </div>
-      </div>
+    <div className="p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title="프로젝트"
+        description="프로젝트를 묶어 관련 케이스와 후속 작업을 한 흐름으로 관리합니다."
+        action={
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={() => setInstructionDialogOpen(true)}
+              disabled={!selectedOrgId}
+            >
+              <Sparkles size={14} />
+              Instruction으로 생성
+            </Button>
+            <Button
+              size="sm"
+              className="gap-2 border-0 text-white"
+              style={{ backgroundColor: "var(--color-primary)" }}
+              onClick={() => setDialogOpen(true)}
+              disabled={!selectedOrgId}
+            >
+              <Plus size={14} />
+              새 프로젝트
+            </Button>
+          </div>
+        }
+      />
 
-      {projects.length === 0 ? (
-        <div
-          className="rounded-xl"
-          style={{
-            backgroundColor: "var(--bg-elevated)",
-            border: "1px solid var(--border-default)",
-            boxShadow: "var(--shadow-sm)",
-          }}
-        >
-          <EmptyState
+      <WorkspacePanel className="overflow-hidden">
+        {isLoading ? (
+          <div className="flex min-h-[220px] items-center justify-center px-6 py-12">
+            <div className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+              프로젝트를 불러오는 중...
+            </div>
+          </div>
+        ) : projects.length === 0 ? (
+          <WorkspaceEmptyState
             icon={<FolderKanban size={22} />}
             title="프로젝트가 없습니다"
             description="프로젝트를 생성하면 관련 케이스를 그룹으로 관리할 수 있습니다."
+            className="rounded-none border-0 bg-transparent"
           />
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {projects.map((project) => (
-            <button
-              key={project.id}
-              onClick={() => navigate(`/${orgPrefix}/projects/${project.id}`)}
-              className="text-left rounded-xl p-5 transition-all hover:shadow-md"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                border: "1px solid var(--border-default)",
-                boxShadow: "var(--shadow-sm)",
-              }}
-            >
-              <div className="flex items-start gap-3">
-                <span
-                  className="w-3 h-3 rounded-full mt-1 shrink-0"
+        ) : (
+          <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
+            {projects.map((project: any) => {
+              const status = projectStatus(project)
+              return (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => navigate(`/${orgPrefix}/projects/${project.id}`)}
+                  className="w-full px-5 py-4 text-left transition-colors"
                   style={{
-                    backgroundColor: project.color ?? "var(--color-teal-500)",
+                    backgroundColor: "transparent",
+                    boxShadow: "none",
                   }}
-                />
-                <div className="flex-1 min-w-0">
-                  <h3
-                    className="font-semibold text-sm truncate"
-                    style={{ color: "var(--text-primary)" }}
-                  >
-                    {project.name}
-                  </h3>
-                  {project.description && (
-                    <p
-                      className="text-xs mt-1 line-clamp-2"
-                      style={{ color: "var(--text-secondary)" }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "var(--bg-subtle)"
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent"
+                  }}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: project.color ?? "var(--color-primary)" }}
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                            {project.name}
+                          </p>
+                          {project.description ? (
+                            <p className="mt-1 line-clamp-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+                              {project.description}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                        <span>케이스 {project.caseCount ?? 0}개</span>
+                        <span>진행 {project.activeCases ?? 0}개</span>
+                      </div>
+                    </div>
+                    <span
+                      className="shrink-0 rounded-full px-2.5 py-1 text-xs font-medium"
+                      style={{ backgroundColor: status.bg, color: status.color }}
                     >
-                      {project.description}
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 mt-4">
-                <div className="flex flex-col">
-                  <span
-                    className="text-xs font-medium"
-                    style={{ color: "var(--text-primary)" }}
-                  >
-                    {project.caseCount ?? 0}
-                  </span>
-                  <span
-                    className="text-xs"
-                    style={{ color: "var(--text-tertiary)" }}
-                  >
-                    전체 케이스
-                  </span>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-medium" style={{ color: "#f59e0b" }}>
-                    {project.activeCases ?? 0}
-                  </span>
-                  <span
-                    className="text-xs"
-                    style={{ color: "var(--text-tertiary)" }}
-                  >
-                    진행 중
-                  </span>
-                </div>
-              </div>
-            </button>
-          ))}
-        </div>
-      )}
+                      {status.label}
+                    </span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        )}
+      </WorkspacePanel>
 
       {selectedOrgId && (
         <>

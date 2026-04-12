@@ -4,12 +4,13 @@ import { adaptersApi } from "@/api/adapters"
 import { queryKeys } from "@/lib/queryKeys"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Cpu, RefreshCcw, ShieldCheck, Workflow } from "lucide-react"
+import { RefreshCcw, Workflow } from "lucide-react"
+import { WorkspaceEmptyState, WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
 
 function tone(connected: boolean, inactive: boolean) {
-  if (connected) return { bg: "rgba(34,197,94,0.12)", color: "var(--color-success)", label: "연결됨" }
-  if (inactive) return { bg: "rgba(245,158,11,0.12)", color: "#d97706", label: "확인 필요" }
-  return { bg: "var(--bg-tertiary)", color: "var(--text-secondary)", label: "대기" }
+  if (connected) return { bg: "var(--status-success-soft)", color: "var(--color-success)", label: "연결됨" }
+  if (inactive) return { bg: "var(--status-warning-soft)", color: "var(--color-warning)", label: "확인 필요" }
+  return { bg: "var(--bg-muted)", color: "var(--text-secondary)", label: "대기" }
 }
 
 export function PluginsPage() {
@@ -27,111 +28,101 @@ export function PluginsPage() {
   const connectedIntegrations = integrations.filter((item: any) => item.connected).length
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-6 py-8">
-      <div className="flex items-end justify-between gap-6">
-        <div>
-          <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
-            외부 연동
-          </h1>
-          <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-            카카오, 텔레그램, 캘린더, 법령 조회처럼 학원 운영에 직접 연결되는 서비스를 한 곳에서 점검합니다.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => { void pluginsQuery.refetch(); void adaptersQuery.refetch() }}>
-          <RefreshCcw size={14} />
-          상태 새로고침
-        </Button>
-      </div>
+    <div className="p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title="외부 연동"
+        description="카카오, 텔레그램, 캘린더, 법령 조회처럼 학원 운영에 직접 연결되는 서비스를 점검합니다."
+        action={
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() => {
+              void pluginsQuery.refetch()
+              void adaptersQuery.refetch()
+            }}
+          >
+            <RefreshCcw size={14} />
+            상태 새로고침
+          </Button>
+        }
+      />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <div className="rounded-2xl border p-5" style={{ borderColor: "var(--border-default)", background: "var(--bg-elevated)" }}>
-          <div className="flex items-center gap-2">
-            <Cpu size={16} style={{ color: "var(--color-teal-500)" }} />
-            <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>연동 항목</span>
-          </div>
-          <div className="mt-3 text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>{plugins.length}</div>
+      <WorkspacePanel className="overflow-hidden">
+        <div
+          className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-5 py-4 text-xs"
+          style={{ borderColor: "var(--border-default)", color: "var(--text-tertiary)" }}
+        >
+          <span>연동 항목 {plugins.length}개</span>
+          <span>연결됨 {connectedIntegrations}개</span>
+          <span>조치 필요 {Math.max(integrations.length - connectedIntegrations, 0)}개</span>
         </div>
-        <div className="rounded-2xl border p-5" style={{ borderColor: "var(--border-default)", background: "var(--bg-elevated)" }}>
-          <div className="flex items-center gap-2">
-            <ShieldCheck size={16} style={{ color: "var(--color-teal-500)" }} />
-            <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>연결됨</span>
-          </div>
-          <div className="mt-3 text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>{connectedIntegrations}</div>
-        </div>
-        <div className="rounded-2xl border p-5" style={{ borderColor: "var(--border-default)", background: "var(--bg-elevated)" }}>
-          <div className="flex items-center gap-2">
-            <Workflow size={16} style={{ color: "var(--color-teal-500)" }} />
-            <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>조치 필요</span>
-          </div>
-          <div className="mt-3 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-            {Math.max(integrations.length - connectedIntegrations, 0)}개 항목은 키 입력 또는 연결 확인이 더 필요합니다.
-          </div>
-        </div>
-      </div>
 
-      <div
-        className="rounded-2xl border p-5"
-        style={{ borderColor: "var(--border-default)", background: "var(--bg-elevated)" }}
-      >
-        <div className="flex items-center gap-2">
-          <Workflow size={16} style={{ color: "var(--color-teal-500)" }} />
-          <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>이 화면에서 보는 것</span>
-        </div>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <div className="rounded-xl p-4" style={{ backgroundColor: "var(--bg-secondary)" }}>
-            <p className="text-xs font-semibold" style={{ color: "var(--text-tertiary)" }}>연동 서비스</p>
-            <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-              카카오, 텔레그램, 캘린더, 법령 조회처럼 실제 업무 결과를 밖으로 보내거나 가져오는 서비스입니다.
-            </p>
-          </div>
-          <div className="rounded-xl p-4" style={{ backgroundColor: "var(--bg-secondary)" }}>
-            <p className="text-xs font-semibold" style={{ color: "var(--text-tertiary)" }}>판단 기준</p>
-            <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-              연결됨은 바로 사용 가능, 확인 필요는 키 또는 계정 점검 필요, 대기는 아직 붙이지 않은 상태입니다.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
         {pluginsQuery.isLoading ? (
-          <div className="rounded-2xl border p-5 text-sm" style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}>
+          <div className="flex min-h-[220px] items-center justify-center px-6 py-12 text-sm" style={{ color: "var(--text-tertiary)" }}>
             플러그인 상태를 불러오는 중...
           </div>
+        ) : plugins.length === 0 ? (
+          <WorkspaceEmptyState
+            icon={<Workflow size={22} />}
+            title="등록된 플러그인이 없습니다"
+            description="연동이 추가되면 여기에서 연결 상태와 설치 여부를 확인할 수 있습니다."
+            className="rounded-none border-0 bg-transparent"
+          />
         ) : (
-          plugins.map((plugin: any) => {
-            const status = tone(plugin.connected, plugin.inactive)
-            return (
-              <div key={plugin.key} className="rounded-2xl border p-5" style={{ borderColor: "var(--border-default)", background: "var(--bg-elevated)" }}>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h2 className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-                      {plugin.label}
-                    </h2>
-                    <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-                      {plugin.description}
-                    </p>
+          <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
+            {plugins.map((plugin: any) => {
+              const status = tone(plugin.connected, plugin.inactive)
+              const installTone = plugin.installed
+                ? { bg: "var(--status-success-soft)", color: "var(--color-success)", label: "설치됨" }
+                : { bg: "var(--bg-muted)", color: "var(--text-secondary)", label: "미설치" }
+
+              return (
+                <div key={plugin.key} className="px-5 py-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                          {plugin.label}
+                        </p>
+                        <span
+                          className="rounded-full px-2.5 py-1 text-xs font-medium"
+                          style={{ backgroundColor: status.bg, color: status.color }}
+                        >
+                          {status.label}
+                        </span>
+                      </div>
+                      <p className="text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+                        {plugin.description}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Badge
+                          className="border-0"
+                          style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}
+                        >
+                          코드 {plugin.key}
+                        </Badge>
+                        <Badge
+                          className="border-0"
+                          style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}
+                        >
+                          구분 {plugin.category ?? "general"}
+                        </Badge>
+                        <Badge
+                          className="border-0"
+                          style={{ backgroundColor: installTone.bg, color: installTone.color }}
+                        >
+                          {installTone.label}
+                        </Badge>
+                      </div>
+                    </div>
                   </div>
-                  <span className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: status.bg, color: status.color }}>
-                    {plugin.connected ? "연결됨" : plugin.inactive ? "확인 필요" : "대기"}
-                  </span>
                 </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
-                    코드: {plugin.key}
-                  </Badge>
-                  <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
-                    구분: {plugin.category ?? "general"}
-                  </Badge>
-                  <Badge className="border-0" style={{ backgroundColor: plugin.installed ? "rgba(34,197,94,0.12)" : "var(--bg-tertiary)", color: plugin.installed ? "var(--color-success)" : "var(--text-secondary)" }}>
-                    {plugin.installed ? "설치됨" : "미설치"}
-                  </Badge>
-                </div>
-              </div>
-            )
-          })
+              )
+            })}
+          </div>
         )}
-      </div>
+      </WorkspacePanel>
     </div>
   )
 }

@@ -10,6 +10,8 @@ export interface Config {
   anthropicApiKey: string | null
   deploymentMode: "local_trusted" | "authenticated"
   embeddedPostgresDataDir: string
+  /** DEMO_MODE=true → API 키 없이도 mock 응답으로 전체 플로우 동작 */
+  demoMode: boolean
 }
 
 export function loadConfig(): Config {
@@ -22,5 +24,6 @@ export function loadConfig(): Config {
       "local_trusted",
     embeddedPostgresDataDir:
       process.env.HAGENT_DATA_DIR || "./hagent-data",
+    demoMode: process.env.DEMO_MODE === "true",
   }
 }

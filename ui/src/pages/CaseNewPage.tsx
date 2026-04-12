@@ -1,12 +1,11 @@
-import { useEffect, useContext, useRef, useState } from "react"
-import { useParams, useNavigate } from "react-router-dom"
+import { useContext, useEffect, useRef, useState } from "react"
 import { useMutation, useQuery } from "@tanstack/react-query"
+import { useNavigate, useParams } from "react-router-dom"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { casesApi } from "@/api/cases"
 import { studentsApi } from "@/api/students"
 import { queryKeys } from "@/lib/queryKeys"
-import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -17,11 +16,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
+import {
+  WorkspaceHeader,
+  WorkspacePanel,
+} from "@/components/ui/workspace-surface"
 import { ToastContext } from "@/components/ToastContext"
 import { Loader2, Plus } from "lucide-react"
-
-// ─── constants ─────────────────────────────────────────────────────────────
 
 const caseTypes = [
   { value: "complaint", label: "민원" },
@@ -39,7 +39,26 @@ const urgencyOptions = [
   { value: "low", label: "낮음" },
 ]
 
-// ─── field wrapper ─────────────────────────────────────────────────────────
+function SectionTitle({
+  title,
+  description,
+}: {
+  title: string
+  description?: string
+}) {
+  return (
+    <div className="space-y-1">
+      <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+        {title}
+      </h2>
+      {description ? (
+        <p className="text-xs leading-5" style={{ color: "var(--text-tertiary)" }}>
+          {description}
+        </p>
+      ) : null}
+    </div>
+  )
+}
 
 function FieldGroup({
   label,
@@ -53,32 +72,24 @@ function FieldGroup({
   children: React.ReactNode
 }) {
   return (
-    <div className="space-y-1.5">
-      <label
-        className="text-sm font-medium"
-        style={{ color: "var(--text-primary)" }}
-      >
+    <div className="space-y-2">
+      <label className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
         {label}
-        {required && (
-          <span
-            className="ml-0.5"
-            style={{ color: "var(--color-danger)" }}
-          >
+        {required ? (
+          <span className="ml-0.5" style={{ color: "var(--color-danger)" }}>
             *
           </span>
-        )}
+        ) : null}
       </label>
       {children}
-      {error && (
+      {error ? (
         <p className="text-xs" style={{ color: "var(--color-danger)" }}>
           {error}
         </p>
-      )}
+      ) : null}
     </div>
   )
 }
-
-// ─── main page ─────────────────────────────────────────────────────────────
 
 export function CaseNewPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
@@ -88,18 +99,14 @@ export function CaseNewPage() {
   const toast = useContext(ToastContext)
   const titleRef = useRef<HTMLInputElement>(null)
 
-  // ── form state ─────────────────────────────────────────────────────────
   const [type, setType] = useState("")
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [urgency, setUrgency] = useState("normal")
   const [reporterName, setReporterName] = useState("")
   const [studentId, setStudentId] = useState("")
-
-  // ── validation errors ──────────────────────────────────────────────────
   const [errors, setErrors] = useState<{ type?: string; title?: string }>({})
 
-  // ── students ───────────────────────────────────────────────────────────
   const { data: students = [] } = useQuery({
     queryKey: queryKeys.students.list(selectedOrgId ?? ""),
     queryFn: () => studentsApi.list(selectedOrgId!),
@@ -114,7 +121,6 @@ export function CaseNewPage() {
     titleRef.current?.focus()
   }, [setBreadcrumbs, orgPrefix])
 
-  // ── mutation ───────────────────────────────────────────────────────────
   const create = useMutation({
     mutationFn: () =>
       casesApi.create(selectedOrgId!, {
@@ -134,13 +140,12 @@ export function CaseNewPage() {
     },
   })
 
-  // ── validation ─────────────────────────────────────────────────────────
   function validate(): boolean {
-    const newErrors: typeof errors = {}
-    if (!type) newErrors.type = "유형을 선택해주세요."
-    if (!title.trim()) newErrors.title = "제목을 입력해주세요."
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    const nextErrors: typeof errors = {}
+    if (!type) nextErrors.type = "유형을 선택해주세요."
+    if (!title.trim()) nextErrors.title = "제목을 입력해주세요."
+    setErrors(nextErrors)
+    return Object.keys(nextErrors).length === 0
   }
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -152,121 +157,12 @@ export function CaseNewPage() {
   const isDirty = !!(type || title || description || reporterName || studentId)
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      {/* Header */}
-      <div
-        className="flex items-center justify-between px-6 py-4"
-        style={{ borderBottom: "1px solid var(--border-default)" }}
-      >
-        <h1
-          className="text-base font-semibold"
-          style={{ color: "var(--text-primary)" }}
-        >
-          새 케이스 등록
-        </h1>
-      </div>
-
-      {/* Form */}
-      <div className="flex-1 overflow-y-auto">
-        <form
-          onSubmit={handleSubmit}
-          className="p-6 max-w-xl mx-auto space-y-5"
-        >
-          {/* Type */}
-          <FieldGroup label="유형" required error={errors.type}>
-            <Select value={type} onValueChange={setType}>
-              <SelectTrigger
-                className={cn("w-full", errors.type && "border-red-500")}
-              >
-                <SelectValue placeholder="유형 선택..." />
-              </SelectTrigger>
-              <SelectContent>
-                {caseTypes.map((t) => (
-                  <SelectItem key={t.value} value={t.value}>
-                    {t.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FieldGroup>
-
-          {/* Title */}
-          <FieldGroup label="제목" required error={errors.title}>
-            <Input
-              ref={titleRef}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="케이스 제목을 입력하세요"
-              className={cn(errors.title && "border-red-500")}
-            />
-          </FieldGroup>
-
-          {/* Description */}
-          <FieldGroup label="설명">
-            <Textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="케이스 내용을 자세히 설명해주세요..."
-              rows={4}
-              className="resize-none"
-            />
-          </FieldGroup>
-
-          <div className="grid grid-cols-2 gap-4">
-            {/* Urgency */}
-            <FieldGroup label="긴급도">
-              <Select value={urgency} onValueChange={setUrgency}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {urgencyOptions.map((u) => (
-                    <SelectItem key={u.value} value={u.value}>
-                      {u.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FieldGroup>
-
-            {/* Reporter */}
-            <FieldGroup label="신고자">
-              <Input
-                value={reporterName}
-                onChange={(e) => setReporterName(e.target.value)}
-                placeholder="신고자/보호자 이름"
-              />
-            </FieldGroup>
-          </div>
-
-          {/* Student */}
-          <FieldGroup label="학생">
-            <Select value={studentId} onValueChange={setStudentId}>
-              <SelectTrigger>
-                <SelectValue placeholder="학생 선택 (선택사항)" />
-              </SelectTrigger>
-              <SelectContent>
-                {(students as any[]).map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    <span className="flex items-center gap-2">
-                      {s.name}
-                      <span
-                        className="text-xs"
-                        style={{ color: "var(--text-tertiary)" }}
-                      >
-                        {s.grade}
-                      </span>
-                    </span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </FieldGroup>
-
-          <Separator />
-
-          {/* Actions */}
-          <div className="flex items-center justify-between">
+    <div className="p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title="새 케이스"
+        description="민원, 환불, 보강 요청을 한 화면에서 빠르게 등록합니다."
+        action={
+          <>
             <Button
               type="button"
               variant="ghost"
@@ -277,19 +173,157 @@ export function CaseNewPage() {
             </Button>
             <Button
               type="submit"
+              form="case-new-form"
               disabled={create.isPending || !isDirty}
               className="gap-2"
             >
-              {create.isPending ? (
-                <Loader2 size={15} className="animate-spin" />
-              ) : (
-                <Plus size={15} />
-              )}
+              {create.isPending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
               등록
             </Button>
+          </>
+        }
+      />
+
+      <WorkspacePanel>
+        <form
+          id="case-new-form"
+          onSubmit={handleSubmit}
+          className="space-y-6 p-6 md:p-8"
+        >
+          <SectionTitle
+            title="기본 정보"
+            description="케이스의 성격을 먼저 정리하면 이후 승인과 담당 배정이 쉬워집니다."
+          />
+
+          <div className="space-y-5">
+            <FieldGroup label="유형" required error={errors.type}>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger
+                  className="h-11"
+                  style={{
+                    backgroundColor: "var(--bg-muted)",
+                    borderColor: errors.type ? "var(--color-danger)" : "var(--border-default)",
+                    color: type ? "var(--text-primary)" : "var(--text-tertiary)",
+                  }}
+                >
+                  <SelectValue placeholder="유형 선택" />
+                </SelectTrigger>
+                <SelectContent>
+                  {caseTypes.map((item) => (
+                    <SelectItem key={item.value} value={item.value}>
+                      {item.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FieldGroup>
+
+            <FieldGroup label="제목" required error={errors.title}>
+              <Input
+                ref={titleRef}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="케이스 제목을 입력하세요"
+                className="h-11"
+                style={{
+                  backgroundColor: "var(--bg-muted)",
+                  borderColor: errors.title ? "var(--color-danger)" : "var(--border-default)",
+                  color: "var(--text-primary)",
+                }}
+              />
+            </FieldGroup>
+
+            <FieldGroup label="설명">
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="케이스 내용을 간단히 정리하세요"
+                rows={5}
+                className="resize-none"
+                style={{
+                  backgroundColor: "var(--bg-muted)",
+                  borderColor: "var(--border-default)",
+                  color: "var(--text-primary)",
+                }}
+              />
+            </FieldGroup>
+          </div>
+
+          <div className="border-t pt-6" style={{ borderColor: "var(--border-default)" }}>
+            <SectionTitle
+              title="보조 정보"
+              description="긴급도, 신고자, 학생 연결은 후속 처리 우선순위를 잡는 데 도움됩니다."
+            />
+
+            <div className="mt-5 grid gap-5 md:grid-cols-2">
+              <FieldGroup label="긴급도">
+                <Select value={urgency} onValueChange={setUrgency}>
+                  <SelectTrigger
+                    className="h-11"
+                    style={{
+                      backgroundColor: "var(--bg-muted)",
+                      borderColor: "var(--border-default)",
+                      color: "var(--text-primary)",
+                    }}
+                  >
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {urgencyOptions.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FieldGroup>
+
+              <FieldGroup label="신고자">
+                <Input
+                  value={reporterName}
+                  onChange={(e) => setReporterName(e.target.value)}
+                  placeholder="신고자/보호자 이름"
+                  className="h-11"
+                  style={{
+                    backgroundColor: "var(--bg-muted)",
+                    borderColor: "var(--border-default)",
+                    color: "var(--text-primary)",
+                  }}
+                />
+              </FieldGroup>
+            </div>
+
+            <div className="mt-5">
+              <FieldGroup label="학생">
+                <Select value={studentId} onValueChange={setStudentId}>
+                  <SelectTrigger
+                    className="h-11"
+                    style={{
+                      backgroundColor: "var(--bg-muted)",
+                      borderColor: "var(--border-default)",
+                      color: studentId ? "var(--text-primary)" : "var(--text-tertiary)",
+                    }}
+                  >
+                    <SelectValue placeholder="학생 선택 (선택사항)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(students as any[]).map((student) => (
+                      <SelectItem key={student.id} value={student.id}>
+                        <span className="flex items-center gap-2">
+                          {student.name}
+                          <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                            {student.grade}
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FieldGroup>
+            </div>
           </div>
         </form>
-      </div>
+      </WorkspacePanel>
     </div>
   )
 }

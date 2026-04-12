@@ -7,7 +7,6 @@ import { instructorsApi } from "@/api/students"
 import { casesApi } from "@/api/cases"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -32,12 +31,12 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
 import { ToastContext } from "@/components/ToastContext"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { usePanel } from "@/context/PanelContext"
 import { queryKeys } from "@/lib/queryKeys"
-import { cn } from "@/lib/utils"
 import {
   BookOpen,
   GraduationCap,
@@ -137,11 +136,11 @@ function statusLabel(status: InstructorStatus): string {
 function statusBadgeStyle(status: InstructorStatus): React.CSSProperties {
   switch (status) {
     case "active":
-      return { backgroundColor: "rgba(16,185,129,0.12)", color: "var(--color-success)" }
+      return { backgroundColor: "var(--status-success-soft)", color: "var(--color-success)" }
     case "inactive":
-      return { backgroundColor: "var(--bg-tertiary)", color: "var(--text-tertiary)" }
+      return { backgroundColor: "var(--bg-muted)", color: "var(--text-tertiary)" }
     default:
-      return { backgroundColor: "rgba(245,158,11,0.12)", color: "#f59e0b" }
+      return { backgroundColor: "var(--status-warning-soft)", color: "var(--color-warning)" }
   }
 }
 
@@ -164,13 +163,13 @@ function roleLabel(role: InstructorRole) {
 function roleBadgeStyle(role: InstructorRole): React.CSSProperties {
   switch (role) {
     case "teacher":
-      return { backgroundColor: "rgba(14,165,233,0.12)", color: "#0ea5e9" }
+      return { backgroundColor: "var(--status-info-soft)", color: "var(--color-info)" }
     case "staff":
-      return { backgroundColor: "rgba(139,92,246,0.12)", color: "#8b5cf6" }
+      return { backgroundColor: "var(--color-primary-soft)", color: "var(--color-primary)" }
     case "hybrid":
-      return { backgroundColor: "rgba(245,158,11,0.12)", color: "#f59e0b" }
+      return { backgroundColor: "var(--status-warning-soft)", color: "var(--color-warning)" }
     default:
-      return { backgroundColor: "var(--bg-tertiary)", color: "var(--text-tertiary)" }
+      return { backgroundColor: "var(--bg-muted)", color: "var(--text-tertiary)" }
   }
 }
 
@@ -308,7 +307,7 @@ function InstructorDialog({
           {/* 이름 */}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-              이름 <span className="text-rose-500">*</span>
+              이름 <span style={{ color: "var(--color-danger)" }}>*</span>
             </label>
             <Input
               placeholder="직원 또는 강사 이름"
@@ -316,17 +315,17 @@ function InstructorDialog({
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               style={{
                 backgroundColor: "var(--bg-secondary)",
-                borderColor: errors.name ? "#ef4444" : "var(--border-default)",
+                borderColor: errors.name ? "var(--color-danger)" : "var(--border-default)",
                 color: "var(--text-primary)",
               }}
             />
-            {errors.name && <span className="text-xs text-rose-500">{errors.name}</span>}
+            {errors.name && <span className="text-xs" style={{ color: "var(--color-danger)" }}>{errors.name}</span>}
           </div>
 
           {/* 과목 */}
           <div className="flex flex-col gap-1">
             <label className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-              담당 영역 <span className="text-rose-500">*</span>
+              담당 영역 <span style={{ color: "var(--color-danger)" }}>*</span>
             </label>
             <Select
               value={form.subject}
@@ -335,7 +334,7 @@ function InstructorDialog({
               <SelectTrigger
                 style={{
                   backgroundColor: "var(--bg-secondary)",
-                  borderColor: errors.subject ? "#ef4444" : "var(--border-default)",
+                  borderColor: errors.subject ? "var(--color-danger)" : "var(--border-default)",
                   color: form.subject ? "var(--text-primary)" : "var(--text-tertiary)",
                 }}
               >
@@ -349,7 +348,7 @@ function InstructorDialog({
                 ))}
               </SelectContent>
             </Select>
-            {errors.subject && <span className="text-xs text-rose-500">{errors.subject}</span>}
+            {errors.subject && <span className="text-xs" style={{ color: "var(--color-danger)" }}>{errors.subject}</span>}
           </div>
 
           <div className="flex flex-col gap-1">
@@ -459,8 +458,8 @@ function InstructorDialog({
             onClick={handleSubmit}
             disabled={isPending}
             style={{
-              background: "var(--color-teal-500)",
-              color: "#fff",
+              background: "var(--color-primary)",
+              color: "var(--text-on-primary)",
             }}
           >
             {isPending && <Loader2 size={14} className="animate-spin mr-1" />}
@@ -526,7 +525,10 @@ function DeleteConfirmDialog({
           <Button
             onClick={() => deleteMutation.mutate()}
             disabled={deleteMutation.isPending}
-            className="bg-rose-500 hover:bg-rose-600 text-white"
+            style={{
+              background: "var(--color-danger)",
+              color: "var(--text-on-primary)",
+            }}
           >
             {deleteMutation.isPending && <Loader2 size={14} className="animate-spin mr-1" />}
             삭제
@@ -569,13 +571,13 @@ function InstructorDetailSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md flex flex-col gap-0 p-0" style={{ backgroundColor: "var(--bg-base)" }}>
+      <SheetContent className="w-full sm:max-w-md flex flex-col gap-0 p-0" style={{ backgroundColor: "var(--bg-elevated)" }}>
         <SheetHeader className="px-6 pt-6 pb-4" style={{ borderBottom: "1px solid var(--border-default)" }}>
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
               <div
                 className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0"
-                style={{ background: "var(--color-teal-500)" }}
+                style={{ background: "var(--color-primary)" }}
               >
                 {instructor.name.charAt(0)}
               </div>
@@ -610,7 +612,7 @@ function InstructorDetailSheet({
                     className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
                     style={{ backgroundColor: "var(--bg-tertiary)" }}
                   >
-                    <BookOpen size={14} style={{ color: "var(--color-teal-500)" }} />
+                    <BookOpen size={14} style={{ color: "var(--color-primary)" }} />
                   </div>
                   <div>
                     <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>담당 과목</div>
@@ -687,7 +689,7 @@ function InstructorDetailSheet({
                     className="rounded-xl px-4 py-3 flex items-center gap-3"
                     style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
                   >
-                    <BookOpen size={16} style={{ color: "var(--color-teal-500)" }} />
+                    <BookOpen size={16} style={{ color: "var(--color-primary)" }} />
                     <span className="text-sm" style={{ color: "var(--text-primary)" }}>
                       연결 일정 <span className="font-bold">{stats?.linkedSchedules ?? instructor.classCount}</span>개
                     </span>
@@ -696,7 +698,7 @@ function InstructorDetailSheet({
                     className="rounded-xl px-4 py-3 flex items-center gap-3"
                     style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
                   >
-                    <GraduationCap size={16} style={{ color: "var(--color-teal-500)" }} />
+                    <GraduationCap size={16} style={{ color: "var(--color-primary)" }} />
                     <span className="text-sm" style={{ color: "var(--text-primary)" }}>
                       연결 학생 <span className="font-bold">{stats?.linkedStudents ?? 0}</span>명
                     </span>
@@ -705,7 +707,7 @@ function InstructorDetailSheet({
                     className="rounded-xl px-4 py-3 flex items-center gap-3"
                     style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
                   >
-                    <BookOpen size={16} style={{ color: "var(--color-teal-500)" }} />
+                    <BookOpen size={16} style={{ color: "var(--color-primary)" }} />
                     <span className="text-sm" style={{ color: "var(--text-primary)" }}>
                       관련 케이스 <span className="font-bold">{stats?.linkedCases ?? 0}</span>건
                     </span>
@@ -772,7 +774,7 @@ function InstructorDetailSheet({
             variant="outline"
             size="sm"
             onClick={() => onDelete(instructor)}
-            className="text-rose-500 border-rose-200 hover:bg-rose-50"
+            style={{ color: "var(--color-danger)", borderColor: "var(--border-default)" }}
           >
             <Trash2 size={14} />
           </Button>
@@ -791,7 +793,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         className="w-16 h-16 rounded-2xl flex items-center justify-center"
         style={{ backgroundColor: "var(--bg-tertiary)" }}
       >
-        <GraduationCap size={28} style={{ color: "var(--color-teal-500)" }} />
+        <GraduationCap size={28} style={{ color: "var(--color-primary)" }} />
       </div>
       <div className="flex flex-col gap-1">
         <p className="text-base font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -804,7 +806,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
       <Button
         onClick={onAdd}
         size="sm"
-        style={{ background: "var(--color-teal-500)", color: "#fff" }}
+        style={{ background: "var(--color-primary)", color: "var(--text-on-primary)" }}
       >
         <Plus size={14} className="mr-1" />
         직원/강사 등록
@@ -962,7 +964,6 @@ export function InstructorsPage() {
   }
 
   const activeCount = instructors.filter((i) => i.status === "active").length
-  const inactiveCount = instructors.filter((i) => i.status !== "active").length
   const teacherCount = instructors.filter((i) => i.role === "teacher").length
   const staffCount = instructors.filter((i) => i.role === "staff").length
   const hybridCount = instructors.filter((i) => i.role === "hybrid").length
@@ -1034,24 +1035,24 @@ export function InstructorsPage() {
               <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>전체 직원/강사</p>
               <p className="mt-1 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>{instructors.length}명</p>
             </div>
-            <div className="rounded-xl p-4" style={{ border: "1px solid rgba(16,185,129,0.3)", backgroundColor: "rgba(16,185,129,0.08)" }}>
+            <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--status-success-soft)" }}>
               <p className="text-xs" style={{ color: "var(--color-success)" }}>재직중</p>
               <p className="mt-1 text-xl font-semibold" style={{ color: "var(--color-success)" }}>{activeCount}명</p>
             </div>
-            <div className="rounded-xl p-4" style={{ border: "1px solid rgba(14,165,233,0.3)", backgroundColor: "rgba(14,165,233,0.08)" }}>
-              <p className="text-xs" style={{ color: "#0ea5e9" }}>강사</p>
-              <p className="mt-1 text-xl font-semibold" style={{ color: "#0ea5e9" }}>{teacherCount}명</p>
+            <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--status-info-soft)" }}>
+              <p className="text-xs" style={{ color: "var(--color-info)" }}>강사</p>
+              <p className="mt-1 text-xl font-semibold" style={{ color: "var(--color-info)" }}>{teacherCount}명</p>
             </div>
-            <div className="rounded-xl p-4" style={{ border: "1px solid rgba(139,92,246,0.3)", backgroundColor: "rgba(139,92,246,0.08)" }}>
-              <p className="text-xs" style={{ color: "#8b5cf6" }}>직원/복합</p>
-              <p className="mt-1 text-xl font-semibold" style={{ color: "#8b5cf6" }}>{staffCount + hybridCount}명</p>
+            <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--color-primary-soft)" }}>
+              <p className="text-xs" style={{ color: "var(--color-primary)" }}>직원/복합</p>
+              <p className="mt-1 text-xl font-semibold" style={{ color: "var(--color-primary)" }}>{staffCount + hybridCount}명</p>
             </div>
           </div>
 
           <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
             <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>바로 실행</p>
             <div className="mt-3 flex flex-col gap-2">
-              <Button size="sm" className="justify-start border-0 text-white" style={{ backgroundColor: "var(--color-teal-500)" }} onClick={() => setShowNewDialog(true)}>
+              <Button size="sm" className="justify-start border-0 text-white" style={{ backgroundColor: "var(--color-primary)" }} onClick={() => setShowNewDialog(true)}>
                 직원/강사 등록
               </Button>
             </div>
@@ -1136,7 +1137,7 @@ export function InstructorsPage() {
             <Button
               size="sm"
               className="justify-start border-0 text-white"
-              style={{ backgroundColor: "var(--color-teal-500)" }}
+              style={{ backgroundColor: "var(--color-primary)" }}
               disabled={createOpsCaseMutation.isPending}
               onClick={() => createOpsCaseMutation.mutate(detailTarget)}
             >
@@ -1198,108 +1199,82 @@ export function InstructorsPage() {
   }, [panelContentKey, setPanelContent])
 
   return (
-    <div
-      className="flex flex-col h-full"
-      style={{ backgroundColor: "var(--bg-base)", color: "var(--text-primary)" }}
-    >
-      {/* Header */}
-      <div
-        className="px-6 pt-6 pb-4"
-        style={{ borderBottom: "1px solid var(--border-default)" }}
-      >
-        <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div>
-            <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>
-              직원/강사 관리
-            </h1>
-            <p className="text-sm mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-              총 {instructors.length}명 · 강사 {teacherCount}명 · 직원 {staffCount}명 · 복합 {hybridCount}명 · 기타 {inactiveCount}명
-            </p>
-          </div>
-
-          <Button
-            onClick={() => setShowNewDialog(true)}
-            size="sm"
-            style={{ background: "var(--color-teal-500)", color: "#fff" }}
-          >
-            <Plus size={14} className="mr-1" />
+    <div className="p-6 md:p-8 space-y-6" style={{ backgroundColor: "var(--bg-canvas)", color: "var(--text-primary)" }}>
+      <WorkspaceHeader
+        title="직원/강사 관리"
+        description="수업과 일정이 연결되는 직원을 한 화면에서 찾고, 바로 수정하고, 케이스로 이어갑니다."
+        action={
+          <Button className="gap-2" onClick={() => setShowNewDialog(true)}>
+            <Plus size={15} />
             직원/강사 등록
           </Button>
-        </div>
+        }
+      />
 
-        {/* Filters */}
-        <div className="flex items-center gap-3 mt-4 flex-wrap">
-          <div className="relative flex-1 min-w-48 max-w-xs">
-            <Search
-              size={14}
-              className="absolute left-3 top-1/2 -translate-y-1/2"
-              style={{ color: "var(--text-tertiary)" }}
-            />
-            <Input
-              placeholder="이름, 과목으로 검색"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-8 h-9 text-sm"
-              style={{
-                backgroundColor: "var(--bg-secondary)",
-                borderColor: "var(--border-default)",
-                color: "var(--text-primary)",
-              }}
-            />
-          </div>
+      <WorkspacePanel className="overflow-hidden">
+        <div className="border-b p-4 md:p-5" style={{ borderColor: "var(--border-default)" }}>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative flex-1 min-w-56 max-w-md">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2"
+                style={{ color: "var(--text-tertiary)" }}
+              />
+              <Input
+                placeholder="이름, 과목으로 검색"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-8 h-9 text-sm"
+                style={{
+                  backgroundColor: "var(--bg-muted)",
+                  borderColor: "var(--border-default)",
+                  color: "var(--text-primary)",
+                }}
+              />
+            </div>
 
-          <div className="flex items-center gap-1.5">
-            {(["all", "active", "inactive"] as const).map((s) => (
-              <button
-                key={s}
-                onClick={() => setStatusFilter(s)}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                  statusFilter === s
-                    ? "text-white"
-                    : "hover:bg-[var(--bg-tertiary)]"
-                )}
-                style={
-                  statusFilter === s
-                    ? { background: "var(--color-teal-500)" }
-                    : { color: "var(--text-secondary)" }
-                }
-              >
-                {s === "all" ? "전체" : s === "active" ? "재직중" : "기타"}
-              </button>
-            ))}
-          </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1 rounded-lg border p-1" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-muted)" }}>
+                {(["all", "active", "inactive"] as const).map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setStatusFilter(s)}
+                    className="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                    style={
+                      statusFilter === s
+                        ? { backgroundColor: "var(--bg-elevated)", color: "var(--text-primary)", boxShadow: "var(--shadow-xs)" }
+                        : { color: "var(--text-secondary)" }
+                    }
+                  >
+                    {s === "all" ? "전체" : s === "active" ? "재직중" : "기타"}
+                  </button>
+                ))}
+              </div>
 
-          <div className="flex items-center gap-1.5">
-            {(["all", "teacher", "staff", "hybrid"] as const).map((role) => (
-              <button
-                key={role}
-                onClick={() => setRoleFilter(role)}
-                className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
-                  roleFilter === role
-                    ? "text-white"
-                    : "hover:bg-[var(--bg-tertiary)]"
-                )}
-                style={
-                  roleFilter === role
-                    ? { background: "var(--color-teal-500)" }
-                    : { color: "var(--text-secondary)" }
-                }
-              >
-                {role === "all" ? "전체 역할" : roleLabel(role)}
-              </button>
-            ))}
+              <div className="flex items-center gap-1 rounded-lg border p-1" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-muted)" }}>
+                {(["all", "teacher", "staff", "hybrid"] as const).map((role) => (
+                  <button
+                    key={role}
+                    onClick={() => setRoleFilter(role)}
+                    className="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                    style={
+                      roleFilter === role
+                        ? { backgroundColor: "var(--bg-elevated)", color: "var(--text-primary)", boxShadow: "var(--shadow-xs)" }
+                        : { color: "var(--text-secondary)" }
+                    }
+                  >
+                    {role === "all" ? "전체 역할" : roleLabel(role)}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Content */}
-      <ScrollArea className="flex-1">
-        <div className="p-6">
+        <div className="p-4 md:p-5">
           {instructorsQuery.isLoading ? (
             <div className="flex items-center justify-center py-20">
-              <Loader2 size={28} className="animate-spin" style={{ color: "var(--color-teal-500)" }} />
+              <Loader2 size={28} className="animate-spin" style={{ color: "var(--color-primary)" }} />
             </div>
           ) : filtered.length === 0 && instructors.length === 0 ? (
             <EmptyState onAdd={() => setShowNewDialog(true)} />
@@ -1311,7 +1286,7 @@ export function InstructorsPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
               {filtered.map((instructor) => (
                 <InstructorCard
                   key={instructor.id}
@@ -1324,7 +1299,7 @@ export function InstructorsPage() {
             </div>
           )}
         </div>
-      </ScrollArea>
+      </WorkspacePanel>
 
       {/* Dialogs & Sheet */}
       <InstructorDialog
@@ -1393,100 +1368,89 @@ function InstructorCard({
   onDelete: () => void
 }) {
   return (
-    <Card
-      className="cursor-pointer transition-all duration-150 hover:shadow-md"
-      style={{
-        backgroundColor: "var(--bg-secondary)",
-        border: "1px solid var(--border-default)",
-      }}
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault()
+          onClick()
+        }
+      }}
+      className="flex w-full items-start gap-4 px-4 py-4 text-left transition-colors hover:bg-[var(--bg-muted)] focus:outline-none"
+      style={{ color: "var(--text-primary)" }}
     >
-      <div className="p-4 flex flex-col gap-3">
-        {/* Top row */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-base shrink-0"
-              style={{ background: "var(--color-teal-500)" }}
-            >
-              {instructor.name.charAt(0)}
+      <div
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-sm font-semibold text-white"
+        style={{ backgroundColor: "var(--color-primary)" }}
+      >
+        {instructor.name.charAt(0)}
+      </div>
+
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+              {instructor.name}
             </div>
-            <div>
-              <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                {instructor.name}
-              </div>
-              <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                  {instructor.subject}
-                </span>
-                <Badge className="text-[10px] border-0" style={roleBadgeStyle(instructor.role)}>
-                  {roleLabel(instructor.role)}
-                </Badge>
-                <Badge className="text-[10px]" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-tertiary)" }}>
-                  {classifyWorkRole(instructor.subject)}
-                </Badge>
-              </div>
+            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+              <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                {instructor.subject}
+              </span>
+              <Badge className="text-[10px] border-0" style={roleBadgeStyle(instructor.role)}>
+                {roleLabel(instructor.role)}
+              </Badge>
+              <Badge className="text-[10px]" style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-tertiary)" }}>
+                {classifyWorkRole(instructor.subject)}
+              </Badge>
             </div>
           </div>
+
           <Badge className="text-xs border-0 shrink-0" style={statusBadgeStyle(instructor.status)}>
             {statusLabel(instructor.status)}
           </Badge>
         </div>
 
-        {/* Info rows */}
-        <div className="flex flex-col gap-1.5">
-          {instructor.phone && (
-            <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+          {instructor.phone ? (
+            <span className="inline-flex items-center gap-1.5">
               <Phone size={12} style={{ color: "var(--text-tertiary)" }} />
-              <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                {instructor.phone}
-              </span>
-            </div>
-          )}
-          {instructor.email && (
-            <div className="flex items-center gap-2">
-              <Mail size={12} style={{ color: "var(--text-tertiary)" }} />
-              <span className="text-xs truncate" style={{ color: "var(--text-secondary)" }}>
-                {instructor.email}
-              </span>
-            </div>
-          )}
-          {!instructor.phone && !instructor.email && (
-            <span className="text-xs" style={{ color: "var(--text-disabled)" }}>
-              연락처 미등록
+              {instructor.phone}
             </span>
-          )}
+          ) : null}
+          {instructor.email ? (
+            <span className="inline-flex items-center gap-1.5 truncate">
+              <Mail size={12} style={{ color: "var(--text-tertiary)" }} />
+              {instructor.email}
+            </span>
+          ) : null}
+          {!instructor.phone && !instructor.email ? (
+            <span style={{ color: "var(--text-tertiary)" }}>연락처 미등록</span>
+          ) : null}
         </div>
 
-        {/* Footer */}
-        <div
-          className="flex items-center justify-between pt-2"
-          style={{ borderTop: "1px solid var(--border-default)" }}
-        >
-          <div className="flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <div className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-tertiary)" }}>
             {instructor.status === "active" ? (
-              <UserCheck size={12} style={{ color: "var(--color-teal-500)" }} />
+              <UserCheck size={12} style={{ color: "var(--color-success)" }} />
             ) : (
               <UserX size={12} style={{ color: "var(--text-tertiary)" }} />
             )}
-            <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-              연결 일정 {instructor.classCount}개
-            </span>
+            <span>연결 일정 {instructor.classCount}개</span>
           </div>
 
-          <div
-            className="flex items-center gap-1"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
             <button
-              className="px-2 py-1 rounded text-xs transition-colors hover:bg-[var(--bg-tertiary)]"
-              style={{ color: "var(--text-tertiary)" }}
+              className="rounded px-2 py-1 text-xs transition-colors hover:bg-[var(--bg-muted)]"
+              style={{ color: "var(--text-secondary)" }}
               onClick={onEdit}
             >
               수정
             </button>
             <button
-              className="px-2 py-1 rounded text-xs transition-colors hover:bg-rose-50 text-rose-400"
+              className="rounded px-2 py-1 text-xs transition-colors hover:bg-[var(--status-danger-soft)]"
+              style={{ color: "var(--color-danger)" }}
               onClick={onDelete}
             >
               삭제
@@ -1494,6 +1458,6 @@ function InstructorCard({
           </div>
         </div>
       </div>
-    </Card>
+    </div>
   )
 }

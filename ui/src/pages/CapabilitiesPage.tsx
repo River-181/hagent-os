@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { WorkspaceHeader, WorkspaceSubtle } from "@/components/ui/workspace-surface"
 import { queryKeys } from "@/lib/queryKeys"
 import { CAPABILITY_BUNDLES, findBundleByCapability, type CapabilityBundleDefinition } from "@/lib/capabilityBundles"
 import {
@@ -38,16 +39,21 @@ import {
   Zap,
 } from "lucide-react"
 
-type CapabilityTab = "all" | "system" | "pack" | "skill" | "integration" | "runtime"
+type CapabilityTab = "all" | "system" | "workflow" | "integration"
 
 const TAB_ORDER: Array<{ value: CapabilityTab; label: string }> = [
   { value: "all", label: "전체" },
   { value: "system", label: "시스템" },
-  { value: "pack", label: "묶음" },
-  { value: "skill", label: "스킬" },
-  { value: "integration", label: "연동" },
-  { value: "runtime", label: "런타임" },
+  { value: "workflow", label: "스킬·묶음" },
+  { value: "integration", label: "연동·런타임" },
 ]
+
+const TAB_FILTERS: Record<CapabilityTab, string[]> = {
+  all: [],
+  system: ["system"],
+  workflow: ["pack", "skill"],
+  integration: ["integration", "runtime"],
+}
 
 function capabilityIcon(kind: string) {
   if (kind === "system") return <Sparkles size={16} />
@@ -63,6 +69,25 @@ function capabilityTypeLabel(kind: string) {
   if (kind === "integration") return "연동"
   if (kind === "runtime") return "런타임"
   return "스킬"
+}
+
+function capabilityStatusLabel(item: any) {
+  if (!item.ready) return "점검 필요"
+  if (item.installed) return "설치됨"
+  return "사용 가능"
+}
+
+function capabilityStatusStyle(item: any) {
+  if (!item.ready) {
+    return {
+      backgroundColor: "var(--status-warning-soft)",
+      color: "var(--color-warning)",
+    }
+  }
+  return {
+    backgroundColor: item.installed ? "var(--accent-primary-soft)" : "var(--bg-muted)",
+    color: item.installed ? "var(--accent-primary)" : "var(--text-tertiary)",
+  }
 }
 
 function capabilityCanonicalKey(item: any) {
@@ -117,52 +142,40 @@ function CapabilityCard({
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-2xl p-4 text-left transition-all"
+      className="w-full rounded-xl p-4 text-left transition-all"
       style={{
-        background: active
-          ? "linear-gradient(180deg, rgba(20,184,166,0.12), rgba(15,23,42,0.02) 90%)"
-          : "var(--bg-elevated)",
-        border: `1px solid ${active ? "rgba(20,184,166,0.30)" : "var(--border-default)"}`,
+        backgroundColor: active ? "var(--bg-subtle)" : "var(--bg-elevated)",
+        border: `1px solid ${active ? "var(--accent-primary)" : "var(--border-default)"}`,
       }}
     >
       <div className="flex items-start gap-3">
         <div
-          className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
           style={{
-            backgroundColor: active ? "rgba(20,184,166,0.14)" : "var(--bg-secondary)",
-            color: active ? "var(--color-teal-500)" : "var(--text-tertiary)",
+            backgroundColor: active ? "var(--accent-primary-soft)" : "var(--bg-subtle)",
+            color: active ? "var(--accent-primary)" : "var(--text-tertiary)",
           }}
         >
           {capabilityIcon(item.capabilityType)}
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-              {item.displayName}
-            </p>
-            <Badge className="border-0 text-[11px]" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-tertiary)" }}>
-              {capabilityTypeLabel(item.capabilityType)}
+        <div className="min-w-0 flex-1 space-y-2">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                {item.displayName}
+              </p>
+              <p className="mt-0.5 truncate text-xs" style={{ color: "var(--text-tertiary)" }}>
+                {capabilityTypeLabel(item.capabilityType)}
+                {typeof item.sourceBadge === "string" ? ` · ${item.sourceBadge}` : ""}
+              </p>
+            </div>
+            <Badge className="border-0 text-xs" style={capabilityStatusStyle(item)}>
+              {capabilityStatusLabel(item)}
             </Badge>
           </div>
-          <p className="mt-1 text-xs leading-relaxed line-clamp-2" style={{ color: "var(--text-secondary)" }}>
+          <p className="line-clamp-2 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
             {item.summary}
           </p>
-          <div className="mt-3 flex gap-2 flex-wrap">
-            <Badge
-              className="border-0 text-[11px]"
-              style={{
-                backgroundColor: item.ready ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)",
-                color: item.ready ? "var(--color-success)" : "#d97706",
-              }}
-            >
-              {item.ready ? "사용 가능" : "설정 필요"}
-            </Badge>
-            {typeof item.sourceBadge === "string" ? (
-              <Badge className="border-0 text-[11px]" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-tertiary)" }}>
-                {item.sourceBadge}
-              </Badge>
-            ) : null}
-          </div>
         </div>
       </div>
     </button>
@@ -187,42 +200,38 @@ function BundleCard({
     <button
       type="button"
       onClick={onClick}
-      className="rounded-3xl p-5 text-left transition-all"
+      className="rounded-xl p-4 text-left transition-all"
       style={{
-        background: active
-          ? "linear-gradient(180deg, rgba(20,184,166,0.12), rgba(15,23,42,0.02) 90%)"
-          : "var(--bg-elevated)",
-        border: `1px solid ${active ? "rgba(20,184,166,0.30)" : "var(--border-default)"}`,
+        backgroundColor: active ? "var(--bg-subtle)" : "var(--bg-elevated)",
+        border: `1px solid ${active ? "var(--accent-primary)" : "var(--border-default)"}`,
       }}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+          <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
             {bundle.title}
           </div>
-          <p className="mt-2 text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
+          <p className="mt-1 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
             {bundle.summary}
           </p>
         </div>
         <div
-          className="flex h-11 w-11 items-center justify-center rounded-2xl shrink-0"
-          style={{ backgroundColor: active ? "rgba(20,184,166,0.14)" : "var(--bg-secondary)", color: "var(--color-teal-500)" }}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+          style={{ backgroundColor: active ? "var(--accent-primary-soft)" : "var(--bg-subtle)", color: "var(--accent-primary)" }}
         >
           <Sparkles size={18} />
         </div>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Badge className="border-0 text-[11px]" style={{ backgroundColor: stats.ready === stats.total ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)", color: stats.ready === stats.total ? "var(--color-success)" : "#d97706" }}>
-          {readinessLabel}
-        </Badge>
-        <Badge className="border-0 text-[11px]" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-tertiary)" }}>
-          추천 팀 {bundle.teamTemplate.roles.length}명
-        </Badge>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+        <span>{readinessLabel}</span>
+        <span>·</span>
+        <span>추천 팀 {bundle.teamTemplate.roles.length}명</span>
         {stats.missingConnections > 0 ? (
-          <Badge className="border-0 text-[11px]" style={{ backgroundColor: "rgba(245,158,11,0.12)", color: "#d97706" }}>
-            연결 필요 {stats.missingConnections}건
-          </Badge>
+          <>
+            <span>·</span>
+            <span>{stats.missingConnections}개 연결 필요</span>
+          </>
         ) : null}
       </div>
     </button>
@@ -237,7 +246,7 @@ function TeamRoleRow({
   matchedAgent?: any
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+    <div className="flex items-center justify-between gap-3 rounded-xl border px-4 py-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
       <div>
         <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
           {role.label}
@@ -284,8 +293,8 @@ function CapabilityProperties({
   const selectedAgentMounted = selectedAgentId ? mountedAgentIds.has(selectedAgentId) : false
 
   return (
-    <div className="space-y-4">
-      <div>
+    <WorkspaceSubtle className="space-y-4 p-4">
+      <div className="space-y-1">
         <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
           역량 속성
         </p>
@@ -294,11 +303,11 @@ function CapabilityProperties({
         </p>
       </div>
 
-      <div className="rounded-2xl p-4" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+      <div className="space-y-1">
         <PropertyRow label="종류">
-          <Badge className="border-0" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
+          <span className="text-sm" style={{ color: "var(--text-primary)" }}>
             {capabilityTypeLabel(detail.capabilityType)}
-          </Badge>
+          </span>
         </PropertyRow>
         <PropertyRow label="기관 설치">
           <div className="flex flex-wrap gap-2">
@@ -314,16 +323,14 @@ function CapabilityProperties({
           </div>
         </PropertyRow>
         <PropertyRow label="중복 후보">
-          <div className="space-y-2">
+          <div className="space-y-1">
             <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-              {duplicateCandidates.length}개
+              {duplicateCandidates.length > 0 ? `${duplicateCandidates.length}개` : "없음"}
             </span>
             {duplicateCandidates.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-1 text-sm" style={{ color: "var(--text-secondary)" }}>
                 {duplicateCandidates.map((item) => (
-                  <Badge key={`${item.capabilityType}/${item.slug}`} className="border-0" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
-                    {item.displayName}
-                  </Badge>
+                  <p key={`${item.capabilityType}/${item.slug}`}>{item.displayName}</p>
                 ))}
               </div>
             ) : null}
@@ -332,11 +339,11 @@ function CapabilityProperties({
       </div>
 
       {(detail.capabilityType === "skill" || detail.capabilityType === "pack" || detail.capabilityType === "system") ? (
-        <div className="rounded-2xl p-4" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+        <WorkspaceSubtle className="space-y-3 p-4">
           <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
             에이전트 배정
           </p>
-          <div className="mt-3 space-y-3">
+          <div className="space-y-3">
             <PropertyRow label="대상">
               <Select value={selectedAgentId} onValueChange={onSelectedAgentIdChange}>
                 <SelectTrigger className="w-full" style={{ backgroundColor: "var(--bg-elevated)" }}>
@@ -366,9 +373,9 @@ function CapabilityProperties({
               </Button>
             </div>
           </div>
-        </div>
+        </WorkspaceSubtle>
       ) : null}
-    </div>
+    </WorkspaceSubtle>
   )
 }
 
@@ -402,7 +409,7 @@ export function CapabilitiesPage() {
     const all = dedupeCapabilities(listQuery.data?.capabilities ?? [])
     const searchLower = search.trim().toLowerCase()
     return all.filter((item: any) => {
-      const kindMatch = activeTab === "all" ? true : item.capabilityType === activeTab
+      const kindMatch = TAB_FILTERS[activeTab].length === 0 ? true : TAB_FILTERS[activeTab].includes(item.capabilityType)
       const searchMatch =
         searchLower.length === 0 ||
         [item.displayName, item.summary, item.slug, item.capabilityType].some((value) =>
@@ -682,35 +689,49 @@ export function CapabilitiesPage() {
       const missingConnections = runtimeHealth.filter((item) => !item.ready)
       setPanelContent(
         <div className="space-y-4">
-          <div>
+          <div className="space-y-1">
             <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
               실행 요약
             </p>
-            <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
               이 업무 묶음을 지금 바로 쓸 수 있는지와 추천 팀 상태만 간단히 보여줍니다.
             </p>
           </div>
 
-          <div className="rounded-2xl p-4" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
-            <PropertyRow label="업무 묶음">
-              <span className="text-sm" style={{ color: "var(--text-primary)" }}>{selectedBundle.title}</span>
-            </PropertyRow>
-            <PropertyRow label="설치 여부">
-              <span className="text-sm" style={{ color: "var(--text-primary)" }}>{detail.installed ? "설치됨" : "미설치"}</span>
-            </PropertyRow>
-            <PropertyRow label="준비 상태">
-              <span className="text-sm" style={{ color: "var(--text-primary)" }}>{detail.ready ? "바로 사용 가능" : "연결/설정 필요"}</span>
-            </PropertyRow>
-            <PropertyRow label="연결 필요">
-              <span className="text-sm" style={{ color: "var(--text-primary)" }}>{missingConnections.length > 0 ? `${missingConnections.length}건` : "없음"}</span>
-            </PropertyRow>
-          </div>
+          <WorkspaceSubtle className="space-y-3 p-4">
+            <div className="grid gap-3 text-sm md:grid-cols-2">
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
+                  업무 묶음
+                </p>
+                <p style={{ color: "var(--text-primary)" }}>{selectedBundle.title}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
+                  설치 여부
+                </p>
+                <p style={{ color: "var(--text-primary)" }}>{detail.installed ? "설치됨" : "미설치"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
+                  준비 상태
+                </p>
+                <p style={{ color: "var(--text-primary)" }}>{detail.ready ? "바로 사용 가능" : "연결/설정 필요"}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
+                  연결 필요
+                </p>
+                <p style={{ color: "var(--text-primary)" }}>{missingConnections.length > 0 ? `${missingConnections.length}건` : "없음"}</p>
+              </div>
+            </div>
+          </WorkspaceSubtle>
 
-          <div className="rounded-2xl p-4" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+          <WorkspaceSubtle className="space-y-3 p-4">
             <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
               추천 팀
             </p>
-            <div className="mt-3 space-y-2">
+            <div className="space-y-2">
               {bundleAgents.map(({ role, matchedAgent }) => (
                 <div key={role.agentType} className="flex items-center justify-between gap-3">
                   <span className="text-sm" style={{ color: "var(--text-primary)" }}>{role.label}</span>
@@ -720,7 +741,7 @@ export function CapabilitiesPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </WorkspaceSubtle>
 
           <div className="flex flex-wrap gap-2">
             <Button size="sm" onClick={() => createMissingTeamMutation.mutate()} disabled={createMissingTeamMutation.isPending}>
@@ -779,58 +800,31 @@ export function CapabilitiesPage() {
   ])
 
   return (
-    <div className="space-y-6">
-      <div
-        className="rounded-3xl p-6 md:p-8"
-        style={{
-          background:
-            "radial-gradient(circle at top left, rgba(20,184,166,0.18), rgba(15,23,42,0.02) 55%), var(--bg-elevated)",
-          border: "1px solid var(--border-default)",
-        }}
-      >
-        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-          <div className="space-y-3">
-            <Badge className="border-0 text-xs" style={{ backgroundColor: "rgba(20,184,166,0.12)", color: "var(--color-teal-500)" }}>
-              {advancedView ? "고급 보기" : "업무 묶음"}
-            </Badge>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-semibold" style={{ color: "var(--text-primary)" }}>
-                역량
-              </h1>
-              <p className="mt-2 max-w-3xl text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
-                {advancedView
-                  ? "스킬, 시스템, 연동, 런타임을 포함한 기술 구성을 한 화면에서 점검합니다."
-                  : "무슨 일을 자동화할지 먼저 고르세요. 기술 용어는 숨기고, 바로 쓸 수 있는 업무 묶음만 보여줍니다."}
-              </p>
-            </div>
-            <div className="flex items-center gap-3 flex-wrap text-xs" style={{ color: "var(--text-tertiary)" }}>
-              <span>스킬 {listQuery.data?.stats?.skills ?? 0}</span>
-              <span>•</span>
-              <span>시스템 {listQuery.data?.stats?.systems ?? 0}</span>
-              <span>•</span>
-              <span>묶음 {listQuery.data?.stats?.packs ?? 0}</span>
-              <span>•</span>
-              <span>연동 {listQuery.data?.stats?.integrations ?? 0}</span>
-              <span>•</span>
-              <span>런타임 {listQuery.data?.stats?.runtimes ?? 0}</span>
-            </div>
-          </div>
+    <div className="p-6 md:p-8 space-y-6">
+      <WorkspaceHeader
+        title="역량"
+        description={
+          advancedView
+            ? "스킬, 시스템, 연동, 런타임을 한 화면에서 점검합니다."
+            : "무슨 일을 자동화할지 먼저 고르세요. 기술 용어는 숨기고, 바로 쓸 수 있는 업무 묶음만 보여줍니다."
+        }
+        action={
           <div
-            className="flex items-center gap-3 rounded-2xl px-4 py-3"
-            style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
+            className="flex items-center gap-3 rounded-xl border px-4 py-3"
+            style={{ backgroundColor: "var(--bg-elevated)", borderColor: "var(--border-default)" }}
           >
             <div>
               <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                 고급 보기
               </p>
               <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                스킬, 연동, slug, 기술 구성을 모두 봅니다.
+                스킬, 연동, 런타임을 모두 봅니다.
               </p>
             </div>
             <Switch checked={advancedView} onCheckedChange={setAdvancedView} />
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {!advancedView ? (
         <div className="space-y-6">
@@ -848,7 +842,7 @@ export function CapabilitiesPage() {
 
           {!detail || detailQuery.isLoading ? (
             <section
-              className="rounded-3xl min-h-[420px] flex flex-col items-center justify-center gap-3"
+              className="rounded-xl min-h-[420px] flex flex-col items-center justify-center gap-3"
               style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
             >
               <Loader2 size={22} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
@@ -858,7 +852,7 @@ export function CapabilitiesPage() {
             </section>
           ) : selectedBundle ? (
             <section
-              className="rounded-3xl p-6 md:p-8"
+              className="rounded-xl p-6 md:p-8"
               style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
             >
               <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
@@ -886,7 +880,7 @@ export function CapabilitiesPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+                  <div className="rounded-xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
                     <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                       <Zap size={16} />
                       추천 진입점
@@ -911,7 +905,7 @@ export function CapabilitiesPage() {
                   </div>
 
                   <details
-                    className="rounded-2xl p-5"
+                    className="rounded-xl p-5"
                     style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
                   >
                     <summary className="cursor-pointer list-none text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -980,7 +974,7 @@ export function CapabilitiesPage() {
                 </div>
 
                 <div className="space-y-4">
-                  <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+                  <div className="rounded-xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
                     <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                       <Users size={16} />
                       추천 팀
@@ -1013,7 +1007,7 @@ export function CapabilitiesPage() {
                     </div>
                   </div>
 
-                  <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+                  <div className="rounded-xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
                     <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                       <Cable size={16} />
                       연결 안내
@@ -1034,7 +1028,7 @@ export function CapabilitiesPage() {
       ) : (
         <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
           <aside
-            className="rounded-3xl overflow-hidden"
+            className="rounded-xl overflow-hidden"
             style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
           >
             <div className="p-4 border-b" style={{ borderColor: "var(--border-default)" }}>
@@ -1083,7 +1077,7 @@ export function CapabilitiesPage() {
           </aside>
 
           <section
-            className="rounded-3xl overflow-hidden"
+            className="rounded-xl overflow-hidden"
             style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
           >
             {!detail || detailQuery.isLoading ? (
@@ -1096,33 +1090,28 @@ export function CapabilitiesPage() {
             ) : (
               <div className="p-6 md:p-8 space-y-6">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                <div className="space-y-4">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Badge className="border-0 text-xs" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-tertiary)" }}>
-                      {capabilityTypeLabel(detail.capabilityType)}
-                    </Badge>
-                    <Badge
-                      className="border-0 text-xs"
-                      style={{
-                        backgroundColor: detail.ready ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)",
-                        color: detail.ready ? "var(--color-success)" : "#d97706",
-                      }}
-                    >
-                      {detail.ready ? "사용 가능" : "설정 필요"}
-                    </Badge>
-                    {detail.sourceStatus ? (
-                      <Badge className="border-0 text-xs" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-tertiary)" }}>
-                        {detail.sourceStatus}
-                      </Badge>
-                    ) : null}
-                  </div>
+                <div className="space-y-3">
+                  <p className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
+                    {capabilityTypeLabel(detail.capabilityType)}
+                    {detail.sourceStatus ? ` · ${detail.sourceStatus}` : ""}
+                  </p>
                   <div>
-                    <h2 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
+                    <h2 className="text-[28px] font-semibold tracking-[-0.02em]" style={{ color: "var(--text-primary)" }}>
                       {detail.displayName}
                     </h2>
                     <p className="mt-2 text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
                       {detail.summary}
                     </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Badge className="border-0 text-xs" style={capabilityStatusStyle(detail)}>
+                      {capabilityStatusLabel(detail)}
+                    </Badge>
+                    {detail.readOnly ? (
+                      <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                        읽기 전용
+                      </span>
+                    ) : null}
                   </div>
                 </div>
 
@@ -1165,27 +1154,28 @@ export function CapabilitiesPage() {
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {[
-                  { label: "종류", value: capabilityTypeLabel(detail.capabilityType), icon: capabilityIcon(detail.capabilityType) },
-                  { label: "장착 에이전트", value: String(detail.mountedAgents?.length ?? 0), icon: <Bot size={16} /> },
-                  { label: "추천 진입점", value: String(detail.recommendedEntrypoints?.length ?? 0), icon: <Zap size={16} /> },
-                  { label: "파일 수", value: String(detail.fileTree?.length ?? 0), icon: <FileText size={16} /> },
-                ].map((card) => (
-                  <div key={card.label} className="rounded-2xl p-4" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
-                    <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                      {card.icon}
-                      {card.label}
+              <WorkspaceSubtle className="p-4">
+                <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                  {[
+                    { label: "종류", value: capabilityTypeLabel(detail.capabilityType) },
+                    { label: "장착 에이전트", value: String(detail.mountedAgents?.length ?? 0) },
+                    { label: "추천 진입점", value: String(detail.recommendedEntrypoints?.length ?? 0) },
+                    { label: "파일 수", value: String(detail.fileTree?.length ?? 0) },
+                  ].map((card) => (
+                    <div key={card.label} className="space-y-1">
+                      <p className="text-xs uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
+                        {card.label}
+                      </p>
+                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                        {card.value}
+                      </p>
                     </div>
-                    <p className="mt-3 text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-                      {card.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              </WorkspaceSubtle>
 
               <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-                <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+                <div className="rounded-xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
                   <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     <Sparkles size={16} />
                     역량 구성
@@ -1254,7 +1244,7 @@ export function CapabilitiesPage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+                <div className="rounded-xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
                   <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     {detail.ready ? <CheckCircle2 size={16} /> : <ShieldAlert size={16} />}
                     실행 준비 상태
@@ -1299,7 +1289,7 @@ export function CapabilitiesPage() {
               </div>
 
               {(detail.capabilityType === "skill" || detail.capabilityType === "pack" || detail.capabilityType === "system") ? (
-                <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+                <div className="rounded-xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
                   <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                     <FileText size={16} />
                     SKILL.md Preview

@@ -420,12 +420,13 @@ function getMockResponse(systemPrompt: string, userMessage: string): RuntimeResp
 }
 
 async function callClaude(systemPrompt: string, userMessage: string, options: RuntimeOptions): Promise<RuntimeResponse> {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (process.env.DEMO_MODE === "true" || !process.env.ANTHROPIC_API_KEY) {
     return {
       ...getMockResponse(systemPrompt, userMessage),
       adapterType: options.adapterType ?? "claude_local",
       model: options.model ?? "claude-sonnet-4-6",
       degraded: true,
+      ...(process.env.DEMO_MODE === "true" && { demo: true }),
     }
   }
 

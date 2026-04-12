@@ -5,6 +5,7 @@ import * as schema from "@hagent/db"
 import { classifyInboundMessage } from "../lib/channel-message-heuristics.js"
 import { processChannelInbound } from "./webhook.js"
 import { getTelegramBinding, normalizeTelegramUpdate, syncTelegramInbound } from "../services/telegram-inbound-sync.js"
+import { sendTelegramMessage } from "../services/integrations/telegram-outbound.js"
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
@@ -97,6 +98,30 @@ export function telegramRoutes(db: Db): Router {
         awaitRouting: true,
         organization,
       })
+
+      // AI 응답을 텔레그램으로 발송 (비동기 — 웹훅 응답 지연 방지)
+      if (result.caseId) {
+        void (async () => {
+          try {
+            const [updatedCase] = await db
+              .select()
+              .from(schema.cases)
+              .where(eq(schema.cases.id, result.caseId))
+            const draft = updatedCase?.agentDraft
+            if (draft) {
+              await sendTelegramMessage(db, {
+                organizationId: result.organizationId,
+                caseRecord: updatedCase,
+                approvalId: `telegram-auto-${result.caseId}`,
+                draft,
+                mode: "auto",
+              })
+            }
+          } catch {
+            // 발송 실패해도 케이스 접수는 성공으로 처리
+          }
+        })()
+      }
 
       res.json({ ok: true, result })
     } catch (error) {
