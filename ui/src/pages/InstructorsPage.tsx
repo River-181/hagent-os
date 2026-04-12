@@ -1,5 +1,5 @@
 // v0.3.1
-import { useContext, useEffect, useMemo, useState } from "react"
+import React, { useContext, useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api } from "@/api/client"
@@ -54,11 +54,13 @@ import {
 // ── Types ────────────────────────────────────────────────────────────────────
 
 type InstructorStatus = "active" | "inactive" | string
+type InstructorRole = "teacher" | "staff" | "hybrid" | string
 
 interface Instructor {
   id: string
   name: string
   subject: string
+  role: InstructorRole
   phone: string
   email: string
   status: InstructorStatus
@@ -114,6 +116,7 @@ function normalizeInstructor(value: unknown): Instructor {
     id: toStr(r.id),
     name: toStr(r.name, "이름 없음"),
     subject: toStr(r.subject, "미분류"),
+    role: toStr(r.role, "teacher"),
     phone: toStr(r.phone),
     email: toStr(r.email),
     status: toStr(r.status, "active"),
@@ -131,14 +134,14 @@ function statusLabel(status: InstructorStatus): string {
   return map[status] ?? status
 }
 
-function statusBadgeClass(status: InstructorStatus): string {
+function statusBadgeStyle(status: InstructorStatus): React.CSSProperties {
   switch (status) {
     case "active":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200"
+      return { backgroundColor: "rgba(16,185,129,0.12)", color: "var(--color-success)" }
     case "inactive":
-      return "bg-slate-100 text-slate-500 border-slate-200"
+      return { backgroundColor: "var(--bg-tertiary)", color: "var(--text-tertiary)" }
     default:
-      return "bg-amber-50 text-amber-700 border-amber-200"
+      return { backgroundColor: "rgba(245,158,11,0.12)", color: "#f59e0b" }
   }
 }
 
@@ -147,6 +150,28 @@ function classifyWorkRole(subject: string) {
   if (["상담", "입학상담", "학생관리"].includes(subject)) return "상담/학생관리"
   if (["운영", "행정", "원무", "마케팅", "차량"].includes(subject)) return "운영"
   return "직원/강사"
+}
+
+function roleLabel(role: InstructorRole) {
+  const map: Record<string, string> = {
+    teacher: "강사",
+    staff: "직원",
+    hybrid: "운영+강의",
+  }
+  return map[role] ?? "직원/강사"
+}
+
+function roleBadgeStyle(role: InstructorRole): React.CSSProperties {
+  switch (role) {
+    case "teacher":
+      return { backgroundColor: "rgba(14,165,233,0.12)", color: "#0ea5e9" }
+    case "staff":
+      return { backgroundColor: "rgba(139,92,246,0.12)", color: "#8b5cf6" }
+    case "hybrid":
+      return { backgroundColor: "rgba(245,158,11,0.12)", color: "#f59e0b" }
+    default:
+      return { backgroundColor: "var(--bg-tertiary)", color: "var(--text-tertiary)" }
+  }
 }
 
 const SUBJECT_OPTIONS = [
@@ -166,6 +191,7 @@ const STATUS_OPTIONS = [
 interface InstructorFormState {
   name: string
   subject: string
+  role: string
   phone: string
   email: string
   status: string
@@ -174,6 +200,7 @@ interface InstructorFormState {
 const emptyForm: InstructorFormState = {
   name: "",
   subject: "",
+  role: "teacher",
   phone: "",
   email: "",
   status: "active",
@@ -203,6 +230,7 @@ function InstructorDialog({
           ? {
               name: instructor.name,
               subject: instructor.subject,
+              role: instructor.role,
               phone: instructor.phone,
               email: instructor.email,
               status: instructor.status,
@@ -322,6 +350,31 @@ function InstructorDialog({
               </SelectContent>
             </Select>
             {errors.subject && <span className="text-xs text-rose-500">{errors.subject}</span>}
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+              역할 구분
+            </label>
+            <Select
+              value={form.role}
+              onValueChange={(v) => setForm({ ...form, role: v })}
+            >
+              <SelectTrigger
+                style={{
+                  backgroundColor: "var(--bg-secondary)",
+                  borderColor: "var(--border-default)",
+                  color: "var(--text-primary)",
+                }}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="teacher">강사</SelectItem>
+                <SelectItem value="staff">직원</SelectItem>
+                <SelectItem value="hybrid">운영+강의</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* 연락처 */}
@@ -492,6 +545,9 @@ function InstructorDetailSheet({
   onOpenChange,
   onEdit,
   onDelete,
+  onCreateOpsCase,
+  onOpenSchedule,
+  onOpenCases,
   stats,
 }: {
   instructor: Instructor | null
@@ -499,6 +555,9 @@ function InstructorDetailSheet({
   onOpenChange: (open: boolean) => void
   onEdit: (instructor: Instructor) => void
   onDelete: (instructor: Instructor) => void
+  onCreateOpsCase: (instructor: Instructor) => void
+  onOpenSchedule: (instructor: Instructor) => void
+  onOpenCases: (instructor: Instructor) => void
   stats?: {
     linkedSchedules: number
     linkedStudents: number
@@ -523,15 +582,18 @@ function InstructorDetailSheet({
               <div>
                 <SheetTitle style={{ color: "var(--text-primary)" }}>{instructor.name}</SheetTitle>
                 <SheetDescription style={{ color: "var(--text-tertiary)" }}>
-                  {instructor.subject} 담당 · {workRole}
+                  {roleLabel(instructor.role)} · {instructor.subject} 담당 · {workRole}
                 </SheetDescription>
               </div>
             </div>
-            <Badge
-              className={cn("text-xs border shrink-0", statusBadgeClass(instructor.status))}
-            >
-              {statusLabel(instructor.status)}
-            </Badge>
+            <div className="flex flex-col items-end gap-1">
+              <Badge className="text-xs border-0 shrink-0" style={statusBadgeStyle(instructor.status)}>
+                {statusLabel(instructor.status)}
+              </Badge>
+              <Badge className="text-xs border-0 shrink-0" style={roleBadgeStyle(instructor.role)}>
+                {roleLabel(instructor.role)}
+              </Badge>
+            </div>
           </div>
         </SheetHeader>
 
@@ -682,6 +744,33 @@ function InstructorDetailSheet({
           <Button
             variant="outline"
             size="sm"
+            className="flex-1"
+            onClick={() => onCreateOpsCase(instructor)}
+            style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}
+          >
+            운영 케이스
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={() => onOpenSchedule(instructor)}
+            style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}
+          >
+            연결 일정
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={() => onOpenCases(instructor)}
+            style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}
+          >
+            관련 케이스
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => onDelete(instructor)}
             className="text-rose-500 border-rose-200 hover:bg-rose-50"
           >
@@ -733,9 +822,12 @@ export function InstructorsPage() {
   const navigate = useNavigate()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const [searchParams, setSearchParams] = useSearchParams()
+  const queryClient = useQueryClient()
+  const toast = useContext(ToastContext)
 
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [roleFilter, setRoleFilter] = useState<string>("all")
 
   const [showNewDialog, setShowNewDialog] = useState(false)
   const [editTarget, setEditTarget] = useState<Instructor | null>(null)
@@ -826,6 +918,7 @@ export function InstructorsPage() {
     const q = search.trim().toLowerCase()
     return instructors.filter((inst) => {
       if (statusFilter !== "all" && inst.status !== statusFilter) return false
+      if (roleFilter !== "all" && inst.role !== roleFilter) return false
       if (q) {
         return (
           inst.name.toLowerCase().includes(q) ||
@@ -834,7 +927,7 @@ export function InstructorsPage() {
       }
       return true
     })
-  }, [instructors, search, statusFilter])
+  }, [instructors, roleFilter, search, statusFilter])
 
   useEffect(() => {
     const detailId = searchParams.get("detail")
@@ -862,13 +955,17 @@ export function InstructorsPage() {
     setShowDetail(true)
     setSearchParams((current) => {
       const next = new URLSearchParams(current)
+      if (next.get("detail") === instructor.id) return next
       next.set("detail", instructor.id)
       return next
-    })
+    }, { replace: true })
   }
 
   const activeCount = instructors.filter((i) => i.status === "active").length
   const inactiveCount = instructors.filter((i) => i.status !== "active").length
+  const teacherCount = instructors.filter((i) => i.role === "teacher").length
+  const staffCount = instructors.filter((i) => i.role === "staff").length
+  const hybridCount = instructors.filter((i) => i.role === "hybrid").length
   const detailStats = useMemo(() => {
     if (!detailTarget) return { linkedSchedules: 0, linkedStudents: 0, linkedCases: 0 }
     const linkedScheduleIds = new Set(
@@ -889,32 +986,72 @@ export function InstructorsPage() {
     }
   }, [casesQuery.data, detailTarget, schedulesQuery.data, studentSchedulesQuery.data])
 
+  const createOpsCaseMutation = useMutation({
+    mutationFn: async (target: Instructor) => {
+      if (!selectedOrgId) throw new Error("orgId required")
+      return casesApi.create(selectedOrgId, {
+        title: `${target.name} 운영 배정 및 점검`,
+        description: [
+          `대상: ${target.name}`,
+          `역할: ${roleLabel(target.role)}`,
+          `담당 영역: ${target.subject}`,
+          `연결 일정: ${detailTarget?.id === target.id ? detailStats.linkedSchedules : (scheduleCountByInstructor.get(target.id) ?? target.classCount ?? 0)}개`,
+          "메모: 직원/강사 배정 상태와 연결 학생, 후속 운영 작업을 확인해 주세요.",
+        ].join("\n"),
+        type: "inquiry",
+        source: "manual",
+        metadata: {
+          createdFrom: "instructors-panel",
+          instructorId: target.id,
+          instructorName: target.name,
+          instructorRole: target.role,
+        },
+      })
+    },
+    onSuccess: (created: any) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(selectedOrgId ?? "") })
+      toast?.success("직원/강사 운영 케이스를 생성했습니다.")
+      if (orgPrefix && created?.id) navigate(`/${orgPrefix}/cases/${created.id}`)
+    },
+    onError: (error) => {
+      toast?.error(error instanceof Error ? error.message : "운영 케이스 생성에 실패했습니다.")
+    },
+  })
+
   const panelContent = useMemo(() => {
     if (!detailTarget) {
       return (
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-semibold text-slate-900">직원/강사 운영 요약</p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>직원/강사 속성</p>
+            <p className="mt-1 text-sm" style={{ color: "var(--text-tertiary)" }}>
               직원을 선택하면 담당 수업, 연결 학생, 최근 케이스를 바로 확인할 수 있습니다.
             </p>
           </div>
 
           <div className="grid gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs text-slate-500">전체 직원/강사</p>
-              <p className="mt-1 text-xl font-semibold text-slate-900">{instructors.length}명</p>
+            <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>전체 직원/강사</p>
+              <p className="mt-1 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>{instructors.length}명</p>
             </div>
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
-              <p className="text-xs text-emerald-700">재직중</p>
-              <p className="mt-1 text-xl font-semibold text-emerald-900">{activeCount}명</p>
+            <div className="rounded-xl p-4" style={{ border: "1px solid rgba(16,185,129,0.3)", backgroundColor: "rgba(16,185,129,0.08)" }}>
+              <p className="text-xs" style={{ color: "var(--color-success)" }}>재직중</p>
+              <p className="mt-1 text-xl font-semibold" style={{ color: "var(--color-success)" }}>{activeCount}명</p>
+            </div>
+            <div className="rounded-xl p-4" style={{ border: "1px solid rgba(14,165,233,0.3)", backgroundColor: "rgba(14,165,233,0.08)" }}>
+              <p className="text-xs" style={{ color: "#0ea5e9" }}>강사</p>
+              <p className="mt-1 text-xl font-semibold" style={{ color: "#0ea5e9" }}>{teacherCount}명</p>
+            </div>
+            <div className="rounded-xl p-4" style={{ border: "1px solid rgba(139,92,246,0.3)", backgroundColor: "rgba(139,92,246,0.08)" }}>
+              <p className="text-xs" style={{ color: "#8b5cf6" }}>직원/복합</p>
+              <p className="mt-1 text-xl font-semibold" style={{ color: "#8b5cf6" }}>{staffCount + hybridCount}명</p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-semibold text-slate-600">바로 실행</p>
+          <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>바로 실행</p>
             <div className="mt-3 flex flex-col gap-2">
-              <Button size="sm" className="justify-start bg-teal-600 text-white hover:bg-teal-700" onClick={() => setShowNewDialog(true)}>
+              <Button size="sm" className="justify-start border-0 text-white" style={{ backgroundColor: "var(--color-teal-500)" }} onClick={() => setShowNewDialog(true)}>
                 직원/강사 등록
               </Button>
             </div>
@@ -926,43 +1063,47 @@ export function InstructorsPage() {
     return (
       <div className="space-y-4">
         <div>
-          <p className="text-lg font-semibold text-slate-900">{detailTarget.name}</p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{detailTarget.name}</p>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-tertiary)" }}>
             {detailTarget.subject} · {classifyWorkRole(detailTarget.subject)} · {statusLabel(detailTarget.status)}
           </p>
         </div>
 
         <div className="grid gap-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">담당 수업</p>
-            <p className="mt-1 text-xl font-semibold text-slate-900">{detailStats.linkedSchedules}개</p>
+          <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>담당 수업</p>
+            <p className="mt-1 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>{detailStats.linkedSchedules}개</p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">연결 학생</p>
-            <p className="mt-1 text-xl font-semibold text-slate-900">{detailStats.linkedStudents}명</p>
+          <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>연결 학생</p>
+            <p className="mt-1 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>{detailStats.linkedStudents}명</p>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-semibold text-slate-600">운영 연결</p>
-          <div className="mt-3 space-y-2 text-sm text-slate-700">
+        <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+          <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>운영 연결</p>
+          <div className="mt-3 space-y-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+            <div className="flex items-center justify-between gap-3">
+              <span>역할 구분</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>{roleLabel(detailTarget.role)}</span>
+            </div>
             <div className="flex items-center justify-between gap-3">
               <span>연락처</span>
-              <span className="font-medium text-slate-900">{detailTarget.phone || "미등록"}</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>{detailTarget.phone || "미등록"}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>이메일</span>
-              <span className="font-medium text-slate-900">{detailTarget.email || "미등록"}</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>{detailTarget.email || "미등록"}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>관련 케이스</span>
-              <span className="font-medium text-slate-900">{detailStats.linkedCases}건</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>{detailStats.linkedCases}건</span>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-600">바로 실행</p>
+        <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+          <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>바로 실행</p>
           <div className="mt-3 flex flex-col gap-2">
             <Button
               size="sm"
@@ -980,7 +1121,7 @@ export function InstructorsPage() {
               size="sm"
               variant="outline"
               className="justify-start"
-              onClick={() => orgPrefix && navigate(`/${orgPrefix}/schedule`)}
+              onClick={() => orgPrefix && navigate(`/${orgPrefix}/schedule?instructor=${detailTarget.id}`)}
             >
               연결 일정 보기
             </Button>
@@ -988,9 +1129,18 @@ export function InstructorsPage() {
               size="sm"
               variant="outline"
               className="justify-start"
-              onClick={() => orgPrefix && navigate(`/${orgPrefix}/cases`)}
+              onClick={() => orgPrefix && navigate(`/${orgPrefix}/cases?instructor=${detailTarget.id}`)}
             >
               관련 케이스 보기
+            </Button>
+            <Button
+              size="sm"
+              className="justify-start border-0 text-white"
+              style={{ backgroundColor: "var(--color-teal-500)" }}
+              disabled={createOpsCaseMutation.isPending}
+              onClick={() => createOpsCaseMutation.mutate(detailTarget)}
+            >
+              운영 배정 케이스 생성
             </Button>
           </div>
         </div>
@@ -1003,9 +1153,13 @@ export function InstructorsPage() {
     detailStats.linkedCases,
     detailStats.linkedSchedules,
     detailStats.linkedStudents,
+    hybridCount,
     instructors.length,
     schedulesQuery.data,
+    staffCount,
     studentSchedulesQuery.data,
+    teacherCount,
+    createOpsCaseMutation.isPending,
   ])
 
   const panelContentKey = useMemo(
@@ -1014,6 +1168,9 @@ export function InstructorsPage() {
         detailTargetId: detailTarget?.id ?? null,
         instructorCount: instructors.length,
         activeCount,
+        teacherCount,
+        staffCount,
+        hybridCount,
         caseCount: Array.isArray(casesQuery.data) ? casesQuery.data.length : 0,
         scheduleCount: Array.isArray(schedulesQuery.data) ? schedulesQuery.data.length : 0,
         studentScheduleCount: Array.isArray(studentSchedulesQuery.data) ? studentSchedulesQuery.data.length : 0,
@@ -1022,9 +1179,12 @@ export function InstructorsPage() {
       activeCount,
       casesQuery.data,
       detailTarget?.id,
+      hybridCount,
       instructors.length,
       schedulesQuery.data,
+      staffCount,
       studentSchedulesQuery.data,
+      teacherCount,
     ],
   )
 
@@ -1049,7 +1209,7 @@ export function InstructorsPage() {
               직원/강사 관리
             </h1>
             <p className="text-sm mt-0.5" style={{ color: "var(--text-tertiary)" }}>
-              총 {instructors.length}명 · 재직중 {activeCount}명 · 기타 {inactiveCount}명
+              총 {instructors.length}명 · 강사 {teacherCount}명 · 직원 {staffCount}명 · 복합 {hybridCount}명 · 기타 {inactiveCount}명
             </p>
           </div>
 
@@ -1102,6 +1262,28 @@ export function InstructorsPage() {
                 }
               >
                 {s === "all" ? "전체" : s === "active" ? "재직중" : "기타"}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {(["all", "teacher", "staff", "hybrid"] as const).map((role) => (
+              <button
+                key={role}
+                onClick={() => setRoleFilter(role)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors",
+                  roleFilter === role
+                    ? "text-white"
+                    : "hover:bg-[var(--bg-tertiary)]"
+                )}
+                style={
+                  roleFilter === role
+                    ? { background: "var(--color-teal-500)" }
+                    : { color: "var(--text-secondary)" }
+                }
+              >
+                {role === "all" ? "전체 역할" : roleLabel(role)}
               </button>
             ))}
           </div>
@@ -1176,13 +1358,17 @@ export function InstructorsPage() {
             setDetailTarget(null)
             setSearchParams((current) => {
               const next = new URLSearchParams(current)
+              if (!next.has("detail")) return next
               next.delete("detail")
               return next
-            })
+            }, { replace: true })
           }
         }}
         onEdit={openEdit}
         onDelete={openDelete}
+        onCreateOpsCase={(target) => createOpsCaseMutation.mutate(target)}
+        onOpenSchedule={(target) => orgPrefix && navigate(`/${orgPrefix}/schedule?instructor=${target.id}`)}
+        onOpenCases={(target) => orgPrefix && navigate(`/${orgPrefix}/cases?instructor=${target.id}`)}
         stats={detailStats}
       />
     </div>
@@ -1229,15 +1415,16 @@ function InstructorCard({
                 <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
                   {instructor.subject}
                 </span>
-                <Badge variant="outline" className="text-[10px]">
+                <Badge className="text-[10px] border-0" style={roleBadgeStyle(instructor.role)}>
+                  {roleLabel(instructor.role)}
+                </Badge>
+                <Badge className="text-[10px]" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-tertiary)" }}>
                   {classifyWorkRole(instructor.subject)}
                 </Badge>
               </div>
             </div>
           </div>
-          <Badge
-            className={cn("text-xs border shrink-0", statusBadgeClass(instructor.status))}
-          >
+          <Badge className="text-xs border-0 shrink-0" style={statusBadgeStyle(instructor.status)}>
             {statusLabel(instructor.status)}
           </Badge>
         </div>

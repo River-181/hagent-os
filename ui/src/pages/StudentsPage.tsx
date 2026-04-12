@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState, type ChangeEvent, type DragEvent } from "react"
+import React, { useContext, useEffect, useMemo, useState, type ChangeEvent, type DragEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useParams } from "react-router-dom"
 import { studentsApi } from "@/api/students"
@@ -152,6 +152,15 @@ const PAYMENT_METHOD_OPTIONS = [
 
 const GRADE_FILTERS = ["", "초", "중", "고", "성인"] as const
 
+const themeClass = {
+  surface: "border-[var(--border-default)] bg-[var(--bg-elevated)] shadow-[var(--shadow-sm)]",
+  surfaceMuted: "border-[var(--border-default)] bg-[var(--bg-secondary)]",
+  surfaceTertiary: "bg-[var(--bg-tertiary)]",
+  textPrimary: "text-[var(--text-primary)]",
+  textSecondary: "text-[var(--text-secondary)]",
+  textTertiary: "text-[var(--text-tertiary)]",
+}
+
 function isRecord(value: unknown): value is Record<string, any> {
   return typeof value === "object" && value !== null
 }
@@ -231,18 +240,18 @@ function statusLabel(status: StudentStatus): string {
   return map[status] ?? status
 }
 
-function statusBadgeClass(status: StudentStatus): string {
+function statusBadgeStyle(status: StudentStatus): React.CSSProperties {
   switch (status) {
     case "active":
-      return "bg-emerald-50 text-emerald-700 border-emerald-200"
+      return { backgroundColor: "rgba(16,185,129,0.12)", color: "var(--color-success)" }
     case "inactive":
-      return "bg-slate-100 text-slate-700 border-slate-200"
+      return { backgroundColor: "var(--bg-tertiary)", color: "var(--text-tertiary)" }
     case "at_risk":
-      return "bg-rose-50 text-rose-700 border-rose-200"
+      return { backgroundColor: "rgba(239,68,68,0.12)", color: "#ef4444" }
     case "withdrawn":
-      return "bg-zinc-100 text-zinc-600 border-zinc-200"
+      return { backgroundColor: "var(--bg-tertiary)", color: "var(--text-disabled)" }
     default:
-      return "bg-slate-100 text-slate-700 border-slate-200"
+      return { backgroundColor: "var(--bg-tertiary)", color: "var(--text-tertiary)" }
   }
 }
 
@@ -258,6 +267,64 @@ function billingSummary(billing: BillingProfile): string {
     return `${billing.cardLabel || "카드"}${billing.cardLast4 ? ` · **** ${billing.cardLast4}` : ""}`.trim()
   }
   return "-"
+}
+
+function hasGuardianRecord(student: StudentRecord): boolean {
+  return Boolean(student.parent?.name || student.parents.length > 0)
+}
+
+function hasGuardianContact(student: StudentRecord): boolean {
+  return Boolean(student.parent?.phone || student.parents.some((parent) => Boolean(parent.phone)))
+}
+
+function hasBillingRecord(billing: BillingProfile): boolean {
+  return Boolean(
+    billing.paymentMethod &&
+      (
+        (billing.bankName && billing.accountNumberMasked) ||
+        billing.cardLast4 ||
+        billing.cardLabel
+      ),
+  )
+}
+
+function autoBillingLabel(billing: BillingProfile): string {
+  if (/자동/.test(billing.billingMemo)) return "자동 청구"
+  if (billing.paymentMethod) return "수동 확인"
+  return "미정"
+}
+
+function studentOpsAlerts(student: StudentRecord, relatedCaseCount = 0): string[] {
+  const alerts: string[] = []
+  if (!hasGuardianRecord(student)) alerts.push("보호자 미등록")
+  if (!hasGuardianContact(student)) alerts.push("보호자 연락처 보완")
+  if (!student.billing.paymentMethod) alerts.push("결제 방식 미등록")
+  if (!hasBillingRecord(student.billing)) alerts.push("결제 수단 보완")
+  if (student.riskPercent >= 70) alerts.push("이탈 위험 높음")
+  if (student.riskPercent >= 60 && relatedCaseCount === 0) alerts.push("점검 케이스 없음")
+  return alerts
+}
+
+function studentOpsReadiness(student: StudentRecord): {
+  guardian: "ready" | "attention"
+  billing: "ready" | "attention"
+} {
+  return {
+    guardian: hasGuardianRecord(student) && hasGuardianContact(student) ? "ready" : "attention",
+    billing: hasBillingRecord(student.billing) ? "ready" : "attention",
+  }
+}
+
+function summarizeAttendance(records: AttendanceRecord[]) {
+  return records.reduce(
+    (acc, record) => {
+      if (record.status === "absent") acc.absent += 1
+      if (record.status === "late") acc.late += 1
+      if (record.status === "excused") acc.excused += 1
+      return acc
+    },
+    { absent: 0, late: 0, excused: 0 },
+  )
 }
 
 function riskTone(score: number) {
@@ -281,7 +348,7 @@ function riskTone(score: number) {
     bar: "bg-emerald-500",
     track: "bg-emerald-100",
     text: "text-emerald-700",
-    row: "hover:bg-slate-50",
+    row: "hover:bg-[var(--bg-secondary)]",
   }
 }
 
@@ -422,6 +489,10 @@ function matchesScheduleToStudent(schedule: ScheduleRecord, student: StudentReco
   return schedule.title.includes(student.grade) || schedule.title.includes(group)
 }
 
+function matchesScheduleToStudentStrict(schedule: ScheduleRecord, student: StudentRecord): boolean {
+  return schedule.studentIds.includes(student.id)
+}
+
 function useDebounce<T>(value: T, delay: number): T {
   const [debounced, setDebounced] = useState(value)
 
@@ -454,7 +525,7 @@ function SortIndicator({
   active: boolean
   direction: SortDirection | null
 }) {
-  if (!active || !direction) return <span className="text-slate-300">·</span>
+  if (!active || !direction) return <span className={themeClass.textTertiary}>·</span>
   return direction === "asc" ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />
 }
 
@@ -604,9 +675,9 @@ function CsvImportDialog({
         onOpenChange(nextOpen)
       }}
     >
-      <DialogContent className="max-w-3xl border-slate-200 bg-white">
+      <DialogContent className={cn("max-w-3xl", themeClass.surface)}>
         <DialogHeader>
-          <DialogTitle className="text-lg text-slate-900">CSV 가져오기</DialogTitle>
+          <DialogTitle className={cn("text-lg", themeClass.textPrimary)}>CSV 가져오기</DialogTitle>
           <DialogDescription>
             CSV 파일을 업로드하고 이름, 학년, 연락처 열을 매핑해 학생 데이터를 한 번에 등록합니다.
           </DialogDescription>
@@ -622,16 +693,16 @@ function CsvImportDialog({
             onDrop={handleDrop}
             className={cn(
               "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border border-dashed px-6 py-10 text-center transition-colors",
-              dragging ? "border-teal-400 bg-teal-50" : "border-slate-300 bg-slate-50 hover:border-slate-400 hover:bg-slate-100"
+              dragging ? "border-teal-400 bg-teal-50" : "border-[var(--border-default)] bg-[var(--bg-secondary)] hover:bg-[var(--bg-tertiary)]"
             )}
           >
             <input type="file" accept=".csv,.xlsx" className="hidden" onChange={handleInputChange} />
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm">
-              <Upload className="h-5 w-5 text-slate-600" />
+            <div className={cn("flex h-12 w-12 items-center justify-center rounded-full", themeClass.surface)}>
+              <Upload className={cn("h-5 w-5", themeClass.textSecondary)} />
             </div>
             <div>
-              <p className="text-sm font-medium text-slate-900">파일을 끌어다 놓거나 클릭해서 선택</p>
-              <p className="mt-1 text-xs text-slate-500">지원 형식: `.csv`</p>
+              <p className={cn("text-sm font-medium", themeClass.textPrimary)}>파일을 끌어다 놓거나 클릭해서 선택</p>
+              <p className={cn("mt-1 text-xs", themeClass.textSecondary)}>지원 형식: `.csv`</p>
             </div>
             {fileName && <Badge variant="outline">{fileName}</Badge>}
           </label>
@@ -644,18 +715,18 @@ function CsvImportDialog({
 
           {preview && (
             <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-              <Card className="gap-3 border-slate-200 bg-white py-4">
+              <Card className={cn("gap-3 py-4", themeClass.surface)}>
                 <div className="px-5">
                   <div className="mb-3 flex items-center gap-2">
-                    <FileSpreadsheet className="h-4 w-4 text-slate-500" />
-                    <h3 className="text-sm font-semibold text-slate-900">미리보기</h3>
+                    <FileSpreadsheet className={cn("h-4 w-4", themeClass.textSecondary)} />
+                    <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>미리보기</h3>
                   </div>
-                  <div className="overflow-hidden rounded-xl border border-slate-200">
+                  <div className={cn("overflow-hidden rounded-xl border", themeClass.surfaceMuted)}>
                     <table className="w-full border-collapse text-sm">
-                      <thead className="bg-slate-50">
+                      <thead className={themeClass.surfaceTertiary}>
                         <tr>
                           {preview.headers.map((header) => (
-                            <th key={header} className="border-b border-slate-200 px-3 py-2 text-left font-medium text-slate-600">
+                            <th key={header} className={cn("border-b px-3 py-2 text-left font-medium", themeClass.surfaceMuted, themeClass.textSecondary)}>
                               {header}
                             </th>
                           ))}
@@ -663,9 +734,9 @@ function CsvImportDialog({
                       </thead>
                       <tbody>
                         {preview.rows.slice(0, 5).map((row, rowIndex) => (
-                          <tr key={`preview-row-${rowIndex}`} className="border-b border-slate-100 last:border-b-0">
+                          <tr key={`preview-row-${rowIndex}`} className="border-b border-[var(--border-default)] last:border-b-0">
                             {preview.headers.map((header, columnIndex) => (
-                              <td key={`${header}-${rowIndex}`} className="px-3 py-2 text-slate-700">
+                              <td key={`${header}-${rowIndex}`} className={cn("px-3 py-2", themeClass.textSecondary)}>
                                 {row[columnIndex] ?? "-"}
                               </td>
                             ))}
@@ -677,11 +748,11 @@ function CsvImportDialog({
                 </div>
               </Card>
 
-              <Card className="gap-4 border-slate-200 bg-white py-4">
+              <Card className={cn("gap-4 py-4", themeClass.surface)}>
                 <div className="space-y-3 px-5">
-                  <h3 className="text-sm font-semibold text-slate-900">열 매핑</h3>
+                  <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>열 매핑</h3>
                   <div className="space-y-2">
-                    <p className="text-xs text-slate-500">이름 열</p>
+                    <p className={cn("text-xs", themeClass.textSecondary)}>이름 열</p>
                     <Select value={nameColumn} onValueChange={setNameColumn}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="이름 열 선택" />
@@ -694,7 +765,7 @@ function CsvImportDialog({
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-xs text-slate-500">학년 열</p>
+                    <p className={cn("text-xs", themeClass.textSecondary)}>학년 열</p>
                     <Select value={gradeColumn} onValueChange={setGradeColumn}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="학년 열 선택" />
@@ -707,7 +778,7 @@ function CsvImportDialog({
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <p className="text-xs text-slate-500">연락처 열</p>
+                    <p className={cn("text-xs", themeClass.textSecondary)}>연락처 열</p>
                     <Select value={phoneColumn} onValueChange={setPhoneColumn}>
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="연락처 열 선택" />
@@ -730,7 +801,8 @@ function CsvImportDialog({
           <Button
             onClick={() => importMutation.mutate()}
             disabled={!preview || !nameColumn || !gradeColumn || !phoneColumn || importMutation.isPending}
-            className="bg-teal-600 text-white hover:bg-teal-700"
+            className="border-0 text-white"
+            style={{ backgroundColor: "var(--color-teal-500)" }}
           >
             {importMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             가져오기 확인
@@ -855,7 +927,7 @@ function StudentFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => !nextOpen && onClose()}>
-      <DialogContent className="max-w-md border-slate-200 bg-white">
+      <DialogContent className={cn("max-w-md", themeClass.surface)}>
         <DialogHeader>
           <DialogTitle>{isEdit ? "학생 정보 수정" : "학생 등록"}</DialogTitle>
           <DialogDescription>
@@ -865,7 +937,7 @@ function StudentFormDialog({
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-500">기본 정보</p>
+            <p className={cn("text-xs font-medium", themeClass.textSecondary)}>기본 정보</p>
             <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="학생 이름" />
             {errors.name && <p className="text-xs text-rose-600">{errors.name}</p>}
             <div className="grid grid-cols-2 gap-2">
@@ -901,7 +973,7 @@ function StudentFormDialog({
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-500">보호자 정보</p>
+            <p className={cn("text-xs font-medium", themeClass.textSecondary)}>보호자 정보</p>
             <Input value={parentName} onChange={(event) => setParentName(event.target.value)} placeholder="보호자 이름" />
             <Input value={parentRelation} onChange={(event) => setParentRelation(event.target.value)} placeholder="관계 (모/부/본인)" />
             <Input value={parentPhone} onChange={(event) => setParentPhone(event.target.value)} placeholder="연락처 (010-0000-0000)" />
@@ -909,7 +981,7 @@ function StudentFormDialog({
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-500">결제 정보</p>
+            <p className={cn("text-xs font-medium", themeClass.textSecondary)}>결제 정보</p>
             <Select value={paymentMethod} onValueChange={setPaymentMethod}>
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="결제 방식 선택" />
@@ -933,10 +1005,10 @@ function StudentFormDialog({
             <Input value={billingMemo} onChange={(event) => setBillingMemo(event.target.value)} placeholder="납부 메모" />
           </div>
 
-          <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className={cn("flex items-center justify-between rounded-xl border px-4 py-3", themeClass.surfaceMuted)}>
             <div>
-              <p className="text-sm font-medium text-slate-900">차량 탑승</p>
-              <p className="text-xs text-slate-500">등하원 차량 이용 여부를 기록합니다.</p>
+              <p className={cn("text-sm font-medium", themeClass.textPrimary)}>차량 탑승</p>
+              <p className={cn("text-xs", themeClass.textSecondary)}>등하원 차량 이용 여부를 기록합니다.</p>
             </div>
             <Switch checked={shuttle} onCheckedChange={setShuttle} />
           </div>
@@ -944,7 +1016,7 @@ function StudentFormDialog({
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>취소</Button>
-          <Button onClick={handleSubmit} disabled={mutation.isPending} className="bg-teal-600 text-white hover:bg-teal-700">
+          <Button onClick={handleSubmit} disabled={mutation.isPending} className="border-0 text-white" style={{ backgroundColor: "var(--color-teal-500)" }}>
             {mutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
             {isEdit ? "수정 저장" : "등록하기"}
           </Button>
@@ -1003,10 +1075,10 @@ function StudentDetailSheet({
         return toArray<unknown>(direct).map(normalizeSchedule)
       } catch (error) {
         try {
-          const fallback = await schedulesApi.list(orgId)
+        const fallback = await schedulesApi.list(orgId)
           return toArray<unknown>(fallback)
             .map(normalizeSchedule)
-            .filter((schedule) => matchesScheduleToStudent(schedule, student))
+            .filter((schedule) => matchesScheduleToStudentStrict(schedule, student))
         } catch (fallbackError) {
           throw fallbackError
         }
@@ -1066,84 +1138,100 @@ function StudentDetailSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-full max-w-xl border-l border-slate-200 bg-white p-0 sm:max-w-xl">
+        <SheetContent side="right" className={cn("w-full max-w-xl border-l p-0 sm:max-w-xl", themeClass.surface)}>
           {!mergedStudent ? (
-            <div className="flex h-full items-center justify-center text-slate-500">
+            <div className={cn("flex h-full items-center justify-center", themeClass.textSecondary)}>
               학생을 선택하세요.
             </div>
           ) : (
             <>
-              <SheetHeader className="border-b border-slate-200 px-6 py-5 text-left">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="space-y-2">
-                    <Badge className="border-teal-200 bg-teal-50 text-teal-700">학생 상세</Badge>
-                    <SheetTitle className="text-xl text-slate-950">{mergedStudent.name}</SheetTitle>
-                    <SheetDescription className="text-sm text-slate-500">
-                      {mergedStudent.grade} · {statusLabel(mergedStudent.status)}
-                    </SheetDescription>
-                  </div>
-                  <Button variant="outline" size="sm" onClick={() => setShowEditDialog(true)}>
-                    수정
-                  </Button>
-                </div>
-              </SheetHeader>
-
+              {(() => {
+                const opsAlerts = studentOpsAlerts(mergedStudent, relatedCases.length)
+                const readiness = studentOpsReadiness(mergedStudent)
+                return (
+                  <SheetHeader className={cn("border-b px-6 py-5 text-left", themeClass.surfaceMuted)}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-2">
+                        <Badge className="border-0" style={{ backgroundColor: "var(--color-primary-bg)", color: "var(--color-teal-500)" }}>학생 상세</Badge>
+                        <SheetTitle className={cn("text-xl", themeClass.textPrimary)}>{mergedStudent.name}</SheetTitle>
+                        <SheetDescription className={cn("text-sm", themeClass.textSecondary)}>
+                          {mergedStudent.grade} · {statusLabel(mergedStudent.status)}
+                        </SheetDescription>
+                        <div className="flex flex-wrap gap-2">
+                          <Badge className={cn("border", readiness.guardian === "ready" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700")}>
+                            보호자 {readiness.guardian === "ready" ? "준비됨" : "보완 필요"}
+                          </Badge>
+                          <Badge className={cn("border", readiness.billing === "ready" ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700")}>
+                            결제 {readiness.billing === "ready" ? "준비됨" : "보완 필요"}
+                          </Badge>
+                          {opsAlerts.slice(0, 2).map((alert) => (
+                            <Badge key={alert} className="border-amber-200 bg-[var(--bg-elevated)] text-amber-800">{alert}</Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => setShowEditDialog(true)}>
+                        수정
+                      </Button>
+                    </div>
+                  </SheetHeader>
+                )
+              })()}
               <ScrollArea className="h-[calc(100vh-4rem)]">
                 <div className="space-y-5 px-6 py-5">
-                  <Card className="gap-4 border-slate-200 bg-white py-5">
+                  <Card className={cn("gap-4 py-5", themeClass.surface)}>
                     <div className="space-y-4 px-5">
                       <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-slate-500" />
-                        <h3 className="text-sm font-semibold text-slate-900">기본 정보</h3>
+                        <User className={cn("h-4 w-4", themeClass.textSecondary)} />
+                        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>기본 정보</h3>
                       </div>
-                      <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2">
+                      <div className={cn("grid gap-3 rounded-2xl p-4 sm:grid-cols-2", themeClass.surfaceTertiary)}>
                         <div>
-                          <p className="text-xs text-slate-500">이름</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.name}</p>
+                          <p className={cn("text-xs", themeClass.textSecondary)}>이름</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{mergedStudent.name}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">학년</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.grade}</p>
+                          <p className={cn("text-xs", themeClass.textSecondary)}>학년</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{mergedStudent.grade}</p>
                         </div>
                         {mergedStudent.classGroup && (
                           <div>
-                            <p className="text-xs text-slate-500">반</p>
-                            <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.classGroup}</p>
+                            <p className={cn("text-xs", themeClass.textSecondary)}>반</p>
+                            <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{mergedStudent.classGroup}</p>
                           </div>
                         )}
                         <div>
-                          <p className="text-xs text-slate-500">연락처</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">{formatPhone(mergedStudent.primaryPhone)}</p>
+                          <p className={cn("text-xs", themeClass.textSecondary)}>연락처</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{formatPhone(mergedStudent.primaryPhone)}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">등록일</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.registeredAt}</p>
+                          <p className={cn("text-xs", themeClass.textSecondary)}>등록일</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{mergedStudent.registeredAt}</p>
                         </div>
                       </div>
                     </div>
                   </Card>
 
-                  <Card className="gap-4 border-slate-200 bg-white py-5">
+                  <Card className={cn("gap-4 py-5", themeClass.surface)}>
                     <div className="space-y-4 px-5">
                       <div className="flex items-center gap-2">
-                        <Phone className="h-4 w-4 text-slate-500" />
-                        <h3 className="text-sm font-semibold text-slate-900">보호자 · 결제 정보</h3>
+                        <Phone className={cn("h-4 w-4", themeClass.textSecondary)} />
+                        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>보호자 · 결제 정보</h3>
                       </div>
-                      <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2">
+                      <div className={cn("grid gap-3 rounded-2xl p-4 sm:grid-cols-2", themeClass.surfaceTertiary)}>
                         <div>
-                          <p className="text-xs text-slate-500">주 보호자</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.parent?.name ?? "-"}</p>
+                          <p className={cn("text-xs", themeClass.textSecondary)}>주 보호자</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{mergedStudent.parent?.name ?? "-"}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">관계</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.parent?.relation ?? "-"}</p>
+                          <p className={cn("text-xs", themeClass.textSecondary)}>관계</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{mergedStudent.parent?.relation ?? "-"}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">보호자 연락처</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">{formatPhone(mergedStudent.parent?.phone ?? "")}</p>
+                          <p className={cn("text-xs", themeClass.textSecondary)}>보호자 연락처</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{formatPhone(mergedStudent.parent?.phone ?? "")}</p>
                         </div>
                         <div className="sm:col-span-2">
-                          <p className="text-xs text-slate-500">등록된 보호자</p>
+                          <p className={cn("text-xs", themeClass.textSecondary)}>등록된 보호자</p>
                           <div className="mt-2 flex flex-wrap gap-2">
                             {mergedStudent.parents.length > 0 ? (
                               mergedStudent.parents.map((parent) => (
@@ -1152,70 +1240,70 @@ function StudentDetailSheet({
                                 </Badge>
                               ))
                             ) : (
-                              <span className="text-sm font-medium text-slate-900">미등록</span>
+                              <span className={cn("text-sm font-medium", themeClass.textPrimary)}>미등록</span>
                             )}
                           </div>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">납부자</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.billing.payerName || "-"}</p>
+                          <p className={cn("text-xs", themeClass.textSecondary)}>납부자</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{mergedStudent.billing.payerName || "-"}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">결제 방식</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">{paymentMethodLabel(mergedStudent.billing.paymentMethod)}</p>
+                          <p className={cn("text-xs", themeClass.textSecondary)}>결제 방식</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{paymentMethodLabel(mergedStudent.billing.paymentMethod)}</p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">계좌</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">
+                          <p className={cn("text-xs", themeClass.textSecondary)}>계좌</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>
                             {mergedStudent.billing.bankName || mergedStudent.billing.accountNumberMasked
                               ? `${mergedStudent.billing.bankName || "계좌"} ${mergedStudent.billing.accountNumberMasked}`.trim()
                               : "-"}
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">카드</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">
+                          <p className={cn("text-xs", themeClass.textSecondary)}>카드</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>
                             {mergedStudent.billing.cardLabel || mergedStudent.billing.cardLast4
                               ? `${mergedStudent.billing.cardLabel || "카드"} ${mergedStudent.billing.cardLast4 ? `· **** ${mergedStudent.billing.cardLast4}` : ""}`.trim()
                               : "-"}
                           </p>
                         </div>
                         <div>
-                          <p className="text-xs text-slate-500">메모</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.billing.billingMemo || "-"}</p>
+                          <p className={cn("text-xs", themeClass.textSecondary)}>메모</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{mergedStudent.billing.billingMemo || "-"}</p>
                         </div>
                         <div className="sm:col-span-2">
-                          <p className="text-xs text-slate-500">결제 요약</p>
-                          <p className="mt-1 text-sm font-medium text-slate-900">{billingSummary(mergedStudent.billing)}</p>
+                          <p className={cn("text-xs", themeClass.textSecondary)}>결제 요약</p>
+                          <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{billingSummary(mergedStudent.billing)}</p>
                         </div>
                       </div>
                     </div>
                   </Card>
 
-                  <Card className="gap-4 border-slate-200 bg-white py-5">
+                  <Card className={cn("gap-4 py-5", themeClass.surface)}>
                     <div className="space-y-4 px-5">
                       <div className="flex items-center gap-2">
-                        <BookOpen className="h-4 w-4 text-slate-500" />
-                        <h3 className="text-sm font-semibold text-slate-900">수강 중인 수업</h3>
+                        <BookOpen className={cn("h-4 w-4", themeClass.textSecondary)} />
+                        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>수강 중인 수업</h3>
                       </div>
 
                       {scheduleQuery.isLoading ? (
-                        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                        <div className={cn("flex items-center gap-2 rounded-2xl border px-4 py-6 text-sm", themeClass.surfaceMuted, themeClass.textSecondary)}>
                           <Loader2 className="h-4 w-4 animate-spin" />
                           수업 정보를 불러오는 중입니다.
                         </div>
                       ) : schedules.length === 0 ? (
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                        <div className={cn("rounded-2xl border px-4 py-4 text-sm", themeClass.surfaceMuted, themeClass.textSecondary)}>
                           연결된 수업이 없습니다.
                         </div>
                       ) : (
                         <div className="space-y-3">
                           {schedules.map((schedule) => (
-                            <div key={schedule.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                            <div key={schedule.id} className={cn("rounded-2xl border px-4 py-3", themeClass.surfaceMuted)}>
                               <div className="flex items-center justify-between gap-3">
                                 <div>
-                                  <p className="text-sm font-semibold text-slate-900">{schedule.title}</p>
-                                  <p className="mt-1 text-xs text-slate-500">
+                                  <p className={cn("text-sm font-semibold", themeClass.textPrimary)}>{schedule.title}</p>
+                                  <p className={cn("mt-1 text-xs", themeClass.textSecondary)}>
                                     {dayLabel(schedule.dayOfWeek)}요일 / {schedule.startTime} - {schedule.endTime}
                                   </p>
                                 </div>
@@ -1228,23 +1316,23 @@ function StudentDetailSheet({
                     </div>
                   </Card>
 
-                  <Card className="gap-4 border-slate-200 bg-white py-5">
+                  <Card className={cn("gap-4 py-5", themeClass.surface)}>
                     <div className="space-y-4 px-5">
                       <div className="flex items-center gap-2">
-                        <MessageSquare className="h-4 w-4 text-slate-500" />
-                        <h3 className="text-sm font-semibold text-slate-900">상담 기록</h3>
+                        <MessageSquare className={cn("h-4 w-4", themeClass.textSecondary)} />
+                        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>상담 기록</h3>
                       </div>
 
                       {mergedStudent.counselingHistory.length === 0 ? (
-                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                        <div className={cn("rounded-2xl border px-4 py-4 text-sm", themeClass.surfaceMuted, themeClass.textSecondary)}>
                           상담 기록이 없습니다.
                         </div>
                       ) : (
                         <div className="space-y-3">
                           {mergedStudent.counselingHistory.map((entry) => (
-                            <div key={entry.id} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
-                              <p className="text-xs font-medium text-slate-500">{entry.date}</p>
-                              <p className="mt-2 text-sm text-slate-800">{entry.content}</p>
+                            <div key={entry.id} className={cn("rounded-2xl border px-4 py-3", themeClass.surfaceMuted)}>
+                              <p className={cn("text-xs font-medium", themeClass.textSecondary)}>{entry.date}</p>
+                              <p className={cn("mt-2 text-sm", themeClass.textPrimary)}>{entry.content}</p>
                             </div>
                           ))}
                         </div>
@@ -1252,16 +1340,16 @@ function StudentDetailSheet({
                     </div>
                   </Card>
 
-                  <Card className="gap-4 border-slate-200 bg-white py-5">
+                  <Card className={cn("gap-4 py-5", themeClass.surface)}>
                     <div className="space-y-4 px-5">
                       <div className="flex items-center gap-2">
-                        <Bus className="h-4 w-4 text-slate-500" />
-                        <h3 className="text-sm font-semibold text-slate-900">차량 탑승</h3>
+                        <Bus className={cn("h-4 w-4", themeClass.textSecondary)} />
+                        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>차량 탑승</h3>
                       </div>
-                      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                      <div className={cn("flex items-center justify-between rounded-2xl border px-4 py-4", themeClass.surfaceMuted)}>
                         <div>
-                          <p className="text-sm font-medium text-slate-900">셔틀 이용 여부</p>
-                          <p className="mt-1 text-xs text-slate-500">수강생 등하원 차량 상태를 관리합니다.</p>
+                          <p className={cn("text-sm font-medium", themeClass.textPrimary)}>셔틀 이용 여부</p>
+                          <p className={cn("mt-1 text-xs", themeClass.textSecondary)}>수강생 등하원 차량 상태를 관리합니다.</p>
                         </div>
                         <Switch
                           checked={shuttleEnabled}
@@ -1272,11 +1360,11 @@ function StudentDetailSheet({
                     </div>
                   </Card>
 
-                  <Card className="gap-4 border-slate-200 bg-white py-5">
+                  <Card className={cn("gap-4 py-5", themeClass.surface)}>
                     <div className="space-y-4 px-5">
                       <div className="flex items-center gap-2">
-                        <BookOpen className="h-4 w-4 text-slate-500" />
-                        <h3 className="text-sm font-semibold text-slate-900">운영 바로가기</h3>
+                        <BookOpen className={cn("h-4 w-4", themeClass.textSecondary)} />
+                        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>운영 바로가기</h3>
                       </div>
                       <div className="grid gap-2 sm:grid-cols-2">
                         <Button variant="outline" onClick={() => orgPrefix && navigate(`/${orgPrefix}/cases`)}>
@@ -1321,18 +1409,18 @@ function EmptyState({
   onCreate: () => void
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-slate-300 bg-white px-8 py-14 text-center">
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-100">
-        <GraduationCap className="h-7 w-7 text-slate-500" />
+    <div className={cn("flex flex-col items-center justify-center rounded-3xl border border-dashed px-8 py-14 text-center", themeClass.surface)}>
+      <div className={cn("flex h-14 w-14 items-center justify-center rounded-full", themeClass.surfaceTertiary)}>
+        <GraduationCap className={cn("h-7 w-7", themeClass.textSecondary)} />
       </div>
-      <h3 className="mt-4 text-base font-semibold text-slate-900">
+      <h3 className={cn("mt-4 text-base font-semibold", themeClass.textPrimary)}>
         {hasFilter ? "검색 결과가 없습니다" : "등록된 학생이 없습니다"}
       </h3>
-      <p className="mt-2 max-w-sm text-sm text-slate-500">
+      <p className={cn("mt-2 max-w-sm text-sm", themeClass.textSecondary)}>
         {hasFilter ? "검색어 또는 필터를 조정해 보세요." : "첫 학생을 등록하거나 CSV로 한 번에 불러올 수 있습니다."}
       </p>
       {!hasFilter && (
-        <Button onClick={onCreate} className="mt-5 bg-teal-600 text-white hover:bg-teal-700">
+        <Button onClick={onCreate} className="mt-5 border-0 text-white" style={{ backgroundColor: "var(--color-teal-500)" }}>
           <Plus className="h-4 w-4" />
           학생 등록
         </Button>
@@ -1346,7 +1434,9 @@ export function StudentsPage() {
   const { selectedOrgId } = useOrganization()
   const { setPanelContent } = usePanel()
   const navigate = useNavigate()
-  const { orgPrefix } = useParams<{ orgPrefix: string }>()
+  const { orgPrefix, id: routeStudentId } = useParams<{ orgPrefix: string; id?: string }>()
+  const queryClient = useQueryClient()
+  const toast = useContext(ToastContext)
   const [viewMode, setViewMode] = useState<ViewMode>("table")
   const [search, setSearch] = useState("")
   const [gradeFilter, setGradeFilter] = useState<(typeof GRADE_FILTERS)[number]>("")
@@ -1408,6 +1498,14 @@ export function StudentsPage() {
   const students = studentsQuery.data ?? []
   const schedules = schedulesQuery.data ?? []
   const cases = casesQuery.data ?? []
+
+  useEffect(() => {
+    if (!routeStudentId) {
+      setSelectedStudentId(null)
+      return
+    }
+    setSelectedStudentId(routeStudentId)
+  }, [routeStudentId])
 
   const filteredStudents = useMemo(() => {
     const query = debouncedSearch.trim().toLowerCase()
@@ -1508,23 +1606,73 @@ export function StudentsPage() {
     [cases, selectedStudent]
   )
 
+  const projectCountByStudentId = useMemo(() => {
+    const counts = new Map<string, number>()
+    const buckets = new Map<string, Set<string>>()
+    for (const item of cases) {
+      const studentId = String((item as any).studentId ?? "")
+      if (!studentId) continue
+      const projectId = String((item as any).projectId ?? (item as any).project?.id ?? (item as any).opsGroupId ?? "")
+      if (!projectId) continue
+      if (!buckets.has(studentId)) buckets.set(studentId, new Set())
+      buckets.get(studentId)?.add(projectId)
+    }
+    for (const [studentId, projectIds] of buckets.entries()) {
+      counts.set(studentId, projectIds.size)
+    }
+    return counts
+  }, [cases])
+
+  const createStudentCaseMutation = useMutation({
+    mutationFn: async (input: { type: "inquiry" | "churn"; title: string; description: string }) => {
+      if (!selectedOrgId || !selectedStudent) {
+        throw new Error("학생을 먼저 선택하세요.")
+      }
+
+      return casesApi.create(selectedOrgId, {
+        title: input.title,
+        description: input.description,
+        type: input.type,
+        severity: input.type === "churn" ? "same_day" : "normal",
+        studentId: selectedStudent.id,
+        source: "manual",
+        metadata: {
+          createdFrom: "students-panel",
+          studentName: selectedStudent.name,
+          parentName: selectedStudent.parent?.name ?? null,
+          paymentMethod: selectedStudent.billing.paymentMethod || null,
+        },
+      })
+    },
+    onSuccess: async (created: any) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(selectedOrgId ?? "") })
+      toast?.success("학생 운영 케이스를 생성했습니다.")
+      if (orgPrefix && created?.id) navigate(`/${orgPrefix}/cases/${created.id}`)
+    },
+    onError: (error) => {
+      toast?.error(error instanceof Error ? error.message : "학생 운영 케이스 생성에 실패했습니다.")
+    },
+  })
+
   const atRiskStudents = filteredStudents.filter((student) => student.riskPercent > 50)
+  const guardianAttentionCount = filteredStudents.filter((student) => studentOpsReadiness(student).guardian === "attention").length
+  const billingAttentionCount = filteredStudents.filter((student) => studentOpsReadiness(student).billing === "attention").length
 
   const panelContent = useMemo(() => {
     if (!selectedStudent) {
       return (
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-semibold text-slate-900">학생 운영 요약</p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className={cn("text-sm font-semibold", themeClass.textPrimary)}>학생 속성</p>
+            <p className={cn("mt-1 text-sm", themeClass.textSecondary)}>
               학생을 선택하면 보호자, 차량, 연결 수업, 최근 상담, 관련 케이스를 바로 확인할 수 있습니다.
             </p>
           </div>
 
           <div className="grid gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs text-slate-500">전체 학생</p>
-              <p className="mt-1 text-xl font-semibold text-slate-900">{students.length}명</p>
+            <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
+              <p className={cn("text-xs", themeClass.textSecondary)}>전체 학생</p>
+              <p className={cn("mt-1 text-xl font-semibold", themeClass.textPrimary)}>{students.length}명</p>
             </div>
             <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
               <p className="text-xs text-orange-700">이탈 위험</p>
@@ -1532,10 +1680,10 @@ export function StudentsPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-semibold text-slate-600">바로 실행</p>
+          <div className={cn("rounded-2xl border p-4", themeClass.surfaceMuted)}>
+            <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>바로 실행</p>
             <div className="mt-3 flex flex-col gap-2">
-              <Button size="sm" className="justify-start bg-teal-600 text-white hover:bg-teal-700" onClick={() => setShowNewDialog(true)}>
+              <Button size="sm" className="justify-start border-0 text-white" style={{ backgroundColor: "var(--color-teal-500)" }} onClick={() => setShowNewDialog(true)}>
                 학생 등록
               </Button>
               <Button size="sm" variant="outline" className="justify-start" onClick={() => setShowImportDialog(true)}>
@@ -1548,6 +1696,9 @@ export function StudentsPage() {
     }
 
     const primaryGuardian = selectedStudent.parent ?? selectedStudent.parents[0] ?? null
+    const attendanceSummary = summarizeAttendance(selectedStudent.attendance)
+    const opsAlerts = studentOpsAlerts(selectedStudent, selectedStudentCases.length)
+    const readiness = studentOpsReadiness(selectedStudent)
     const relatedProjects = Array.from(
       new Map(
         selectedStudentCases
@@ -1565,78 +1716,130 @@ export function StudentsPage() {
     return (
       <div className="space-y-4">
         <div>
-          <p className="text-lg font-semibold text-slate-900">{selectedStudent.name}</p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className={cn("text-lg font-semibold", themeClass.textPrimary)}>{selectedStudent.name}</p>
+          <p className={cn("mt-1 text-sm", themeClass.textSecondary)}>
             {selectedStudent.grade} · {statusLabel(selectedStudent.status)}
           </p>
         </div>
 
         <div className="grid gap-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">이탈 위험</p>
-            <p className="mt-1 text-xl font-semibold text-slate-900">{selectedStudent.riskPercent}%</p>
+          <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
+            <p className={cn("text-xs", themeClass.textSecondary)}>이탈 위험</p>
+            <p className={cn("mt-1 text-xl font-semibold", themeClass.textPrimary)}>{selectedStudent.riskPercent}%</p>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">차량 탑승</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">{selectedStudent.shuttle ? "탑승" : "미탑승"}</p>
+          <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
+            <p className={cn("text-xs", themeClass.textSecondary)}>차량 탑승</p>
+            <p className={cn("mt-1 text-base font-semibold", themeClass.textPrimary)}>{selectedStudent.shuttle ? "탑승" : "미탑승"}</p>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-semibold text-slate-600">운영 연결</p>
-          <div className="mt-3 space-y-2 text-sm text-slate-700">
+        <div className={cn(
+          "rounded-2xl border p-4",
+          opsAlerts.length > 0 ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50",
+        )}>
+          <p className={cn("text-xs font-semibold", opsAlerts.length > 0 ? "text-amber-700" : "text-emerald-700")}>
+            운영 경고
+          </p>
+          {opsAlerts.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {opsAlerts.map((alert) => (
+                <Badge key={alert} className="border-amber-200 bg-[var(--bg-elevated)] text-amber-800">{alert}</Badge>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-emerald-900">보호자와 결제 레코드가 기본 운영 기준을 충족합니다.</p>
+          )}
+        </div>
+
+        <div className={cn("rounded-2xl border p-4", themeClass.surfaceMuted)}>
+          <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>운영 연결</p>
+          <div className={cn("mt-3 space-y-2 text-sm", themeClass.textSecondary)}>
+            <div className="flex items-center justify-between gap-3">
+              <span>보호자 레코드</span>
+              <span className={cn("font-medium", readiness.guardian === "ready" ? "text-emerald-700" : "text-amber-700")}>
+                {readiness.guardian === "ready" ? "준비됨" : "보완 필요"}
+              </span>
+            </div>
             <div className="flex items-center justify-between gap-3">
               <span>보호자</span>
-              <span className="font-medium text-slate-900">
+              <span className={cn("font-medium", themeClass.textPrimary)}>
                 {primaryGuardian?.name ?? "미등록"}
                 {selectedStudent.parents.length > 1 ? ` 외 ${selectedStudent.parents.length - 1}명` : ""}
               </span>
             </div>
             <div className="flex items-center justify-between gap-3">
+              <span>결제 레코드</span>
+              <span className={cn("font-medium", readiness.billing === "ready" ? "text-emerald-700" : "text-amber-700")}>
+                {readiness.billing === "ready" ? "준비됨" : "보완 필요"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
               <span>결제 방식</span>
-              <span className="font-medium text-slate-900">{paymentMethodLabel(selectedStudent.billing.paymentMethod)}</span>
+              <span className={cn("font-medium", themeClass.textPrimary)}>{paymentMethodLabel(selectedStudent.billing.paymentMethod)}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>결제 수단</span>
-              <span className="font-medium text-slate-900">{billingSummary(selectedStudent.billing)}</span>
+              <span className={cn("font-medium", themeClass.textPrimary)}>{billingSummary(selectedStudent.billing)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>청구 방식</span>
+              <span className={cn("font-medium", themeClass.textPrimary)}>{autoBillingLabel(selectedStudent.billing)}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>연결 수업</span>
-              <span className="font-medium text-slate-900">{selectedStudentSchedules.length}개</span>
+              <span className={cn("font-medium", themeClass.textPrimary)}>{selectedStudentSchedules.length}개</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>최근 상담</span>
-              <span className="font-medium text-slate-900">{selectedStudent.counselingHistory.length}건</span>
+              <span className={cn("font-medium", themeClass.textPrimary)}>{selectedStudent.counselingHistory.length}건</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>관련 케이스</span>
-              <span className="font-medium text-slate-900">{selectedStudentCases.length}건</span>
+              <span className={cn("font-medium", themeClass.textPrimary)}>{selectedStudentCases.length}건</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>연결 프로젝트</span>
-              <span className="font-medium text-slate-900">{relatedProjects.length}건</span>
+              <span className={cn("font-medium", themeClass.textPrimary)}>{relatedProjects.length}건</span>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-600">연결 수업 미리보기</p>
+        <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
+          <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>출결 이상 신호</p>
+          <div className="mt-3 grid grid-cols-3 gap-2">
+            <div className="rounded-xl bg-rose-50 px-3 py-2">
+              <p className="text-[11px] text-rose-600">결석</p>
+              <p className="mt-1 text-base font-semibold text-rose-900">{attendanceSummary.absent}회</p>
+            </div>
+            <div className="rounded-xl bg-amber-50 px-3 py-2">
+              <p className="text-[11px] text-amber-600">지각</p>
+              <p className="mt-1 text-base font-semibold text-amber-900">{attendanceSummary.late}회</p>
+            </div>
+            <div className="rounded-xl bg-sky-50 px-3 py-2">
+              <p className="text-[11px] text-sky-600">공결</p>
+              <p className="mt-1 text-base font-semibold text-sky-900">{attendanceSummary.excused}회</p>
+            </div>
+          </div>
+        </div>
+
+        <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
+          <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>연결 수업 미리보기</p>
           <div className="mt-3 space-y-2">
             {selectedStudentSchedules.length > 0 ? selectedStudentSchedules.slice(0, 3).map((schedule) => (
-              <div key={schedule.id} className="rounded-xl bg-slate-50 px-3 py-2">
-                <p className="text-sm font-medium text-slate-900">{schedule.title}</p>
-                <p className="mt-0.5 text-xs text-slate-500">
+              <div key={schedule.id} className={cn("rounded-xl px-3 py-2", themeClass.surfaceTertiary)}>
+                <p className={cn("text-sm font-medium", themeClass.textPrimary)}>{schedule.title}</p>
+                <p className={cn("mt-0.5 text-xs", themeClass.textSecondary)}>
                   {schedule.instructorName || "담당 미지정"} · {schedule.startTime.slice(0, 5)}-{schedule.endTime.slice(0, 5)}
                 </p>
               </div>
             )) : (
-              <p className="text-sm text-slate-500">아직 연결된 수업이 없습니다.</p>
+              <p className={cn("text-sm", themeClass.textSecondary)}>아직 연결된 수업이 없습니다.</p>
             )}
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-600">연결 프로젝트</p>
+        <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
+          <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>연결 프로젝트</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {relatedProjects.length > 0 ? relatedProjects.slice(0, 4).map((project) => (
               <button
@@ -1650,32 +1853,81 @@ export function StudentsPage() {
                 </Badge>
               </button>
             )) : (
-              <p className="text-sm text-slate-500">아직 연결된 프로젝트가 없습니다.</p>
+              <p className={cn("text-sm", themeClass.textSecondary)}>아직 연결된 프로젝트가 없습니다.</p>
             )}
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-600">관련 케이스 바로가기</p>
+        <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
+          <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>관련 케이스 바로가기</p>
           <div className="mt-3 space-y-2">
             {selectedStudentCases.length > 0 ? selectedStudentCases.slice(0, 3).map((item: any) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => orgPrefix && navigate(`/${orgPrefix}/cases/${item.id}`)}
-                className="w-full rounded-xl bg-slate-50 px-3 py-2 text-left"
+                className={cn("w-full rounded-xl px-3 py-2 text-left", themeClass.surfaceTertiary)}
               >
-                <p className="text-sm font-medium text-slate-900">{item.title}</p>
-                <p className="mt-0.5 text-xs text-slate-500">{item.identifier ?? item.type ?? "케이스"}</p>
+                <p className={cn("text-sm font-medium", themeClass.textPrimary)}>{item.title}</p>
+                <p className={cn("mt-0.5 text-xs", themeClass.textSecondary)}>{item.identifier ?? item.type ?? "케이스"}</p>
               </button>
             )) : (
-              <p className="text-sm text-slate-500">관련 케이스가 없습니다.</p>
+              <p className={cn("text-sm", themeClass.textSecondary)}>관련 케이스가 없습니다.</p>
             )}
+          </div>
+        </div>
+
+        <div className={cn("rounded-2xl border p-4", themeClass.surfaceMuted)}>
+          <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>바로 실행</p>
+          <div className="mt-3 flex flex-col gap-2">
+            <Button
+              size="sm"
+              className="justify-start border-0 text-white"
+              style={{ backgroundColor: "var(--color-teal-500)" }}
+              disabled={createStudentCaseMutation.isPending}
+              onClick={() =>
+                createStudentCaseMutation.mutate({
+                  type: "inquiry",
+                  title: `${selectedStudent.name} 보호자 상담 팔로업`,
+                  description: [
+                    `학생: ${selectedStudent.name} (${selectedStudent.grade})`,
+                    `보호자: ${primaryGuardian?.name ?? "미등록"}${primaryGuardian?.phone ? ` / ${formatPhone(primaryGuardian.phone)}` : ""}`,
+                    `결제 수단: ${billingSummary(selectedStudent.billing)}`,
+                    "메모: 보호자 연락 후 상담 및 안내 필요",
+                  ].join("\n"),
+                })
+              }
+            >
+              <MessageSquare className="mr-1 h-4 w-4" />
+              보호자 상담 케이스 생성
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="justify-start"
+              disabled={createStudentCaseMutation.isPending}
+              onClick={() =>
+                createStudentCaseMutation.mutate({
+                  type: "churn",
+                  title: `${selectedStudent.name} 출결/이탈 위험 점검`,
+                  description: [
+                    `학생: ${selectedStudent.name} (${selectedStudent.grade})`,
+                    `이탈 위험: ${selectedStudent.riskPercent}%`,
+                    `출결: 결석 ${attendanceSummary.absent}회 / 지각 ${attendanceSummary.late}회 / 공결 ${attendanceSummary.excused}회`,
+                    `기존 관련 케이스: ${selectedStudentCases.length}건`,
+                  ].join("\n"),
+                })
+              }
+            >
+              <AlertTriangle className="mr-1 h-4 w-4" />
+              출결/이탈 점검 케이스 생성
+            </Button>
           </div>
         </div>
       </div>
     )
   }, [
+    createStudentCaseMutation.isPending,
     navigate,
     orgPrefix,
     atRiskStudents.length,
@@ -1710,6 +1962,20 @@ export function StudentsPage() {
     return () => setPanelContent(null)
   }, [panelContentKey, setPanelContent])
 
+  function openStudentDetail(studentId: string) {
+    setSelectedStudentId(studentId)
+    if (orgPrefix) {
+      navigate(`/${orgPrefix}/students/${studentId}`)
+    }
+  }
+
+  function closeStudentDetail() {
+    setSelectedStudentId(null)
+    if (orgPrefix) {
+      navigate(`/${orgPrefix}/students`)
+    }
+  }
+
   function handleSort(key: SortKey) {
     setSortState((current) => {
       if (current.key !== key) return { key, direction: "asc" }
@@ -1736,21 +2002,21 @@ export function StudentsPage() {
     ]
 
     return (
-      <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+      <div className={cn("overflow-hidden rounded-3xl border", themeClass.surface)}>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
-            <thead className="bg-slate-50">
-              <tr className="border-b border-slate-200">
+            <thead className={themeClass.surfaceTertiary}>
+              <tr className="border-b border-[var(--border-default)]">
                 {columns.map((column) => {
                   const isActive = sortState.key === column.key
                   return (
-                    <th key={column.key} className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-500">
+                    <th key={column.key} className={cn("px-4 py-3 text-left text-xs font-semibold tracking-wide", themeClass.textSecondary)}>
                       <button
                         type="button"
                         onClick={() => handleSort(column.key)}
                         className={cn(
                           "inline-flex items-center gap-1.5 transition-colors",
-                          isActive ? "text-slate-900" : "hover:text-slate-700"
+                          isActive ? themeClass.textPrimary : "hover:text-[var(--text-primary)]"
                         )}
                       >
                         {column.label}
@@ -1759,38 +2025,53 @@ export function StudentsPage() {
                     </th>
                   )
                 })}
-                <th className="px-4 py-3 text-left text-xs font-semibold tracking-wide text-slate-500">액션</th>
+                <th className={cn("px-4 py-3 text-left text-xs font-semibold tracking-wide", themeClass.textSecondary)}>액션</th>
               </tr>
             </thead>
             <tbody>
               {filteredStudents.map((student) => {
                 const tone = riskTone(student.riskPercent)
                 const classCount = countStudentSchedules(student, schedules)
+                const relatedCaseCount = cases.filter((item: any) => String(item.studentId ?? "") === student.id).length
+                const opsAlerts = studentOpsAlerts(student, relatedCaseCount)
                 return (
                   <tr
                     key={student.id}
                     className={cn(
-                      "cursor-pointer border-b border-slate-100 transition-colors last:border-b-0",
+                      "cursor-pointer border-b transition-colors last:border-b-0",
+                      "border-[var(--border-default)]",
                       tone.row,
                       selectedStudentId === student.id && "ring-2 ring-teal-500/40"
                     )}
-                    onClick={() => setSelectedStudentId(student.id)}
+                    onClick={() => openStudentDetail(student.id)}
                   >
-                    <td className="px-4 py-4 text-sm font-semibold text-slate-900">{student.name}</td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{student.grade}</td>
-                    <td className="px-4 py-4 text-sm text-slate-600">{maskPhone(student.primaryPhone)}</td>
-                    <td className="px-4 py-4 text-sm text-slate-600">{student.registeredAt}</td>
-                    <td className="px-4 py-4 text-sm text-slate-700">{classCount}</td>
+                    <td className="px-4 py-4">
+                      <div className={cn("text-sm font-semibold", themeClass.textPrimary)}>{student.name}</div>
+                      <div className={cn("mt-1 text-xs", themeClass.textSecondary)}>
+                        보호자 {student.parents.length || (student.parent ? 1 : 0)}명 · {paymentMethodLabel(student.billing.paymentMethod)} · 프로젝트 {projectCountByStudentId.get(student.id) ?? 0}건
+                      </div>
+                      {opsAlerts.length > 0 ? (
+                        <div className="mt-2 flex flex-wrap gap-1.5">
+                          {opsAlerts.slice(0, 2).map((alert) => (
+                            <Badge key={alert} className="border-amber-200 bg-amber-50 text-amber-700">{alert}</Badge>
+                          ))}
+                        </div>
+                      ) : null}
+                    </td>
+                    <td className={cn("px-4 py-4 text-sm", themeClass.textPrimary)}>{student.grade}</td>
+                    <td className={cn("px-4 py-4 text-sm", themeClass.textSecondary)}>{maskPhone(student.primaryPhone)}</td>
+                    <td className={cn("px-4 py-4 text-sm", themeClass.textSecondary)}>{student.registeredAt}</td>
+                    <td className={cn("px-4 py-4 text-sm", themeClass.textPrimary)}>{classCount}</td>
                     <td className="min-w-44 px-4 py-4">
                       <RiskBar score={student.riskPercent} />
                     </td>
                     <td className="px-4 py-4">
-                      <Badge className={cn("border", student.shuttle ? "border-teal-200 bg-teal-50 text-teal-700" : "border-slate-200 bg-slate-50 text-slate-600")}>
+                      <Badge className="border-0" style={student.shuttle ? { backgroundColor: "var(--color-primary-bg)", color: "var(--color-teal-500)" } : { backgroundColor: "var(--bg-tertiary)", color: "var(--text-tertiary)" }}>
                         {student.shuttle ? "탑승" : "미탑승"}
                       </Badge>
                     </td>
                     <td className="px-4 py-4">
-                      <Badge className={cn("border", statusBadgeClass(student.status))}>
+                      <Badge className="border-0" style={statusBadgeStyle(student.status)}>
                         {statusLabel(student.status)}
                       </Badge>
                     </td>
@@ -1800,7 +2081,7 @@ export function StudentsPage() {
                         size="sm"
                         onClick={(event) => {
                           event.stopPropagation()
-                          setSelectedStudentId(student.id)
+                          openStudentDetail(student.id)
                         }}
                       >
                         상세보기
@@ -1826,45 +2107,63 @@ export function StudentsPage() {
         {filteredStudents.map((student) => {
           const classCount = countStudentSchedules(student, schedules)
           const tone = riskTone(student.riskPercent)
+          const opsAlerts = studentOpsAlerts(student)
           return (
             <button
               key={student.id}
               type="button"
-              onClick={() => setSelectedStudentId(student.id)}
+              onClick={() => openStudentDetail(student.id)}
               className="text-left"
             >
-              <Card className="h-full gap-4 border-slate-200 bg-white py-5 transition-transform hover:-translate-y-0.5 hover:shadow-md">
+              <Card className={cn("h-full gap-4 py-5 transition-transform hover:-translate-y-0.5 hover:shadow-md", themeClass.surface)}>
                 <div className="flex items-start justify-between gap-3 px-5">
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="text-base font-semibold text-slate-900">{student.name}</h3>
-                      <Badge className={cn("border", statusBadgeClass(student.status))}>{statusLabel(student.status)}</Badge>
+                      <h3 className={cn("text-base font-semibold", themeClass.textPrimary)}>{student.name}</h3>
+                      <Badge className="border-0" style={statusBadgeStyle(student.status)}>{statusLabel(student.status)}</Badge>
                     </div>
-                    <p className="mt-1 text-sm text-slate-500">{student.grade} · 등록일 {student.registeredAt}</p>
+                    <p className={cn("mt-1 text-sm", themeClass.textSecondary)}>{student.grade} · 등록일 {student.registeredAt}</p>
                   </div>
-                  <Badge className={cn("border", student.shuttle ? "border-teal-200 bg-teal-50 text-teal-700" : "border-slate-200 bg-slate-50 text-slate-600")}>
+                  <Badge className="border-0" style={student.shuttle ? { backgroundColor: "var(--color-primary-bg)", color: "var(--color-teal-500)" } : { backgroundColor: "var(--bg-tertiary)", color: "var(--text-tertiary)" }}>
                     {student.shuttle ? "차량 탑승" : "차량 미탑승"}
                   </Badge>
                 </div>
 
                 <div className="space-y-4 px-5">
-                  <div className="rounded-2xl bg-slate-50 p-4">
+                  <div className={cn("rounded-2xl p-4", themeClass.surfaceTertiary)}>
                     <div className="mb-2 flex items-center justify-between">
-                      <span className="text-xs font-medium text-slate-500">이탈 위험</span>
+                      <span className={cn("text-xs font-medium", themeClass.textSecondary)}>이탈 위험</span>
                       <span className={cn("text-xs font-semibold", tone.text)}>{student.riskPercent}%</span>
                     </div>
                     <RiskBar score={student.riskPercent} />
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-2xl border border-slate-200 p-4">
-                      <p className="text-xs text-slate-500">연락처</p>
-                      <p className="mt-1 text-sm font-medium text-slate-900">{maskPhone(student.primaryPhone)}</p>
+                    <div className={cn("rounded-2xl border p-4", themeClass.surfaceMuted)}>
+                      <p className={cn("text-xs", themeClass.textSecondary)}>연락처</p>
+                      <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{maskPhone(student.primaryPhone)}</p>
                     </div>
-                    <div className="rounded-2xl border border-slate-200 p-4">
-                      <p className="text-xs text-slate-500">수업 수</p>
-                      <p className="mt-1 text-sm font-medium text-slate-900">{classCount}</p>
+                    <div className={cn("rounded-2xl border p-4", themeClass.surfaceMuted)}>
+                      <p className={cn("text-xs", themeClass.textSecondary)}>수업 수</p>
+                      <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{classCount}</p>
                     </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <Badge variant="outline" className="border-[var(--border-default)] bg-[var(--bg-secondary)] text-[var(--text-secondary)]">
+                      보호자 {student.parents.length || (student.parent ? 1 : 0)}명
+                    </Badge>
+                    <Badge variant="outline" className="border-[var(--border-default)] bg-[var(--bg-secondary)] text-[var(--text-secondary)]">
+                      {paymentMethodLabel(student.billing.paymentMethod)}
+                    </Badge>
+                    <Badge variant="outline" className="border-[var(--border-default)] bg-[var(--bg-secondary)] text-[var(--text-secondary)]">
+                      프로젝트 {projectCountByStudentId.get(student.id) ?? 0}건
+                    </Badge>
+                    {opsAlerts.slice(0, 2).map((alert) => (
+                      <Badge key={alert} className="border-amber-200 bg-amber-50 text-amber-700">
+                        {alert}
+                      </Badge>
+                    ))}
                   </div>
                 </div>
               </Card>
@@ -1878,22 +2177,34 @@ export function StudentsPage() {
   return (
     <>
       <div className="overflow-y-auto flex-1">
-        <div className="bg-[radial-gradient(circle_at_top_left,_rgba(13,148,136,0.10),_transparent_28%),linear-gradient(180deg,#f8fafc_0%,#eef6f7_100%)]">
+        <div
+          style={{
+            background:
+              "radial-gradient(circle at top left, color-mix(in srgb, var(--color-teal-500) 12%, transparent), transparent 28%), linear-gradient(180deg, var(--bg-primary) 0%, var(--bg-secondary) 100%)",
+          }}
+        >
           <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-5 py-6">
             <div className="rounded-3xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-800 shadow-sm">
               학생 개인정보는 마스킹 처리되어 표시됩니다. 상세 패널에서도 최소 정보만 노출합니다.
             </div>
 
-            <section className="rounded-[28px] border border-slate-200 bg-white/90 p-5 shadow-sm backdrop-blur">
+            <section
+              className="rounded-[28px] border p-5 backdrop-blur"
+              style={{
+                borderColor: "var(--border-default)",
+                backgroundColor: "color-mix(in srgb, var(--bg-elevated) 90%, transparent)",
+                boxShadow: "var(--shadow-sm)",
+              }}
+            >
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--text-primary)] text-[var(--bg-elevated)]">
                       <GraduationCap className="h-5 w-5" />
                     </div>
                     <div>
-                      <h1 className="text-2xl font-semibold tracking-tight text-slate-950">학생 관리</h1>
-                      <p className="mt-1 text-sm text-slate-500">
+                      <h1 className={cn("text-2xl font-semibold tracking-tight", themeClass.textPrimary)}>학생 관리</h1>
+                      <p className={cn("mt-1 text-sm", themeClass.textSecondary)}>
                         총 {students.length}명 · 현재 표시 {filteredStudents.length}명
                       </p>
                     </div>
@@ -1901,11 +2212,11 @@ export function StudentsPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                  <div className={cn("inline-flex rounded-2xl border p-1", themeClass.surfaceMuted)}>
                     <Button
                       size="sm"
                       variant={viewMode === "table" ? "default" : "ghost"}
-                      className={cn(viewMode === "table" ? "bg-slate-900 text-white hover:bg-slate-800" : "text-slate-600")}
+                      className={cn(viewMode === "table" ? "bg-[var(--text-primary)] text-[var(--bg-elevated)] hover:opacity-90" : themeClass.textSecondary)}
                       onClick={() => setViewMode("table")}
                     >
                       <Table2 className="h-4 w-4" />
@@ -1914,7 +2225,7 @@ export function StudentsPage() {
                     <Button
                       size="sm"
                       variant={viewMode === "card" ? "default" : "ghost"}
-                      className={cn(viewMode === "card" ? "bg-slate-900 text-white hover:bg-slate-800" : "text-slate-600")}
+                      className={cn(viewMode === "card" ? "bg-[var(--text-primary)] text-[var(--bg-elevated)] hover:opacity-90" : themeClass.textSecondary)}
                       onClick={() => setViewMode("card")}
                     >
                       <Grid2x2 className="h-4 w-4" />
@@ -1926,7 +2237,7 @@ export function StudentsPage() {
                     <Upload className="h-4 w-4" />
                     CSV 가져오기
                   </Button>
-                  <Button className="bg-teal-600 text-white hover:bg-teal-700" onClick={() => setShowNewDialog(true)}>
+                  <Button className="border-0 text-white" style={{ backgroundColor: "var(--color-teal-500)" }} onClick={() => setShowNewDialog(true)}>
                     <Plus className="h-4 w-4" />
                     학생 등록
                   </Button>
@@ -1935,12 +2246,12 @@ export function StudentsPage() {
 
               <div className="mt-5 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <Search className={cn("absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2", themeClass.textTertiary)} />
                   <Input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="이름 / 학년 / 상태 검색"
-                    className="h-11 rounded-2xl border-slate-200 bg-slate-50 pl-10"
+                    className="h-11 rounded-2xl border-[var(--border-default)] bg-[var(--bg-secondary)] pl-10 text-[var(--text-primary)]"
                   />
                 </div>
 
@@ -1953,8 +2264,8 @@ export function StudentsPage() {
                       className={cn(
                         "rounded-full",
                         gradeFilter === filterValue
-                          ? "bg-slate-900 text-white hover:bg-slate-800"
-                          : "border-slate-200 text-slate-600"
+                          ? "bg-[var(--text-primary)] text-[var(--bg-elevated)] hover:opacity-90"
+                          : "border-[var(--border-default)] text-[var(--text-secondary)]"
                       )}
                       onClick={() => setGradeFilter(filterValue)}
                     >
@@ -1967,7 +2278,7 @@ export function StudentsPage() {
 
             {viewMode === "table" && atRiskStudents.length > 0 && (
               <div className="flex items-center gap-3 rounded-3xl border border-orange-200 bg-orange-50 px-5 py-4 text-orange-900 shadow-sm">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--bg-elevated)]">
                   <AlertTriangle className="h-5 w-5 text-orange-500" />
                 </div>
                 <div>
@@ -1977,10 +2288,25 @@ export function StudentsPage() {
               </div>
             )}
 
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className={cn("rounded-3xl border px-5 py-4", themeClass.surface)}>
+                <p className={cn("text-xs", themeClass.textSecondary)}>보호자 보완 필요</p>
+                <p className={cn("mt-1 text-xl font-semibold", themeClass.textPrimary)}>{guardianAttentionCount}명</p>
+              </div>
+              <div className={cn("rounded-3xl border px-5 py-4", themeClass.surface)}>
+                <p className={cn("text-xs", themeClass.textSecondary)}>결제 레코드 보완</p>
+                <p className={cn("mt-1 text-xl font-semibold", themeClass.textPrimary)}>{billingAttentionCount}명</p>
+              </div>
+              <div className={cn("rounded-3xl border px-5 py-4", themeClass.surface)}>
+                <p className={cn("text-xs", themeClass.textSecondary)}>이탈 위험 학생</p>
+                <p className={cn("mt-1 text-xl font-semibold", themeClass.textPrimary)}>{atRiskStudents.length}명</p>
+              </div>
+            </div>
+
             <section>
               {studentsQuery.isLoading ? (
-                <div className="flex min-h-[320px] items-center justify-center rounded-3xl border border-slate-200 bg-white">
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                <div className={cn("flex min-h-[320px] items-center justify-center rounded-3xl border", themeClass.surface)}>
+                  <div className={cn("flex items-center gap-2 text-sm", themeClass.textSecondary)}>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     학생 목록을 불러오는 중입니다.
                   </div>
@@ -2000,7 +2326,7 @@ export function StudentsPage() {
       <StudentDetailSheet
         open={Boolean(selectedStudentId)}
         onOpenChange={(open) => {
-          if (!open) setSelectedStudentId(null)
+          if (!open) closeStudentDetail()
         }}
         student={selectedStudent}
         orgId={selectedOrgId}

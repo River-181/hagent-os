@@ -1,12 +1,13 @@
 // v0.4.0
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { usePanel } from "@/context/PanelContext"
 import { schedulesApi } from "@/api/schedules"
 import { casesApi } from "@/api/cases"
+import { instructorsApi } from "@/api/students"
 import { api } from "@/api/client"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
@@ -38,6 +39,7 @@ interface ScheduleItem {
     subject: string
   } | null
   instructorName?: string | null
+  instructorRole?: string | null
   instructorStatus?: string | null
   instructorSubject?: string | null
   studentCount?: number
@@ -46,11 +48,20 @@ interface ScheduleItem {
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
 const DAYS_KO = ["일", "월", "화", "수", "목", "금", "토"]
-const WEEK_DAYS = ["월", "화", "수", "목", "금", "토"]
-const HOURS = [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19]
+const WEEK_DAYS = ["월", "화", "수", "목", "금", "토", "일"]
+const DAY_START_MINUTES = 6 * 60
+const DAY_END_MINUTES = 24 * 60
+const SLOT_MINUTES = 15
+const SLOT_HEIGHT = 18
+const TIME_SLOTS = Array.from({ length: (DAY_END_MINUTES - DAY_START_MINUTES) / SLOT_MINUTES }, (_, index) => {
+  const totalMinutes = DAY_START_MINUTES + index * SLOT_MINUTES
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`
+})
 
-// dayOfWeek: 1=월,2=화,3=수,4=목,5=금,6=토 (matching seed data convention)
-const DAY_INDEX_MAP: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5 }
+// dayOfWeek: 1=월,2=화,3=수,4=목,5=금,6=토,0=일 (matching seed data convention)
+const DAY_INDEX_MAP: Record<number, number> = { 1: 0, 2: 1, 3: 2, 4: 3, 5: 4, 6: 5, 0: 6 }
 
 // ─── Type color config ─────────────────────────────────────────────────────────
 
@@ -72,6 +83,19 @@ function getTypeColor(type: string) {
   return TYPE_COLORS[type] ?? TYPE_COLORS.regular
 }
 
+function instructorRoleLabel(role: string | null | undefined) {
+  switch (role) {
+    case "teacher":
+      return "강사"
+    case "staff":
+      return "직원"
+    case "hybrid":
+      return "운영+강의"
+    default:
+      return "직원/강사"
+  }
+}
+
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -87,13 +111,117 @@ function formatTimeRange(start: string, end: string): string {
   return `${start.substring(0, 5)} – ${end.substring(0, 5)}`
 }
 
+function addMinutesToTime(time: string, minutesToAdd: number): string {
+  const [hoursRaw, minutesRaw] = time.split(":")
+  const hours = Number(hoursRaw)
+  const minutes = Number(minutesRaw)
+  const total = hours * 60 + minutes + minutesToAdd
+  const normalized = ((total % (24 * 60)) + 24 * 60) % (24 * 60)
+  const nextHours = Math.floor(normalized / 60)
+  const nextMinutes = normalized % 60
+  return `${String(nextHours).padStart(2, "0")}:${String(nextMinutes).padStart(2, "0")}`
+}
+
+function timeToMinutes(time: string): number {
+  const [hoursRaw, minutesRaw] = time.split(":")
+  return Number(hoursRaw) * 60 + Number(minutesRaw)
+}
+
+function minutesToTime(totalMinutes: number): string {
+  const normalized = ((totalMinutes % (24 * 60)) + 24 * 60) % (24 * 60)
+  const hours = Math.floor(normalized / 60)
+  const minutes = normalized % 60
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`
+}
+
+type PositionedSchedule = ScheduleItem & {
+  startMinutes: number
+  endMinutes: number
+  columnIndex: number
+  columnCount: number
+  top: number
+  height: number
+}
+
+function overlaps(a: { startMinutes: number; endMinutes: number }, b: { startMinutes: number; endMinutes: number }) {
+  return a.startMinutes < b.endMinutes && b.startMinutes < a.endMinutes
+}
+
+function scheduleDurationMinutes(item: Pick<ScheduleItem, "startTime" | "endTime">) {
+  return Math.max(SLOT_MINUTES, timeToMinutes(item.endTime) - timeToMinutes(item.startTime))
+}
+
+function isLongSpanSchedule(item: Pick<ScheduleItem, "type" | "startTime" | "endTime">) {
+  return item.type === "leave" || scheduleDurationMinutes(item) >= 4 * 60
+}
+
+function layoutDaySchedules(items: ScheduleItem[]) {
+  const normalized = items
+    .map((item) => {
+      const startMinutes = Math.max(DAY_START_MINUTES, timeToMinutes(item.startTime))
+      const endMinutes = Math.max(startMinutes + SLOT_MINUTES, Math.min(DAY_END_MINUTES, timeToMinutes(item.endTime)))
+      return {
+        ...item,
+        startMinutes,
+        endMinutes,
+      }
+    })
+    .sort((a, b) => a.startMinutes - b.startMinutes || a.endMinutes - b.endMinutes)
+
+  const groups: Array<Array<typeof normalized[number]>> = []
+  let currentGroup: Array<typeof normalized[number]> = []
+  let currentGroupEnd = -1
+
+  for (const item of normalized) {
+    if (currentGroup.length === 0 || item.startMinutes < currentGroupEnd) {
+      currentGroup.push(item)
+      currentGroupEnd = Math.max(currentGroupEnd, item.endMinutes)
+      continue
+    }
+    groups.push(currentGroup)
+    currentGroup = [item]
+    currentGroupEnd = item.endMinutes
+  }
+  if (currentGroup.length > 0) groups.push(currentGroup)
+
+  const positioned: PositionedSchedule[] = []
+
+  for (const group of groups) {
+    const columnEndTimes: number[] = []
+    const assigned: Array<(typeof group)[number] & { columnIndex: number }> = []
+
+    for (const item of group) {
+      let columnIndex = columnEndTimes.findIndex((endMinutes) => endMinutes <= item.startMinutes)
+      if (columnIndex === -1) {
+        columnIndex = columnEndTimes.length
+        columnEndTimes.push(item.endMinutes)
+      } else {
+        columnEndTimes[columnIndex] = item.endMinutes
+      }
+      assigned.push({ ...item, columnIndex })
+    }
+
+    const columnCount = Math.max(columnEndTimes.length, 1)
+    for (const item of assigned) {
+      positioned.push({
+        ...item,
+        columnCount,
+        top: ((item.startMinutes - DAY_START_MINUTES) / SLOT_MINUTES) * SLOT_HEIGHT,
+        height: Math.max(SLOT_HEIGHT, ((item.endMinutes - item.startMinutes) / SLOT_MINUTES) * SLOT_HEIGHT),
+      })
+    }
+  }
+
+  return positioned
+}
+
 function getWeekDates(baseDate: Date): Date[] {
-  // Returns Mon–Sat of the week containing baseDate
+  // Returns Mon–Sun of the week containing baseDate
   const day = baseDate.getDay() // 0=Sun
   const monday = new Date(baseDate)
   const offset = day === 0 ? -6 : 1 - day
   monday.setDate(baseDate.getDate() + offset)
-  return Array.from({ length: 6 }, (_, i) => {
+  return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
     return d
@@ -146,6 +274,7 @@ interface InstructorOption {
   id: string
   name: string
   subject: string
+  role?: string | null
 }
 
 interface StudentScheduleRow {
@@ -163,10 +292,12 @@ function ScheduleDetailDialog({
   schedule,
   open,
   onClose,
+  startInEditMode = false,
 }: {
   schedule: ScheduleItem | null
   open: boolean
   onClose: () => void
+  startInEditMode?: boolean
 }) {
   const { selectedOrgId } = useOrganization()
   const queryClient = useQueryClient()
@@ -231,6 +362,19 @@ function ScheduleDetailDialog({
     setEditInstructorId(schedule.instructorId ?? "")
     setIsEditing(true)
   }
+
+  useEffect(() => {
+    if (!schedule || !open) return
+    setEditTitle(schedule.title)
+    setEditType(schedule.type)
+    setEditDayOfWeek(schedule.dayOfWeek)
+    setEditStartTime(schedule.startTime.substring(0, 5))
+    setEditEndTime(schedule.endTime.substring(0, 5))
+    setEditRoom(schedule.room ?? "")
+    setEditInstructorId(schedule.instructorId ?? "")
+    setConfirmDelete(false)
+    setIsEditing(startInEditMode)
+  }, [open, schedule?.id, schedule?.instructorId, schedule?.title, schedule?.type, schedule?.dayOfWeek, schedule?.startTime, schedule?.endTime, schedule?.room, startInEditMode])
 
   const handleSave = () => {
     updateMutation.mutate({
@@ -383,7 +527,46 @@ function ScheduleDetailDialog({
                   <span className="text-sm font-medium" style={{ color: "var(--color-teal-500)" }}>
                     {schedule.instructor.name}
                   </span>
-                  <span className="text-xs ml-auto" style={{ color: "var(--text-tertiary)" }}>{schedule.instructor.subject}</span>
+                  <span className="text-xs ml-auto" style={{ color: "var(--text-tertiary)" }}>
+                    {instructorRoleLabel(schedule.instructorRole)} · {schedule.instructor.subject}
+                  </span>
+                </div>
+              )}
+              {!isShuttle && !isLeave && (
+                <div className="px-4 py-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
+                  <p className="text-xs font-medium mb-2" style={{ color: "var(--text-tertiary)" }}>담당 직원/강사 빠른 변경</p>
+                  <div className="flex flex-col gap-2">
+                    <select value={editInstructorId} onChange={e => setEditInstructorId(e.target.value)}
+                      className="w-full px-3 py-2 rounded-lg text-sm" style={inputStyle}>
+                      <option value="">직원/강사 미지정</option>
+                      {instructors.map(inst => (
+                        <option key={inst.id} value={inst.id}>{inst.name} ({inst.subject})</option>
+                      ))}
+                    </select>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        disabled={updateMutation.isPending || editInstructorId === (schedule.instructorId ?? "")}
+                        onClick={() => updateMutation.mutate({ instructorId: editInstructorId || null })}
+                        className="text-xs text-white"
+                        style={{ backgroundColor: "var(--color-teal-500)" }}
+                      >
+                        {updateMutation.isPending ? <Loader2 size={13} className="animate-spin mr-1" /> : null}
+                        담당 저장
+                      </Button>
+                      {schedule.instructorId ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => updateMutation.mutate({ instructorId: null })}
+                          disabled={updateMutation.isPending}
+                          className="text-xs"
+                        >
+                          담당 해제
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
                 </div>
               )}
               {schedule.room && (
@@ -596,149 +779,408 @@ function WeeklyView({
   schedules,
   weekDates,
   onSelectSchedule,
+  onMoveSchedule,
+  onResizeSchedule,
 }: {
   schedules: ScheduleItem[]
   weekDates: Date[]
   onSelectSchedule: (s: ScheduleItem) => void
+  onMoveSchedule: (scheduleId: string, dayOfWeek: number, nextStartTime: string) => void
+  onResizeSchedule: (scheduleId: string, boundary: "start" | "end", nextTime: string) => void
 }) {
   const today = new Date()
+  const [draggedOperation, setDraggedOperation] = useState<{ scheduleId: string; type: "move" | "resize-start" | "resize-end" } | null>(null)
+  const scrollRef = useRef<HTMLDivElement | null>(null)
+  const totalHeight = TIME_SLOTS.length * SLOT_HEIGHT
+  const todayDow = today.getDay() === 0 ? 0 : today.getDay()
+  const currentMinutes = today.getHours() * 60 + today.getMinutes()
+  const currentLineTop = ((currentMinutes - DAY_START_MINUTES) / SLOT_MINUTES) * SLOT_HEIGHT
+  const todayRangeVisible = currentMinutes >= DAY_START_MINUTES && currentMinutes <= DAY_END_MINUTES
 
-  const getBlocksForCell = (dayOfWeek: number, hour: number) =>
-    schedules.filter((s) => {
-      const dow = s.dayOfWeek
-      const startH = parseHour(s.startTime)
-      return dow === dayOfWeek && startH === hour
-    })
+  const dayLayouts = useMemo(
+    () =>
+      weekDates.map((_, idx) => {
+        const dayOfWeek = idx === 6 ? 0 : idx + 1
+        const dayItems = schedules.filter((item) => item.dayOfWeek === dayOfWeek)
+        return {
+          dayOfWeek,
+          backgroundEvents: layoutDaySchedules(dayItems.filter((item) => isLongSpanSchedule(item))),
+          foregroundEvents: layoutDaySchedules(dayItems.filter((item) => !isLongSpanSchedule(item))),
+        }
+      }),
+    [schedules, weekDates],
+  )
+
+  useEffect(() => {
+    const container = scrollRef.current
+    if (!container) return
+    const first = weekDates[0]
+    const last = weekDates[weekDates.length - 1]
+    const withinCurrentWeek = today >= first && today <= last
+    const targetMinutes = withinCurrentWeek ? currentMinutes : 15 * 60
+    const targetTop = Math.max(0, ((targetMinutes - DAY_START_MINUTES) / SLOT_MINUTES) * SLOT_HEIGHT - 220)
+    container.scrollTop = targetTop
+  }, [currentMinutes, weekDates])
+
+  const resolveDropTime = (container: HTMLDivElement, clientY: number) => {
+    const rect = container.getBoundingClientRect()
+    const relativeY = Math.min(Math.max(clientY - rect.top, 0), totalHeight)
+    const snappedMinutes = Math.round(relativeY / SLOT_HEIGHT) * SLOT_MINUTES + DAY_START_MINUTES
+    const clampedMinutes = Math.min(Math.max(snappedMinutes, DAY_START_MINUTES), DAY_END_MINUTES)
+    return minutesToTime(clampedMinutes)
+  }
 
   return (
     <div
+      ref={scrollRef}
       className="rounded-xl overflow-auto"
       style={{
         border: "1px solid var(--border-default)",
         boxShadow: "var(--shadow-sm)",
       }}
     >
-      <table className="border-collapse min-w-[640px] w-full">
-        <thead>
-          <tr>
-            <th
-              className="w-16 px-3 py-2 text-xs text-left"
-              style={{
-                backgroundColor: "var(--bg-secondary)",
-                color: "var(--text-tertiary)",
-                borderBottom: "1px solid var(--border-default)",
-              }}
-            >
-              시간
-            </th>
-            {weekDates.map((date, idx) => {
-              const isToday = isSameDay(date, today)
-              const dow = idx + 1 // 1=Mon ... 6=Sat
-              return (
-                <th
-                  key={dow}
-                  className="px-2 py-2 text-xs font-semibold text-center"
-                  style={{
-                    backgroundColor: isToday ? "rgba(20,184,166,0.06)" : "var(--bg-secondary)",
-                    color: isToday ? "#0f766e" : "var(--text-secondary)",
-                    borderBottom: "1px solid var(--border-default)",
-                    borderLeft: "1px solid var(--border-default)",
-                    minWidth: 110,
-                  }}
-                >
-                  <div>{WEEK_DAYS[idx]}</div>
-                  <div
-                    className={cn(
-                      "inline-flex items-center justify-center w-6 h-6 rounded-full text-xs mt-0.5",
-                      isToday && "font-bold"
-                    )}
-                    style={{
-                      backgroundColor: isToday ? "#14b8a6" : "transparent",
-                      color: isToday ? "#fff" : "inherit",
-                    }}
-                  >
-                    {date.getDate()}
-                  </div>
-                </th>
-              )
-            })}
-          </tr>
-        </thead>
-        <tbody>
-          {HOURS.map((hour) => (
-            <tr key={hour}>
-              <td
-                className="px-3 py-2 text-xs align-top"
+      <div className="min-w-[1080px]">
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: "84px repeat(7, minmax(150px, 1fr))",
+            backgroundColor: "var(--bg-secondary)",
+            borderBottom: "1px solid var(--border-default)",
+            position: "sticky",
+            top: 0,
+            zIndex: 20,
+          }}
+        >
+          <div
+            className="px-3 py-3 text-xs font-medium"
+            style={{ color: "var(--text-tertiary)", borderRight: "1px solid var(--border-default)" }}
+          >
+            시간
+          </div>
+          {weekDates.map((date, idx) => {
+            const isToday = isSameDay(date, today)
+            return (
+              <div
+                key={idx}
+                className="px-2 py-3 text-center"
                 style={{
-                  color: "var(--text-tertiary)",
-                  borderBottom: "1px solid var(--border-default)",
-                  backgroundColor: "var(--bg-secondary)",
-                  whiteSpace: "nowrap",
+                  borderLeft: idx > 0 ? "1px solid var(--border-default)" : undefined,
+                  backgroundColor: isToday ? "rgba(20,184,166,0.06)" : "var(--bg-secondary)",
+                  color: isToday ? "#0f766e" : "var(--text-secondary)",
                 }}
               >
-                {hour}:00
-              </td>
-              {weekDates.map((_, idx) => {
-                const dow = idx + 1
-                const blocks = getBlocksForCell(dow, hour)
-                return (
-                  <td
-                    key={dow}
-                    className="px-1.5 py-1.5 align-top"
-                    style={{
-                      borderBottom: "1px solid var(--border-default)",
-                      borderLeft: "1px solid var(--border-default)",
-                      backgroundColor: "var(--bg-elevated)",
-                      minHeight: 48,
-                    }}
-                  >
-                    {blocks.map((block) => {
-                      const colors = getTypeColor(block.type)
-                      const startH = parseHour(block.startTime)
-                      const endH = parseHour(block.endTime)
-                      const startM = parseMinute(block.startTime)
-                      const endM = parseMinute(block.endTime)
-                      const spanHours = (endH + endM / 60) - (startH + startM / 60)
+                <div className="text-xs font-semibold">{WEEK_DAYS[idx]}</div>
+                <div
+                  className="mt-1 inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold"
+                  style={{
+                    backgroundColor: isToday ? "#14b8a6" : "transparent",
+                    color: isToday ? "#fff" : "inherit",
+                  }}
+                >
+                  {date.getDate()}
+                </div>
+              </div>
+            )
+          })}
+        </div>
 
-                      return (
-                        <button
-                          key={block.id}
-                          onClick={() => onSelectSchedule(block)}
-                          className="w-full text-left rounded-md px-2 py-1.5 text-xs mb-1 transition-all duration-150 hover:shadow-sm hover:-translate-y-px focus:outline-none focus:ring-2 focus:ring-offset-1"
-                          style={{
-                            backgroundColor: colors.bg,
-                            color: colors.text,
-                            minHeight: spanHours > 1 ? `${spanHours * 3}rem` : undefined,
-                            border: `1px solid ${colors.dot}30`,
-                            display: "block",
-                          }}
-                        >
-                          <div className="flex items-center gap-1 font-semibold leading-tight">
-                            <span className="text-[10px]">{colors.icon}</span>
-                            <span className="truncate">{block.title}</span>
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: "84px repeat(7, minmax(150px, 1fr))",
+            minHeight: totalHeight,
+          }}
+        >
+          <div
+            className="relative"
+            style={{
+              height: totalHeight,
+              backgroundColor: "var(--bg-secondary)",
+              borderRight: "1px solid var(--border-default)",
+            }}
+          >
+            {TIME_SLOTS.map((slot) => {
+              const slotMinutes = timeToMinutes(slot)
+              const top = ((slotMinutes - DAY_START_MINUTES) / SLOT_MINUTES) * SLOT_HEIGHT
+              const hour = parseHour(slot)
+              const minute = parseMinute(slot)
+              return (
+                <div
+                  key={slot}
+                  className="absolute inset-x-0"
+                  style={{
+                    top,
+                    height: SLOT_HEIGHT,
+                    borderTop:
+                      minute === 0
+                        ? "1px solid rgba(100,116,139,0.35)"
+                        : minute === 30
+                          ? "1px solid rgba(148,163,184,0.12)"
+                          : "1px solid rgba(148,163,184,0.04)",
+                  }}
+                >
+                  {minute === 0 ? (
+                    <span
+                      className="absolute left-3 -translate-y-1/2 text-[11px] font-medium"
+                      style={{ top: 0, color: "var(--text-tertiary)" }}
+                    >
+                      {`${hour}:00`}
+                    </span>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+
+          {dayLayouts.map(({ dayOfWeek, backgroundEvents, foregroundEvents }, idx) => {
+            const isTodayColumn = todayDow === dayOfWeek && todayRangeVisible
+            return (
+              <div
+                key={dayOfWeek}
+                className="relative"
+                style={{
+                  height: totalHeight,
+                  borderLeft: idx > 0 ? "1px solid var(--border-default)" : undefined,
+                  backgroundColor: isTodayColumn ? "rgba(20,184,166,0.035)" : "var(--bg-elevated)",
+                }}
+                onDragOver={(event) => {
+                  if (!draggedOperation) return
+                  event.preventDefault()
+                }}
+                onDrop={(event) => {
+                  const rawType = event.dataTransfer.getData("application/hagent-drag-type") as "move" | "resize-start" | "resize-end" | ""
+                  const rawId = event.dataTransfer.getData("text/plain")
+                  const nextOperation = draggedOperation ?? (rawId
+                    ? { scheduleId: rawId, type: rawType || "move" }
+                    : null)
+                  if (!nextOperation) return
+                  event.preventDefault()
+                  const nextTime = resolveDropTime(event.currentTarget, event.clientY)
+                  if (nextOperation.type === "move") {
+                    onMoveSchedule(nextOperation.scheduleId, dayOfWeek, nextTime)
+                  } else if (nextOperation.type === "resize-start") {
+                    onResizeSchedule(nextOperation.scheduleId, "start", nextTime)
+                  } else {
+                    onResizeSchedule(nextOperation.scheduleId, "end", nextTime)
+                  }
+                  setDraggedOperation(null)
+                }}
+              >
+                {TIME_SLOTS.map((slot) => {
+                  const slotMinutes = timeToMinutes(slot)
+                  const top = ((slotMinutes - DAY_START_MINUTES) / SLOT_MINUTES) * SLOT_HEIGHT
+                  return (
+                    <div
+                      key={`${dayOfWeek}-${slot}`}
+                      className="absolute inset-x-0"
+                      style={{
+                        top,
+                        height: SLOT_HEIGHT,
+                        borderTop:
+                          parseMinute(slot) === 0
+                            ? "1px solid rgba(100,116,139,0.35)"
+                            : parseMinute(slot) === 30
+                              ? "1px solid rgba(148,163,184,0.12)"
+                              : "1px solid rgba(148,163,184,0.04)",
+                      }}
+                    />
+                  )
+                })}
+
+                {isTodayColumn ? (
+                  <>
+                    <div
+                      className="pointer-events-none absolute inset-x-0 z-10"
+                      style={{
+                        top: currentLineTop,
+                        borderTop: "2px solid #ef4444",
+                        boxShadow: "0 0 0 1px rgba(239,68,68,0.18)",
+                        zIndex: 4,
+                      }}
+                    />
+                    <span
+                      className="pointer-events-none absolute left-2 z-10 -translate-y-1/2 rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white"
+                      style={{ top: currentLineTop, backgroundColor: "#ef4444", zIndex: 5 }}
+                    >
+                      지금 {minutesToTime(currentMinutes)}
+                    </span>
+                  </>
+                ) : null}
+
+                {backgroundEvents.map((event) => {
+                  const colors = getTypeColor(event.type)
+                  const eventHeight = Math.max(event.height - 4, SLOT_HEIGHT * 2)
+                  return (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => onSelectSchedule(event)}
+                      className="absolute rounded-2xl text-left transition-colors focus:outline-none focus:ring-2"
+                      draggable
+                      onDragStart={(actionEvent) => {
+                        setDraggedOperation({ scheduleId: event.id, type: "move" })
+                        actionEvent.dataTransfer.effectAllowed = "move"
+                        actionEvent.dataTransfer.setData("text/plain", event.id)
+                        actionEvent.dataTransfer.setData("application/hagent-drag-type", "move")
+                      }}
+                      onDragEnd={() => setDraggedOperation(null)}
+                      style={{
+                        top: event.top + 2,
+                        left: 8,
+                        right: 8,
+                        height: eventHeight,
+                        background: `linear-gradient(180deg, ${colors.bg}cc 0%, ${colors.bg}80 100%)`,
+                        color: colors.text,
+                        border: `1px solid ${colors.dot}35`,
+                        boxShadow: "inset 0 1px 0 rgba(255,255,255,0.45)",
+                        overflow: "hidden",
+                        zIndex: 6,
+                        padding: "8px 10px",
+                        opacity: 0.78,
+                      }}
+                    >
+                      <span
+                        className="absolute inset-x-1 top-0 h-2 cursor-ns-resize rounded-full"
+                        draggable
+                        onClick={(actionEvent) => actionEvent.stopPropagation()}
+                        onDragStart={(actionEvent) => {
+                          actionEvent.stopPropagation()
+                          setDraggedOperation({ scheduleId: event.id, type: "resize-start" })
+                          actionEvent.dataTransfer.effectAllowed = "move"
+                          actionEvent.dataTransfer.setData("text/plain", event.id)
+                          actionEvent.dataTransfer.setData("application/hagent-drag-type", "resize-start")
+                        }}
+                        onDragEnd={() => setDraggedOperation(null)}
+                        style={{ backgroundColor: "transparent" }}
+                      />
+                      <div className="flex items-center gap-1.5 text-[11px] font-semibold">
+                        <span>{colors.icon}</span>
+                        <span className="truncate">{event.title}</span>
+                      </div>
+                      <div className="mt-1 text-[11px] opacity-75">
+                        {formatTimeRange(event.startTime, event.endTime)}
+                      </div>
+                      <span
+                        className="absolute inset-x-1 bottom-0 h-2 cursor-ns-resize rounded-full"
+                        draggable
+                        onClick={(actionEvent) => actionEvent.stopPropagation()}
+                        onDragStart={(actionEvent) => {
+                          actionEvent.stopPropagation()
+                          setDraggedOperation({ scheduleId: event.id, type: "resize-end" })
+                          actionEvent.dataTransfer.effectAllowed = "move"
+                          actionEvent.dataTransfer.setData("text/plain", event.id)
+                          actionEvent.dataTransfer.setData("application/hagent-drag-type", "resize-end")
+                        }}
+                        onDragEnd={() => setDraggedOperation(null)}
+                        style={{ backgroundColor: "transparent" }}
+                      />
+                    </button>
+                  )
+                })}
+
+                {foregroundEvents.map((event) => {
+                  const colors = getTypeColor(event.type)
+                  const width = `calc(${100 / event.columnCount}% - 10px)`
+                  const left = `calc(${(100 / event.columnCount) * event.columnIndex}% + 5px)`
+                  const durationMinutes = event.endMinutes - event.startMinutes
+                  const compactByHeight = durationMinutes < 45
+                  const compactByOverlap = event.columnCount >= 3
+                  const compactCard = compactByHeight || compactByOverlap
+                  const ultraCompactCard = durationMinutes < 30 || event.columnCount >= 4
+                  const showInstructor = !ultraCompactCard && durationMinutes >= 30
+                  const showMeta = !compactCard && durationMinutes >= 45
+                  const showTime = !compactByOverlap && durationMinutes >= 60
+                  const eventHeight = Math.max(event.height - 4, SLOT_HEIGHT)
+
+                  return (
+                    <button
+                      key={event.id}
+                      type="button"
+                      onClick={() => onSelectSchedule(event)}
+                      className="absolute rounded-xl text-left text-xs transition-colors focus:outline-none focus:ring-2"
+                      draggable
+                      onDragStart={(actionEvent) => {
+                        setDraggedOperation({ scheduleId: event.id, type: "move" })
+                        actionEvent.dataTransfer.effectAllowed = "move"
+                        actionEvent.dataTransfer.setData("text/plain", event.id)
+                        actionEvent.dataTransfer.setData("application/hagent-drag-type", "move")
+                      }}
+                      onDragEnd={() => setDraggedOperation(null)}
+                      style={{
+                        top: event.top + 2,
+                        left,
+                        width,
+                        height: eventHeight,
+                        backgroundColor: colors.bg,
+                        color: colors.text,
+                        border: `1px solid ${colors.dot}40`,
+                        boxShadow: "0 4px 12px rgba(15,23,42,0.08)",
+                        overflow: "hidden",
+                        zIndex: 12,
+                        padding: ultraCompactCard ? "6px 7px" : "8px 9px",
+                      }}
+                    >
+                      <span
+                        className="absolute inset-x-1 top-0 h-2 cursor-ns-resize rounded-full"
+                        draggable
+                        onClick={(actionEvent) => actionEvent.stopPropagation()}
+                        onDragStart={(actionEvent) => {
+                          actionEvent.stopPropagation()
+                          setDraggedOperation({ scheduleId: event.id, type: "resize-start" })
+                          actionEvent.dataTransfer.effectAllowed = "move"
+                          actionEvent.dataTransfer.setData("text/plain", event.id)
+                          actionEvent.dataTransfer.setData("application/hagent-drag-type", "resize-start")
+                        }}
+                        onDragEnd={() => setDraggedOperation(null)}
+                        style={{ backgroundColor: "transparent" }}
+                      />
+                      <div className="flex items-center gap-1 font-semibold leading-tight">
+                        <span className={ultraCompactCard ? "text-[9px]" : "text-[10px]"}>{colors.icon}</span>
+                        <span className="truncate">{event.title}</span>
+                      </div>
+                      {showInstructor ? (
+                        <>
+                          <div className="mt-0.5 truncate opacity-80">
+                            {event.instructor?.name ?? event.instructorName ?? "담당 미지정"}
+                            {event.instructorRole ? ` · ${instructorRoleLabel(event.instructorRole)}` : ""}
                           </div>
-                          {block.instructor && (
-                            <div className="mt-0.5 opacity-80">{block.instructor.name}</div>
-                          )}
-                          {typeof block.studentCount === "number" && block.studentCount > 0 ? (
-                            <div className="opacity-60">학생 {block.studentCount}명</div>
+                        </>
+                      ) : null}
+                      {showMeta ? (
+                        <>
+                          {typeof event.studentCount === "number" && event.studentCount > 0 ? (
+                            <div className="truncate opacity-65">학생 {event.studentCount}명</div>
                           ) : null}
-                          {block.room && <div className="opacity-60">{block.room}</div>}
-                          {spanHours > 1 && (
-                            <div className="opacity-60 mt-0.5">
-                              {formatTimeRange(block.startTime, block.endTime)}
-                            </div>
-                          )}
-                        </button>
-                      )
-                    })}
-                  </td>
-                )
-              })}
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                          {event.room ? <div className="truncate opacity-65">{event.room}</div> : null}
+                        </>
+                      ) : null}
+                      {showTime ? (
+                        <div className="mt-1 truncate text-[11px] opacity-75">
+                          {formatTimeRange(event.startTime, event.endTime)}
+                        </div>
+                      ) : null}
+                      <span
+                        className="absolute inset-x-1 bottom-0 h-2 cursor-ns-resize rounded-full"
+                        draggable
+                        onClick={(actionEvent) => actionEvent.stopPropagation()}
+                        onDragStart={(actionEvent) => {
+                          actionEvent.stopPropagation()
+                          setDraggedOperation({ scheduleId: event.id, type: "resize-end" })
+                          actionEvent.dataTransfer.effectAllowed = "move"
+                          actionEvent.dataTransfer.setData("text/plain", event.id)
+                          actionEvent.dataTransfer.setData("application/hagent-drag-type", "resize-end")
+                        }}
+                        onDragEnd={() => setDraggedOperation(null)}
+                        style={{ backgroundColor: "transparent" }}
+                      />
+                    </button>
+                  )
+                })}
+              </div>
+            )
+          })}
+        </div>
+      </div>
     </div>
   )
 }
@@ -750,11 +1192,13 @@ function MonthlyView({
   year,
   month,
   onDayClick,
+  onSelectSchedule,
 }: {
   schedules: ScheduleItem[]
   year: number
   month: number
   onDayClick: (date: Date, daySchedules: ScheduleItem[]) => void
+  onSelectSchedule: (s: ScheduleItem) => void
 }) {
   const today = new Date()
   const rows = getMonthCalendarRows(year, month)
@@ -766,7 +1210,9 @@ function MonthlyView({
     const jsDow = date.getDay() // 0=Sun..6=Sat
     // Convert: seed 1=Mon..6=Sat; js 1=Mon..6=Sat,0=Sun → same for Mon-Sat, 0 for Sun
     const seedDow = jsDow === 0 ? 0 : jsDow
-    return schedules.filter((s) => s.dayOfWeek === seedDow)
+    return schedules
+      .filter((s) => s.dayOfWeek === seedDow)
+      .sort((a, b) => a.startTime.localeCompare(b.startTime) || a.title.localeCompare(b.title))
   }
 
   const DOW_LABELS = ["일", "월", "화", "수", "목", "금", "토"]
@@ -817,50 +1263,61 @@ function MonthlyView({
             const dayItems = getSchedulesForDate(date)
 
             return (
-              <button
+              <div
                 key={ci}
+                className="min-h-[132px] p-2 text-left"
                 onClick={() => dayItems.length > 0 && onDayClick(date, dayItems)}
-                className="min-h-[100px] p-1.5 text-left transition-all duration-150 hover:bg-[rgba(20,184,166,0.03)] focus:outline-none"
                 style={{
                   backgroundColor: isToday ? "rgba(20,184,166,0.04)" : "var(--bg-elevated)",
                   borderLeft: ci > 0 ? "1px solid var(--border-default)" : undefined,
                   cursor: dayItems.length > 0 ? "pointer" : "default",
                 }}
               >
-                <div
-                  className={cn(
-                    "inline-flex items-center justify-center w-6 h-6 rounded-full text-xs mb-1 font-medium",
-                    isToday && "text-white"
-                  )}
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    dayItems.length > 0 && onDayClick(date, dayItems)
+                  }}
+                  className="mb-2 inline-flex items-center justify-center rounded-full px-2 py-1 text-xs font-semibold transition-colors focus:outline-none"
                   style={{
                     backgroundColor: isToday ? "#14b8a6" : "transparent",
-                    color: !isToday ? (inMonth ? "var(--text-primary)" : "var(--text-tertiary)") : undefined,
+                    color: isToday ? "#fff" : inMonth ? "var(--text-primary)" : "var(--text-tertiary)",
                   }}
                 >
                   {date.getDate()}
-                </div>
-                <div className="flex flex-col gap-0.5 mt-0.5 overflow-hidden">
-                  {dayItems.slice(0, 3).map((s, i) => {
+                </button>
+                <div className="flex flex-col gap-1">
+                  {dayItems.map((s) => {
                     const colors = getTypeColor(s.type)
+                    const compactMonthly = scheduleDurationMinutes(s) < 45
                     return (
-                      <div
-                        key={i}
-                        className="flex items-center gap-1 rounded px-1 py-0.5 text-[10px] leading-tight truncate"
-                        style={{ backgroundColor: colors.bg, color: colors.text }}
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          onSelectSchedule(s)
+                        }}
+                        className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1 text-[10px] leading-tight transition-colors focus:outline-none"
+                        style={{
+                          backgroundColor: colors.bg,
+                          color: colors.text,
+                          border: `1px solid ${colors.dot}30`,
+                        }}
                         title={s.title}
                       >
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
-                        <span className="truncate">{s.title}</span>
-                      </div>
+                        <span className="shrink-0 text-[11px]">{colors.icon}</span>
+                        <span className="shrink-0 font-medium opacity-75">{s.startTime.slice(0, 5)}</span>
+                        <span className="truncate font-medium">{s.title}</span>
+                        {!compactMonthly && s.instructorName ? (
+                          <span className="truncate opacity-65">· {s.instructorName}</span>
+                        ) : null}
+                      </button>
                     )
                   })}
-                  {dayItems.length > 3 && (
-                    <span className="text-[10px] px-1" style={{ color: "var(--text-tertiary)" }}>
-                      +{dayItems.length - 3}개 더
-                    </span>
-                  )}
                 </div>
-              </button>
+              </div>
             )
           })}
         </div>
@@ -915,7 +1372,8 @@ function DayScheduleDialog({
                       <div className="font-semibold truncate">{s.title}</div>
                       <div className="text-xs opacity-70 mt-0.5 flex items-center gap-1.5">
                         <span>{formatTimeRange(s.startTime, s.endTime)}</span>
-                        {s.instructor && <span>· {s.instructor.name}</span>}
+                        {s.instructor ? <span>· {s.instructor.name}{s.instructorRole ? ` (${instructorRoleLabel(s.instructorRole)})` : ""}</span> : null}
+                        {!s.instructor && !s.instructorName ? <span>· 담당 미지정</span> : null}
                         {typeof s.studentCount === "number" && s.studentCount > 0 ? <span>· 학생 {s.studentCount}명</span> : null}
                         {s.room && <span>· {s.room}</span>}
                       </div>
@@ -963,14 +1421,21 @@ function Legend({ schedules }: { schedules: ScheduleItem[] }) {
 // ─── InstructorList ────────────────────────────────────────────────────────────
 
 function InstructorList({ schedules }: { schedules: ScheduleItem[] }) {
-  const instructorMap = new Map<string, { name: string; subject: string; count: number }>()
+  const instructorMap = new Map<string, { name: string; subject: string; role: string | null; count: number }>()
   for (const s of schedules) {
-    if (s.instructor) {
-      const existing = instructorMap.get(s.instructor.id)
+    const instructorId = s.instructor?.id ?? s.instructorId
+    const instructorName = s.instructor?.name ?? s.instructorName
+    if (instructorId && instructorName) {
+      const existing = instructorMap.get(instructorId)
       if (existing) {
         existing.count++
       } else {
-        instructorMap.set(s.instructor.id, { name: s.instructor.name, subject: s.instructor.subject, count: 1 })
+        instructorMap.set(instructorId, {
+          name: instructorName,
+          subject: s.instructor?.subject ?? s.instructorSubject ?? "영역 미지정",
+          role: s.instructorRole ?? null,
+          count: 1,
+        })
       }
     }
   }
@@ -990,7 +1455,7 @@ function InstructorList({ schedules }: { schedules: ScheduleItem[] }) {
             style={{ backgroundColor: `hsl(${(i * 67) % 360}, 60%, 55%)` }}
           />
           {inst.name}
-          <span style={{ color: "var(--text-tertiary)" }}>· {inst.subject}</span>
+          <span style={{ color: "var(--text-tertiary)" }}>· {instructorRoleLabel(inst.role)} · {inst.subject}</span>
         </div>
       ))}
     </div>
@@ -1005,6 +1470,7 @@ export function SchedulePage() {
   const { setPanelContent } = usePanel()
   const navigate = useNavigate()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [viewMode, setViewMode] = useState<"weekly" | "monthly">("weekly")
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -1015,6 +1481,8 @@ export function SchedulePage() {
   const [dayDialogDate, setDayDialogDate] = useState<Date | null>(null)
   const [dayDialogSchedules, setDayDialogSchedules] = useState<ScheduleItem[]>([])
   const [newScheduleOpen, setNewScheduleOpen] = useState(false)
+  const [quickInstructorId, setQuickInstructorId] = useState("")
+  const [detailStartsEditing, setDetailStartsEditing] = useState(false)
 
   useEffect(() => {
     setBreadcrumbs([{ label: "일정" }])
@@ -1045,11 +1513,44 @@ export function SchedulePage() {
     },
   })
 
-  const filteredSchedules = typeFilter
-    ? (schedules as ScheduleItem[]).filter((s) => s.type === typeFilter)
-    : (schedules as ScheduleItem[])
+  const { data: instructorOptions = [] } = useQuery<InstructorOption[]>({
+    queryKey: ["instructors", selectedOrgId, "schedule-page"],
+    enabled: !!selectedOrgId,
+    queryFn: () => instructorsApi.list(selectedOrgId!),
+  })
+
+  const instructorFilterId = searchParams.get("instructor")
+  const queryClient = useQueryClient()
+  const activeSchedules = useMemo(() => schedules as ScheduleItem[], [schedules])
+  const filteredSchedules = useMemo(() => {
+    return activeSchedules.filter((schedule) => {
+      if (typeFilter && schedule.type !== typeFilter) return false
+      if (instructorFilterId) {
+        const scheduleInstructorId = schedule.instructor?.id ?? schedule.instructorId
+        if (scheduleInstructorId !== instructorFilterId) return false
+      }
+      return true
+    })
+  }, [activeSchedules, instructorFilterId, typeFilter])
 
   const weekDates = getWeekDates(currentDate)
+  const unassignedSchedules = useMemo(
+    () => activeSchedules.filter((item) => !item.instructor?.id && !item.instructorName),
+    [activeSchedules],
+  )
+  const counselingCount = useMemo(
+    () => activeSchedules.filter((item) => item.type === "counseling").length,
+    [activeSchedules],
+  )
+  const linkedStudentTotal = useMemo(
+    () => activeSchedules.reduce((sum, item) => sum + (item.studentCount ?? 0), 0),
+    [activeSchedules],
+  )
+  const filteredInstructorName = useMemo(() => {
+    if (!instructorFilterId) return null
+    const found = activeSchedules.find((item) => (item.instructor?.id ?? item.instructorId) === instructorFilterId)
+    return found?.instructor?.name ?? found?.instructorName ?? "선택된 직원/강사"
+  }, [activeSchedules, instructorFilterId])
 
   const handlePrev = () => {
     const d = new Date(currentDate)
@@ -1073,6 +1574,7 @@ export function SchedulePage() {
 
   const handleSelectSchedule = (s: ScheduleItem) => {
     setSelectedSchedule(s)
+    setDetailStartsEditing(true)
     setDetailOpen(true)
   }
 
@@ -1082,48 +1584,224 @@ export function SchedulePage() {
     setDayDialogOpen(true)
   }
 
+  const moveScheduleMutation = useMutation({
+    mutationFn: async ({
+      scheduleId,
+      dayOfWeek,
+      startTime,
+      endTime,
+    }: {
+      scheduleId: string
+      dayOfWeek: number
+      startTime: string
+      endTime: string
+    }) => {
+      if (!selectedOrgId) throw new Error("Organization not selected")
+      return schedulesApi.update(selectedOrgId, scheduleId, {
+        dayOfWeek,
+        startTime,
+        endTime,
+      })
+    },
+    onSuccess: () => {
+      if (!selectedOrgId) return
+      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(selectedOrgId) })
+    },
+  })
+
+  const resizeScheduleMutation = useMutation({
+    mutationFn: async ({
+      scheduleId,
+      boundary,
+      nextTime,
+    }: {
+      scheduleId: string
+      boundary: "start" | "end"
+      nextTime: string
+    }) => {
+      if (!selectedOrgId) throw new Error("Organization not selected")
+      const target = (schedules as ScheduleItem[]).find((item) => item.id === scheduleId)
+      if (!target) throw new Error("Schedule not found")
+      const nextStartTime = boundary === "start" ? nextTime : target.startTime
+      const nextEndTime = boundary === "end" ? nextTime : target.endTime
+      const startMinutes = timeToMinutes(nextStartTime)
+      const endMinutes = timeToMinutes(nextEndTime)
+      if (endMinutes - startMinutes < SLOT_MINUTES) {
+        throw new Error("최소 15분 이상이어야 합니다.")
+      }
+      return schedulesApi.update(selectedOrgId, scheduleId, {
+        startTime: nextStartTime,
+        endTime: nextEndTime,
+      })
+    },
+    onSuccess: () => {
+      if (!selectedOrgId) return
+      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(selectedOrgId) })
+    },
+  })
+
+  const reassignInstructorMutation = useMutation({
+    mutationFn: async ({
+      scheduleId,
+      instructorId,
+    }: {
+      scheduleId: string
+      instructorId: string | null
+    }) => {
+      if (!selectedOrgId) throw new Error("Organization not selected")
+      return schedulesApi.update(selectedOrgId, scheduleId, {
+        instructorId,
+      })
+    },
+    onSuccess: () => {
+      if (!selectedOrgId) return
+      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(selectedOrgId) })
+    },
+  })
+
+  const handleMoveSchedule = (scheduleId: string, dayOfWeek: number, nextStartTime: string) => {
+    const target = activeSchedules.find((schedule) => schedule.id === scheduleId)
+    if (!target) return
+    const durationMinutes =
+      (parseHour(target.endTime) * 60 + parseMinute(target.endTime))
+      - (parseHour(target.startTime) * 60 + parseMinute(target.startTime))
+    moveScheduleMutation.mutate({
+      scheduleId,
+      dayOfWeek,
+      startTime: nextStartTime,
+      endTime: addMinutesToTime(nextStartTime, durationMinutes),
+    })
+  }
+
+  const handleResizeSchedule = (scheduleId: string, boundary: "start" | "end", nextTime: string) => {
+    resizeScheduleMutation.mutate({ scheduleId, boundary, nextTime })
+  }
+
   const dateLabel = viewMode === "weekly"
     ? formatWeekLabel(weekDates)
     : formatMonthLabel(currentDate)
 
+  useEffect(() => {
+    if (!selectedSchedule) {
+      setQuickInstructorId("")
+      return
+    }
+    setQuickInstructorId(selectedSchedule.instructorId ?? "")
+  }, [selectedSchedule?.id, selectedSchedule?.instructorId])
+
+  useEffect(() => {
+    if (!selectedSchedule) return
+    const refreshed = activeSchedules.find((item) => item.id === selectedSchedule.id)
+    if (!refreshed) return
+    const currentSnapshot = JSON.stringify({
+      id: selectedSchedule.id,
+      title: selectedSchedule.title,
+      instructorId: selectedSchedule.instructorId,
+      dayOfWeek: selectedSchedule.dayOfWeek,
+      startTime: selectedSchedule.startTime,
+      endTime: selectedSchedule.endTime,
+      room: selectedSchedule.room,
+    })
+    const nextSnapshot = JSON.stringify({
+      id: refreshed.id,
+      title: refreshed.title,
+      instructorId: refreshed.instructorId,
+      dayOfWeek: refreshed.dayOfWeek,
+      startTime: refreshed.startTime,
+      endTime: refreshed.endTime,
+      room: refreshed.room,
+    })
+    if (currentSnapshot !== nextSnapshot) {
+      setSelectedSchedule(refreshed)
+    }
+  }, [activeSchedules, selectedSchedule])
+
   const panelContent = useMemo(() => {
     if (!selectedSchedule) {
-      const counselingCount = (schedules as ScheduleItem[]).filter((item) => item.type === "counseling").length
-      const unassignedCount = (schedules as ScheduleItem[]).filter((item) => !item.instructor?.id && !item.instructorName).length
       return (
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-semibold text-slate-900">일정 운영 요약</p>
-            <p className="mt-1 text-sm text-slate-500">
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>일정 속성</p>
+            <p className="mt-1 text-sm" style={{ color: "var(--text-tertiary)" }}>
               일정을 선택하면 담당 직원, 연결 학생, 관련 케이스와 후속 작업을 확인할 수 있습니다.
             </p>
           </div>
 
           <div className="grid gap-3">
-            <div className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="text-xs text-slate-500">전체 일정</p>
-              <p className="mt-1 text-xl font-semibold text-slate-900">{(schedules as ScheduleItem[]).length}개</p>
+            <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>전체 일정</p>
+              <p className="mt-1 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>{activeSchedules.length}개</p>
             </div>
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-              <p className="text-xs text-amber-700">상담 일정</p>
-              <p className="mt-1 text-xl font-semibold text-amber-900">{counselingCount}개</p>
+            <div className="rounded-xl p-4" style={{ border: "1px solid rgba(245,158,11,0.3)", backgroundColor: "rgba(245,158,11,0.08)" }}>
+              <p className="text-xs" style={{ color: "#f59e0b" }}>상담 일정</p>
+              <p className="mt-1 text-xl font-semibold" style={{ color: "#f59e0b" }}>{counselingCount}개</p>
             </div>
-            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
-              <p className="text-xs text-rose-700">담당 미지정</p>
-              <p className="mt-1 text-xl font-semibold text-rose-900">{unassignedCount}개</p>
+            <div className="rounded-xl p-4" style={{ border: "1px solid rgba(239,68,68,0.3)", backgroundColor: "rgba(239,68,68,0.08)" }}>
+              <p className="text-xs" style={{ color: "#ef4444" }}>담당 미지정</p>
+              <p className="mt-1 text-xl font-semibold" style={{ color: "#ef4444" }}>{unassignedSchedules.length}개</p>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-            <p className="text-xs font-semibold text-slate-600">일정 유형</p>
+          <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+            <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>운영 연결 상태</p>
+            <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+              <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "var(--bg-tertiary)" }}>
+                <p className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>연결 학생</p>
+                <p className="mt-1 font-semibold" style={{ color: "var(--text-primary)" }}>{linkedStudentTotal}명</p>
+              </div>
+              <div className="rounded-lg px-3 py-2" style={{ backgroundColor: "var(--bg-tertiary)" }}>
+                <p className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>필터 상태</p>
+                <p className="mt-1 font-semibold" style={{ color: "var(--text-primary)" }}>{filteredInstructorName ?? "전체 일정"}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>일정 유형</p>
             <div className="mt-3 flex flex-wrap gap-2">
               {Object.values(TYPE_COLORS).slice(0, 6).map((item) => (
-                <span key={item.label} className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: item.bg, color: item.text }}>
+                <span key={item.label} className="rounded-full px-2.5 py-1 text-xs font-medium opacity-80" style={{ backgroundColor: item.bg, color: item.text }}>
                   {item.label}
                 </span>
               ))}
             </div>
           </div>
+
+          {unassignedSchedules.length > 0 ? (
+            <div className="rounded-xl p-4" style={{ border: "1px solid rgba(239,68,68,0.3)", backgroundColor: "rgba(239,68,68,0.08)" }}>
+              <p className="text-xs font-semibold" style={{ color: "#ef4444" }}>우선 확인</p>
+              <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+                담당 미지정 일정이 {unassignedSchedules.length}개 있습니다. 담당 직원/강사를 연결해야 실제 운영에 바로 쓸 수 있습니다.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  className="border-0 text-white"
+                  style={{ backgroundColor: "#ef4444" }}
+                  onClick={() => {
+                    setSelectedSchedule(unassignedSchedules[0] ?? null)
+                    setDetailStartsEditing(true)
+                    setDetailOpen(true)
+                  }}
+                >
+                  미지정 일정 열기
+                </Button>
+                {instructorFilterId ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSearchParams((current) => {
+                      const next = new URLSearchParams(current)
+                      next.delete("instructor")
+                      return next
+                    })}
+                  >
+                    필터 해제
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
         </div>
       )
     }
@@ -1142,19 +1820,19 @@ export function SchedulePage() {
     return (
       <div className="space-y-4">
         <div>
-          <p className="text-lg font-semibold text-slate-900">{selectedSchedule.title}</p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{selectedSchedule.title}</p>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-tertiary)" }}>
             {typeInfo.label} · {formatTimeRange(selectedSchedule.startTime, selectedSchedule.endTime)}
           </p>
         </div>
 
         <div className="grid gap-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">담당 직원/강사</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">{selectedSchedule.instructor?.name ?? selectedSchedule.instructorName ?? "미지정"}</p>
+          <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>담당 직원/강사</p>
+            <p className="mt-1 text-base font-semibold" style={{ color: "var(--text-primary)" }}>{selectedSchedule.instructor?.name ?? selectedSchedule.instructorName ?? "미지정"}</p>
             {selectedSchedule.instructorSubject || selectedSchedule.instructorStatus ? (
-              <p className="mt-1 text-xs text-slate-500">
-                {selectedSchedule.instructorSubject ?? "역할 미지정"} · {selectedSchedule.instructorStatus ?? "상태 미지정"}
+              <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                {instructorRoleLabel(selectedSchedule.instructorRole)} · {selectedSchedule.instructorSubject ?? "영역 미지정"} · {selectedSchedule.instructorStatus ?? "상태 미지정"}
               </p>
             ) : null}
             {selectedSchedule.instructor?.id ? (
@@ -1167,35 +1845,89 @@ export function SchedulePage() {
                 직원/강사 상세로 이동
               </button>
             ) : (
-              <p className="mt-2 text-xs font-medium text-rose-600">담당 직원/강사를 지정해야 실제 운영 일정으로 쓰기 쉽습니다.</p>
+              <p className="mt-2 text-xs font-medium" style={{ color: "#ef4444" }}>담당 직원/강사를 지정해야 실제 운영 일정으로 쓰기 쉽습니다.</p>
             )}
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">연결 학생</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">{selectedSchedule.studentCount ?? selectedStudentIds.length}명</p>
+          <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>연결 학생</p>
+            <p className="mt-1 text-base font-semibold" style={{ color: "var(--text-primary)" }}>{selectedSchedule.studentCount ?? selectedStudentIds.length}명</p>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-semibold text-slate-600">운영 연결</p>
-          <div className="mt-3 space-y-2 text-sm text-slate-700">
+        <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+          <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>운영 연결</p>
+          <div className="mt-3 space-y-2 text-sm" style={{ color: "var(--text-secondary)" }}>
             <div className="flex items-center justify-between gap-3">
               <span>일정 유형</span>
-              <span className="font-medium text-slate-900">{typeInfo.label}</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>{typeInfo.label}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>강의실</span>
-              <span className="font-medium text-slate-900">{selectedSchedule.room ?? "미지정"}</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>{selectedSchedule.room ?? "미지정"}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>관련 케이스</span>
-              <span className="font-medium text-slate-900">{linkedCaseCount}건</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>{linkedCaseCount}건</span>
             </div>
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-600">바로 실행</p>
+        <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+          <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>담당 직원/강사 빠른 변경</p>
+          <div className="mt-3 space-y-3">
+            <select
+              value={quickInstructorId}
+              onChange={(event) => setQuickInstructorId(event.target.value)}
+              className="w-full rounded-xl border px-3 py-2 text-sm"
+              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-base)", color: "var(--text-primary)" }}
+            >
+              <option value="">담당 미지정</option>
+              {instructorOptions.map((instructor) => (
+                <option key={instructor.id} value={instructor.id}>
+                  {instructor.name} · {instructorRoleLabel((instructor as any).role ?? null)}
+                </option>
+              ))}
+            </select>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                className="border-0 text-white"
+                style={{ backgroundColor: "var(--color-teal-500)" }}
+                disabled={reassignInstructorMutation.isPending || quickInstructorId === (selectedSchedule.instructorId ?? "")}
+                onClick={() =>
+                  reassignInstructorMutation.mutate({
+                    scheduleId: selectedSchedule.id,
+                    instructorId: quickInstructorId || null,
+                  })
+                }
+              >
+                {reassignInstructorMutation.isPending ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+                담당 저장
+              </Button>
+              {selectedSchedule.instructorId ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={reassignInstructorMutation.isPending}
+                  onClick={() =>
+                    reassignInstructorMutation.mutate({
+                      scheduleId: selectedSchedule.id,
+                      instructorId: null,
+                    })
+                  }
+                >
+                  담당 해제
+                </Button>
+              ) : null}
+            </div>
+            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+              오른쪽 패널에서 바로 재배정하고, 필요하면 상세 수정으로 이어집니다.
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+          <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>바로 실행</p>
           <div className="mt-3 flex flex-col gap-2">
             <Button size="sm" variant="outline" className="justify-start" onClick={() => setDetailOpen(true)}>
               일정 상세/수정
@@ -1206,27 +1938,30 @@ export function SchedulePage() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-600">관련 케이스 바로가기</p>
+        <div className="rounded-xl p-4" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+          <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>관련 케이스 바로가기</p>
           <div className="mt-3 space-y-2">
             {linkedCases.length > 0 ? linkedCases.map((item: any) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => orgPrefix && navigate(`/${orgPrefix}/cases/${item.id}`)}
-                className="w-full rounded-xl bg-slate-50 px-3 py-2 text-left"
+                className="w-full rounded-xl px-3 py-2 text-left transition-colors"
+                style={{ backgroundColor: "var(--bg-secondary)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--bg-tertiary)")}
+                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--bg-secondary)")}
               >
-                <p className="text-sm font-medium text-slate-900">{item.title}</p>
-                <p className="mt-0.5 text-xs text-slate-500">{item.identifier ?? item.type ?? "케이스"}</p>
+                <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{item.title}</p>
+                <p className="mt-0.5 text-xs" style={{ color: "var(--text-tertiary)" }}>{item.identifier ?? item.type ?? "케이스"}</p>
               </button>
             )) : (
-              <p className="text-sm text-slate-500">연결된 케이스가 없습니다.</p>
+              <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>연결된 케이스가 없습니다.</p>
             )}
           </div>
         </div>
       </div>
     )
-  }, [cases, navigate, orgPrefix, schedules, selectedSchedule, studentSchedules])
+  }, [activeSchedules.length, cases, counselingCount, filteredInstructorName, instructorFilterId, linkedStudentTotal, navigate, orgPrefix, selectedSchedule, setSearchParams, studentSchedules, unassignedSchedules])
 
   const panelContentKey = useMemo(
     () =>
@@ -1348,7 +2083,42 @@ export function SchedulePage() {
 
       {/* Type filter pills */}
       {!isLoading && !isError && (
-        <div className="flex flex-wrap gap-1.5 mb-4">
+        <div className="space-y-3 mb-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl px-4 py-3" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>담당 미지정</p>
+              <p className="mt-1 text-lg font-semibold" style={{ color: unassignedSchedules.length > 0 ? "#ef4444" : "var(--text-primary)" }}>{unassignedSchedules.length}개</p>
+            </div>
+            <div className="rounded-xl px-4 py-3" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>상담 일정</p>
+              <p className="mt-1 text-lg font-semibold" style={{ color: "#f59e0b" }}>{counselingCount}개</p>
+            </div>
+            <div className="rounded-xl px-4 py-3" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+              <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>연결 학생</p>
+              <p className="mt-1 text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{linkedStudentTotal}명</p>
+            </div>
+          </div>
+
+          {filteredInstructorName ? (
+            <div className="flex items-center gap-2 rounded-xl px-4 py-3 text-sm" style={{ border: "1px solid var(--color-teal-500)", backgroundColor: "var(--color-primary-bg)", color: "var(--color-teal-500)" }}>
+              <span className="font-medium">{filteredInstructorName}</span>
+              <span>담당 일정만 보고 있습니다.</span>
+              <Button
+                size="sm"
+                variant="outline"
+                className="ml-auto"
+                onClick={() => setSearchParams((current) => {
+                  const next = new URLSearchParams(current)
+                  next.delete("instructor")
+                  return next
+                })}
+              >
+                필터 해제
+              </Button>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap gap-1.5">
           <button
             onClick={() => setTypeFilter(null)}
             className="px-2.5 py-1 rounded-full text-xs font-medium transition-colors"
@@ -1379,23 +2149,27 @@ export function SchedulePage() {
               </button>
             )
           })}
+          </div>
         </div>
       )}
 
       {!isLoading && !isError && (
         <>
           {viewMode === "weekly" ? (
-            <WeeklyView
-              schedules={filteredSchedules}
-              weekDates={weekDates}
-              onSelectSchedule={handleSelectSchedule}
-            />
+              <WeeklyView
+                schedules={filteredSchedules}
+                weekDates={weekDates}
+                onSelectSchedule={handleSelectSchedule}
+                onMoveSchedule={handleMoveSchedule}
+                onResizeSchedule={handleResizeSchedule}
+              />
           ) : (
             <MonthlyView
               schedules={filteredSchedules}
               year={currentDate.getFullYear()}
               month={currentDate.getMonth()}
               onDayClick={handleDayClick}
+              onSelectSchedule={handleSelectSchedule}
             />
           )}
 
@@ -1427,7 +2201,11 @@ export function SchedulePage() {
       <ScheduleDetailDialog
         schedule={selectedSchedule}
         open={detailOpen}
-        onClose={() => setDetailOpen(false)}
+        onClose={() => {
+          setDetailOpen(false)
+          setDetailStartsEditing(false)
+        }}
+        startInEditMode={detailStartsEditing}
       />
 
       {/* Day schedule dialog (monthly view) */}

@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { useQuery } from "@tanstack/react-query"
-import { Coins, Bot, PieChart, TriangleAlert } from "lucide-react"
+import { Coins, Bot, PieChart, TriangleAlert, Loader2 } from "lucide-react"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { costsApi } from "@/api/costs"
@@ -8,7 +8,6 @@ import { queryKeys } from "@/lib/queryKeys"
 import { MetricCard } from "@/components/MetricCard"
 import { EmptyState } from "@/components/EmptyState"
 import { Card, CardContent } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
 
 function HBar({ label, value, max, cost }: { label: string; value: number; max: number; cost: number }) {
   const pct = max > 0 ? Math.round((value / max) * 100) : 0
@@ -48,7 +47,7 @@ export function CostsPage() {
   const maxTokens = agentData.length > 0 ? Math.max(...agentData.map((item) => item.totalTokens)) : 0
 
   return (
-    <ScrollArea className="h-full">
+    <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-5xl p-6">
         <div className="mb-6">
           <h1 className="text-xl font-bold" style={{ color: "var(--text-primary)" }}>비용 분석</h1>
@@ -72,7 +71,7 @@ export function CostsPage() {
                 <p className="mt-0.5 text-xs" style={{ color: "var(--text-tertiary)" }}>실행 이벤트 기준</p>
               </div>
               {isLoading ? (
-                <div className="text-sm" style={{ color: "var(--text-secondary)" }}>불러오는 중...</div>
+                <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin" style={{ color: "var(--text-tertiary)" }} /></div>
               ) : agentData.length === 0 ? (
                 <EmptyState icon={<Bot size={20} />} title="사용량 데이터가 없습니다" description="에이전트 실행이 발생하면 여기에 누적됩니다." />
               ) : (
@@ -119,6 +118,6 @@ export function CostsPage() {
           </Card>
         </div>
       </div>
-    </ScrollArea>
+    </div>
   )
 }

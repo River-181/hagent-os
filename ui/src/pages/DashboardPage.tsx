@@ -12,7 +12,6 @@ import { documentsApi } from "@/api/documents"
 import { queryKeys } from "@/lib/queryKeys"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { MetricCard } from "@/components/MetricCard"
 import { ActiveAgentsPanel } from "@/components/ActiveAgentsPanel"
 import { ActivityRow } from "@/components/ActivityRow"
@@ -313,7 +312,7 @@ export function DashboardPage() {
         />
       </div>
 
-      <ScrollArea className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="p-6 max-w-6xl mx-auto space-y-6 min-h-0">
           {/* Dispatch result banner */}
           {lastDispatchResult && (
@@ -637,7 +636,7 @@ export function DashboardPage() {
             </section>
           </div>
         </div>
-      </ScrollArea>
+      </div>
     </div>
   )
 }
