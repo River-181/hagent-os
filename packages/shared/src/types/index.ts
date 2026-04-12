@@ -26,7 +26,13 @@ export type AgentType =
   | "finance"
   | "compliance"
   | "notification"
+  | "operations"
+  | "counseling"
+  | "marketing"
   | "analytics"
+  | "operations"
+  | "counseling"
+  | "marketing"
 
 export type AgentStatus = "idle" | "running" | "paused" | "error" | "terminated"
 

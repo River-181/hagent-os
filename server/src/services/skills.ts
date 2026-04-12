@@ -5,9 +5,25 @@ import { and, eq, inArray } from "drizzle-orm"
 import { z } from "zod"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
-import type { SkillPackageManifest } from "@hagent/shared"
+import type { AgentType, SkillPackageManifest } from "@hagent/shared"
+import { findCuratedSource } from "./curated-sources.js"
 
 const skillRoot = fileURLToPath(new URL("../../../skills", import.meta.url))
+const agentTypeValues = [
+  "orchestrator",
+  "complaint",
+  "retention",
+  "scheduler",
+  "intake",
+  "staff",
+  "finance",
+  "compliance",
+  "notification",
+  "analytics",
+  "operations",
+  "counseling",
+  "marketing",
+] as const satisfies readonly AgentType[]
 
 const manifestSchema = z.object({
   id: z.string().min(3),
@@ -28,7 +44,7 @@ const manifestSchema = z.object({
     importedAt: z.string().optional(),
   }),
   compatibility: z.object({
-    agentTypes: z.array(z.string()).default([]),
+    agentTypes: z.array(z.enum(agentTypeValues)).default([]),
     adapters: z.array(z.string()).default([]),
     locales: z.array(z.string()).default([]),
   }),
@@ -51,7 +67,7 @@ const manifestSchema = z.object({
       runtimes: z.array(z.string()).default([]),
     })
     .optional(),
-  recommendedAgents: z.array(z.string()).default([]).optional(),
+  recommendedAgents: z.array(z.enum(agentTypeValues)).default([]).optional(),
   launchEntrypoints: z.array(z.enum(["case", "project", "agent", "onboarding"])).default([]).optional(),
   forkOf: z
     .object({
@@ -78,7 +94,7 @@ const importRequestSchema = z.object({
   license: z.string().optional(),
   compatibility: z
     .object({
-      agentTypes: z.array(z.string()).default([]),
+      agentTypes: z.array(z.enum(agentTypeValues)).default([]),
       adapters: z.array(z.string()).default(["claude_local"]),
       locales: z.array(z.string()).default(["ko-KR"]),
     })
@@ -100,7 +116,7 @@ const createRequestSchema = z.object({
   displayName: z.string().min(2),
   summary: z.string().min(2),
   packageType: z.enum(["builtin", "imported", "wrapper", "composite"]).default("builtin"),
-  agentTypes: z.array(z.string()).default([]),
+  agentTypes: z.array(z.enum(agentTypeValues)).default([]),
   adapters: z.array(z.string()).default(["claude_local"]),
   locales: z.array(z.string()).default(["ko-KR"]),
 })
@@ -113,7 +129,7 @@ export interface SkillFileNode {
   children?: SkillFileNode[]
 }
 
-interface RuntimeHealthItem {
+export interface RuntimeHealthItem {
   key: string
   label: string
   ready: boolean
@@ -477,6 +493,7 @@ async function getPackagesWithMeta(db: Db, orgId?: string) {
     const mountedAgents = mountMap.get(pkg.manifest.slug) ?? []
     const runtimeHealth = computeRuntimeHealth(pkg.manifest)
     const ready = runtimeHealth.every((item) => item.ready)
+    const curatedSource = findCuratedSource(pkg.manifest)
 
     return {
       ...pkg,
@@ -485,8 +502,11 @@ async function getPackagesWithMeta(db: Db, orgId?: string) {
       mountedAgents,
       runtimeHealth,
       ready,
+      curatedSource,
       sourceBadge:
-        pkg.manifest.source.kind === "local"
+        curatedSource
+          ? "Curated"
+          : pkg.manifest.source.kind === "local"
           ? "Local"
           : pkg.manifest.source.kind === "manual"
           ? "Manual"
@@ -523,6 +543,7 @@ export async function listSkills(db: Db, orgId?: string) {
     forkOf: pkg.manifest.forkOf ?? null,
     installed: pkg.installed,
     sourceBadge: pkg.sourceBadge,
+    curatedSource: pkg.curatedSource,
     runtimeHealth: pkg.runtimeHealth,
     ready: pkg.ready,
     mountedAgents: pkg.mountedAgents,
@@ -688,6 +709,7 @@ export async function getSkillDetail(db: Db, slug: string, orgId?: string) {
     runtimeHealth: pkg.runtimeHealth,
     ready: pkg.ready,
     sourceBadge: pkg.sourceBadge,
+    curatedSource: pkg.curatedSource,
     readOnly: pkg.manifest.namespace !== "hagent",
     usedByCases: recommendedCaseTypes,
     usedByProjects: recommendedProjectTracks,
@@ -1142,4 +1164,26 @@ export async function getAgentMountedSkills(db: Db, agentId: string) {
       }
     })
     .filter((item): item is NonNullable<typeof item> => Boolean(item))
+}
+
+export async function deleteSkill(db: Db, slug: string) {
+  const pkg = await resolvePackage(db, slug)
+
+  // 외부 스킬은 삭제 불가 — namespace가 "hagent"인 경우만 허용
+  if (pkg.manifest.namespace !== "hagent") {
+    throw new Error("외부 스킬은 삭제할 수 없습니다. 로컬 복제 후 hagent 네임스페이스로 이동하세요.")
+  }
+
+  // DB에서 제거 (organizationSkills, agentSkills는 CASCADE로 삭제됨)
+  try {
+    await db.delete(schema.skillPackages).where(eq(schema.skillPackages.slug, slug))
+  } catch {
+    // DB 마이그레이션 미적용 시 무시
+  }
+
+  // 파일시스템에서 제거
+  const skillDir = getSkillDir(pkg.manifest.namespace, slug)
+  await fs.rm(skillDir, { recursive: true, force: true })
+
+  return { deleted: true, slug }
 }

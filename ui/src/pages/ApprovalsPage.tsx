@@ -2,7 +2,7 @@ import { useEffect, useContext, useMemo, useState } from "react"
 import { useParams } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
-import { useOrganization } from "@/context/OrganizationContext"
+import { useActiveOrgId } from "@/context/OrganizationContext"
 import { approvalsApi } from "@/api/approvals"
 import { casesApi } from "@/api/cases"
 import { queryKeys } from "@/lib/queryKeys"
@@ -45,14 +45,19 @@ function resolveDeliveryStatus(approval: any): string | null {
   )
 }
 
+function isDoneCaseApproval(approval: any) {
+  const caseStatus = approval?.case?.status ?? approval?.caseStatus ?? null
+  return caseStatus === "done" || caseStatus === "closed" || caseStatus === "resolved"
+}
+
 async function decideApproval(id: string, decision: "approved" | "rejected", comment?: string) {
   return approvalsApi.decide(id, decision, comment)
 }
 
 export function ApprovalsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
-  const { selectedOrgId } = useOrganization()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
+  const activeOrgId = useActiveOrgId(orgPrefix)
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
   const { setPanelContent, openPanel } = usePanel()
@@ -74,15 +79,15 @@ export function ApprovalsPage() {
     isLoading,
     isError,
   } = useQuery({
-    queryKey: queryKeys.approvals.list(selectedOrgId ?? ""),
-    queryFn: () => approvalsApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.approvals.list(activeOrgId ?? ""),
+    queryFn: () => approvalsApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
 
   const { data: allCases = [] } = useQuery({
-    queryKey: queryKeys.cases.list(selectedOrgId ?? ""),
-    queryFn: () => casesApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.cases.list(activeOrgId ?? ""),
+    queryFn: () => casesApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
 
   const caseMap = useMemo(() => {
@@ -98,7 +103,7 @@ export function ApprovalsPage() {
     return map
   }, [allCases])
 
-  const approvals = allApprovals as any[]
+  const approvals = (allApprovals as any[]).filter((approval) => !isDoneCaseApproval(approval))
   const filteredApprovals = useMemo(
     () => filterApprovals(approvals, activeTab),
     [approvals, activeTab]
@@ -112,9 +117,9 @@ export function ApprovalsPage() {
   const failedCount = approvals.filter((approval) => resolveDeliveryStatus(approval) === "failed").length
 
   function invalidateAll() {
-    void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") })
-    void queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(selectedOrgId ?? "") })
-    void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(selectedOrgId ?? "") })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(activeOrgId ?? "") })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(activeOrgId ?? "") })
+    void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(activeOrgId ?? "") })
   }
 
   const updateApprovalMutation = useMutation({

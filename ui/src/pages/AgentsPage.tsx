@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
+import { usePanel } from "@/context/PanelContext"
 import { agentsApi } from "@/api/agents"
 import { queryKeys } from "@/lib/queryKeys"
 import {
@@ -67,10 +68,16 @@ export function AgentsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const { selectedOrgId } = useOrganization()
+  const { closePanel, setPanelContent } = usePanel()
 
   useEffect(() => {
     setBreadcrumbs([{ label: "에이전트 팀" }])
   }, [setBreadcrumbs])
+
+  useEffect(() => {
+    setPanelContent(null)
+    closePanel()
+  }, [closePanel, setPanelContent])
 
   const { data: agents = [], isLoading, isError } = useQuery({
     queryKey: queryKeys.agents.list(selectedOrgId ?? ""),

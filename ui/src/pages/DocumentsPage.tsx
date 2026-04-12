@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react"
 import { useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
-import { useOrganization } from "@/context/OrganizationContext"
+import { useActiveOrgId } from "@/context/OrganizationContext"
 import { usePanel } from "@/context/PanelContext"
 import { useToast } from "@/context/ToastContext"
 import { documentsApi } from "@/api/documents"
@@ -498,10 +498,10 @@ function NewDocDialog({
 
 export function DocumentsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
-  const { selectedOrgId } = useOrganization()
   const { setPanelContent, openPanel } = usePanel()
   const { addToast } = useToast()
   const { id: routeDocId, orgPrefix } = useParams<{ id?: string; orgPrefix: string }>()
+  const activeOrgId = useActiveOrgId(orgPrefix)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [activeCategory, setActiveCategory] = useState("all")
@@ -529,9 +529,9 @@ export function DocumentsPage() {
   }, [setBreadcrumbs])
 
   const { data: apiDocs, isLoading } = useQuery({
-    queryKey: queryKeys.documents.list(selectedOrgId ?? ""),
-    queryFn: () => documentsApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.documents.list(activeOrgId ?? ""),
+    queryFn: () => documentsApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
     retry: false,
   })
 
@@ -602,7 +602,7 @@ export function DocumentsPage() {
   }
 
   const handleSaveDocument = async () => {
-    if (!displayDoc || !selectedOrgId || !editTitle.trim()) return
+    if (!displayDoc || !activeOrgId || !editTitle.trim()) return
 
     const now = new Date().toISOString()
     const nextDoc: Document = {
@@ -637,7 +637,7 @@ export function DocumentsPage() {
   }
 
   const handleDeleteDocument = async () => {
-    if (!displayDoc || !selectedOrgId) return
+    if (!displayDoc || !activeOrgId) return
 
     setIsDeleting(true)
     const deletingId = displayDoc.id
@@ -769,10 +769,10 @@ export function DocumentsPage() {
     try {
       let importedDocs = previewImportDocs
 
-      if (selectedOrgId) {
+      if (activeOrgId) {
         importedDocs = await Promise.all(
           previewImportDocs.map((doc) =>
-            documentsApi.create(selectedOrgId, {
+            documentsApi.create(activeOrgId, {
               title: doc.title,
               body: doc.body,
               category: doc.category,

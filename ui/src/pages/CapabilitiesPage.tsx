@@ -5,6 +5,7 @@ import { capabilitiesApi } from "@/api/capabilities"
 import { skillsApi } from "@/api/skills"
 import { adaptersApi } from "@/api/adapters"
 import { agentsApi } from "@/api/agents"
+import { Switch } from "@/components/ui/switch"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { usePanel } from "@/context/PanelContext"
@@ -16,11 +17,13 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { queryKeys } from "@/lib/queryKeys"
+import { CAPABILITY_BUNDLES, findBundleByCapability, type CapabilityBundleDefinition } from "@/lib/capabilityBundles"
 import {
   Bot,
   Cable,
   CheckCircle2,
   Cpu,
+  ExternalLink,
   FileText,
   FolderTree,
   Loader2,
@@ -30,6 +33,7 @@ import {
   Search,
   ShieldAlert,
   Sparkles,
+  Users,
   Trash2,
   Zap,
 } from "lucide-react"
@@ -165,6 +169,90 @@ function CapabilityCard({
   )
 }
 
+function BundleCard({
+  bundle,
+  stats,
+  active,
+  onClick,
+}: {
+  bundle: CapabilityBundleDefinition
+  stats: { ready: number; total: number; installed: boolean; missingConnections: number }
+  active: boolean
+  onClick: () => void
+}) {
+  const readinessLabel =
+    stats.total === 0 ? "준비 정보 없음" : stats.ready === stats.total ? "바로 사용 가능" : stats.installed ? "연결 필요" : "설치 필요"
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-3xl p-5 text-left transition-all"
+      style={{
+        background: active
+          ? "linear-gradient(180deg, rgba(20,184,166,0.12), rgba(15,23,42,0.02) 90%)"
+          : "var(--bg-elevated)",
+        border: `1px solid ${active ? "rgba(20,184,166,0.30)" : "var(--border-default)"}`,
+      }}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+            {bundle.title}
+          </div>
+          <p className="mt-2 text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
+            {bundle.summary}
+          </p>
+        </div>
+        <div
+          className="flex h-11 w-11 items-center justify-center rounded-2xl shrink-0"
+          style={{ backgroundColor: active ? "rgba(20,184,166,0.14)" : "var(--bg-secondary)", color: "var(--color-teal-500)" }}
+        >
+          <Sparkles size={18} />
+        </div>
+      </div>
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Badge className="border-0 text-[11px]" style={{ backgroundColor: stats.ready === stats.total ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)", color: stats.ready === stats.total ? "var(--color-success)" : "#d97706" }}>
+          {readinessLabel}
+        </Badge>
+        <Badge className="border-0 text-[11px]" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-tertiary)" }}>
+          추천 팀 {bundle.teamTemplate.roles.length}명
+        </Badge>
+        {stats.missingConnections > 0 ? (
+          <Badge className="border-0 text-[11px]" style={{ backgroundColor: "rgba(245,158,11,0.12)", color: "#d97706" }}>
+            연결 필요 {stats.missingConnections}건
+          </Badge>
+        ) : null}
+      </div>
+    </button>
+  )
+}
+
+function TeamRoleRow({
+  role,
+  matchedAgent,
+}: {
+  role: CapabilityBundleDefinition["teamTemplate"]["roles"][number]
+  matchedAgent?: any
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+      <div>
+        <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+          {role.label}
+        </div>
+        <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+          {matchedAgent ? `${matchedAgent.name} 연결됨` : "아직 팀에 없습니다."}
+        </div>
+      </div>
+      <Badge className="border-0" style={{ backgroundColor: matchedAgent ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)", color: matchedAgent ? "var(--color-success)" : "#d97706" }}>
+        {matchedAgent ? "준비됨" : role.required ? "필수" : "선택"}
+      </Badge>
+    </div>
+  )
+}
+
 function CapabilityProperties({
   detail,
   allCapabilities,
@@ -295,6 +383,7 @@ export function CapabilitiesPage() {
   const [activeTab, setActiveTab] = useState<CapabilityTab>("all")
   const [search, setSearch] = useState("")
   const [selectedAgentId, setSelectedAgentId] = useState("")
+  const [advancedView, setAdvancedView] = useState(false)
 
   useEffect(() => {
     setBreadcrumbs([
@@ -323,23 +412,64 @@ export function CapabilitiesPage() {
     })
   }, [activeTab, listQuery.data?.capabilities, search])
 
+  const bundleCards = useMemo(() => {
+    const capabilities = listQuery.data?.capabilities ?? []
+    return CAPABILITY_BUNDLES.map((bundle) => {
+      const included = capabilities.filter((item: any) => bundle.includedSlugs.includes(item.slug))
+      const runtimeHealth = included.flatMap((item: any) => item.runtimeHealth ?? [])
+      const missingConnections = runtimeHealth.filter((item: any) => !item.ready).length
+      const ready = included.filter((item: any) => item.ready).length
+      const installed = included.some((item: any) => item.installed)
+      return {
+        bundle,
+        stats: {
+          ready,
+          total: included.length,
+          installed,
+          missingConnections,
+        },
+      }
+    })
+  }, [listQuery.data?.capabilities])
+
+  const selectedBundle = useMemo(() => {
+    if (!slug) return bundleCards[0]?.bundle ?? null
+    return findBundleByCapability(slug) ?? bundleCards[0]?.bundle ?? null
+  }, [bundleCards, slug])
+
+  const basicDetailTarget = selectedBundle
+    ? { kind: selectedBundle.primaryKind, slug: selectedBundle.primarySlug }
+    : { kind, slug }
+
   useEffect(() => {
     if (!kind || !slug) {
+      if (!advancedView) {
+        const firstBundle = bundleCards[0]?.bundle
+        if (firstBundle && orgPrefix) {
+          navigate(`/${orgPrefix}/capabilities/${firstBundle.primaryKind}/${firstBundle.primarySlug}`, { replace: true })
+          return
+        }
+      }
       const first = filtered[0]
       if (first && orgPrefix) {
         navigate(`/${orgPrefix}/capabilities/${first.capabilityType}/${first.slug}`, { replace: true })
       }
     }
-  }, [filtered, kind, navigate, orgPrefix, slug])
+  }, [advancedView, bundleCards, filtered, kind, navigate, orgPrefix, slug])
 
   useEffect(() => {
     setSelectedAgentId("")
   }, [slug])
 
   const detailQuery = useQuery({
-    queryKey: queryKeys.capabilities.detail(kind ?? "__none__", slug ?? "__none__"),
-    queryFn: () => capabilitiesApi.get(kind!, slug!, selectedOrgId ?? undefined),
-    enabled: Boolean(kind && slug),
+    queryKey: [...queryKeys.capabilities.detail((advancedView ? kind : basicDetailTarget.kind) ?? "__none__", (advancedView ? slug : basicDetailTarget.slug) ?? "__none__"), selectedOrgId, advancedView ? "advanced" : "basic"],
+    queryFn: () =>
+      capabilitiesApi.get(
+        advancedView ? kind! : basicDetailTarget.kind!,
+        advancedView ? slug! : basicDetailTarget.slug!,
+        selectedOrgId ?? undefined,
+      ),
+    enabled: Boolean((advancedView ? kind && slug : basicDetailTarget.kind && basicDetailTarget.slug) && selectedOrgId),
   })
 
   const { data: orgAgents = [] } = useQuery<any[]>({
@@ -450,7 +580,94 @@ export function CapabilitiesPage() {
     onError: () => toast.error("에이전트 제거에 실패했습니다."),
   })
 
+  const createMissingTeamMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedOrgId || !selectedBundle) return []
+      const created: any[] = []
+      for (const role of selectedBundle.teamTemplate.roles) {
+        const exists = orgAgents.find((agent: any) => agent.agentType === role.agentType)
+        if (exists) continue
+        const agent = await agentsApi.create(selectedOrgId, {
+          name: role.createName,
+          title: role.label,
+          agentType: role.agentType,
+          model: "gpt-5-codex",
+        })
+        created.push(agent)
+      }
+      return created
+    },
+    onSuccess: async (created) => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.agents.list(selectedOrgId ?? "") })
+      if (created?.length) {
+        toast.success(`팀 구성원 ${created.length}명을 만들었습니다.`)
+      } else {
+        toast.success("이미 필요한 팀이 준비되어 있습니다.")
+      }
+    },
+    onError: () => toast.error("팀 생성에 실패했습니다."),
+  })
+
+  const equipBundleTeamMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedOrgId || !selectedBundle) return
+      const capabilitiesBySlug = new Map((listQuery.data?.capabilities ?? []).map((item: any) => [item.slug, item]))
+      const installableSlugs = Array.from(
+        new Set(
+          selectedBundle.teamTemplate.roles.flatMap((role) => role.skills)
+            .filter((skillSlug) => {
+              const meta = capabilitiesBySlug.get(skillSlug)
+              return meta && ["skill", "pack", "system"].includes(meta.capabilityType)
+            }),
+        ),
+      )
+
+      for (const capabilitySlug of installableSlugs) {
+        const meta = capabilitiesBySlug.get(capabilitySlug)
+        if (meta && !meta.installed) {
+          await skillsApi.install(selectedOrgId, capabilitySlug)
+        }
+      }
+
+      const refreshedAgents = await agentsApi.list(selectedOrgId)
+      for (const role of selectedBundle.teamTemplate.roles) {
+        const targetAgent = refreshedAgents.find((agent: any) => agent.agentType === role.agentType)
+        if (!targetAgent) continue
+        const current = await agentsApi.listSkills(targetAgent.id)
+        const next = Array.isArray(current)
+          ? current.map((item: any, index: number) => ({
+              slug: item.slug,
+              enabled: item.enabled ?? true,
+              mountOrder: item.mountOrder ?? index,
+            }))
+          : []
+        for (const skillSlug of role.skills) {
+          if (!next.some((item: any) => item.slug === skillSlug)) {
+            next.push({ slug: skillSlug, enabled: true, mountOrder: next.length })
+          }
+        }
+        await agentsApi.updateSkills(targetAgent.id, next)
+      }
+    },
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: queryKeys.agents.list(selectedOrgId ?? "") }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.capabilities.all }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.skills.all }),
+      ])
+      toast.success("추천 팀에 역량을 일괄 배정했습니다.")
+    },
+    onError: () => toast.error("추천 팀 배정에 실패했습니다."),
+  })
+
   const detail = detailQuery.data
+  const bundleAgents = useMemo(() => {
+    if (!selectedBundle) return []
+    return selectedBundle.teamTemplate.roles.map((role) => ({
+      role,
+      matchedAgent: orgAgents.find((agent: any) => agent.agentType === role.agentType),
+    }))
+  }, [orgAgents, selectedBundle])
 
   useEffect(() => {
     if (!selectedAgentId && orgAgents.length > 0) {
@@ -460,6 +677,73 @@ export function CapabilitiesPage() {
 
   useEffect(() => {
     if (!detail) return
+    if (!advancedView && selectedBundle) {
+      const runtimeHealth = (detail.runtimeHealth ?? []) as any[]
+      const missingConnections = runtimeHealth.filter((item) => !item.ready)
+      setPanelContent(
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+              실행 요약
+            </p>
+            <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+              이 업무 묶음을 지금 바로 쓸 수 있는지와 추천 팀 상태만 간단히 보여줍니다.
+            </p>
+          </div>
+
+          <div className="rounded-2xl p-4" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+            <PropertyRow label="업무 묶음">
+              <span className="text-sm" style={{ color: "var(--text-primary)" }}>{selectedBundle.title}</span>
+            </PropertyRow>
+            <PropertyRow label="설치 여부">
+              <span className="text-sm" style={{ color: "var(--text-primary)" }}>{detail.installed ? "설치됨" : "미설치"}</span>
+            </PropertyRow>
+            <PropertyRow label="준비 상태">
+              <span className="text-sm" style={{ color: "var(--text-primary)" }}>{detail.ready ? "바로 사용 가능" : "연결/설정 필요"}</span>
+            </PropertyRow>
+            <PropertyRow label="연결 필요">
+              <span className="text-sm" style={{ color: "var(--text-primary)" }}>{missingConnections.length > 0 ? `${missingConnections.length}건` : "없음"}</span>
+            </PropertyRow>
+          </div>
+
+          <div className="rounded-2xl p-4" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
+              추천 팀
+            </p>
+            <div className="mt-3 space-y-2">
+              {bundleAgents.map(({ role, matchedAgent }) => (
+                <div key={role.agentType} className="flex items-center justify-between gap-3">
+                  <span className="text-sm" style={{ color: "var(--text-primary)" }}>{role.label}</span>
+                  <span className="text-xs" style={{ color: matchedAgent ? "var(--color-success)" : "var(--text-tertiary)" }}>
+                    {matchedAgent ? matchedAgent.name : "없음"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button size="sm" onClick={() => createMissingTeamMutation.mutate()} disabled={createMissingTeamMutation.isPending}>
+              {createMissingTeamMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Users size={14} />}
+              팀 만들기
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => equipBundleTeamMutation.mutate()} disabled={equipBundleTeamMutation.isPending}>
+              {equipBundleTeamMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
+              일괄 배정
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => orgPrefix && navigate(`/${orgPrefix}/settings#integrations`)}>
+              <ExternalLink size={14} />
+              설정으로 이동
+            </Button>
+          </div>
+        </div>,
+      )
+      openPanel()
+      return () => {
+        setPanelContent(null)
+        closePanel()
+      }
+    }
     setPanelContent(
       <CapabilityProperties
         detail={detail}
@@ -480,18 +764,18 @@ export function CapabilitiesPage() {
       closePanel()
     }
   }, [
-    adapterTestMutation,
-    assignMutation,
+    advancedView,
+    bundleAgents,
     closePanel,
     detail,
-    installMutation,
     listQuery.data?.capabilities,
+    navigate,
     openPanel,
     orgAgents,
-    removeAssignmentMutation,
+    orgPrefix,
     selectedAgentId,
+    selectedBundle,
     setPanelContent,
-    uninstallMutation,
   ])
 
   return (
@@ -507,15 +791,16 @@ export function CapabilitiesPage() {
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div className="space-y-3">
             <Badge className="border-0 text-xs" style={{ backgroundColor: "rgba(20,184,166,0.12)", color: "var(--color-teal-500)" }}>
-              운영 제어면
+              {advancedView ? "고급 보기" : "업무 묶음"}
             </Badge>
             <div>
               <h1 className="text-2xl md:text-3xl font-semibold" style={{ color: "var(--text-primary)" }}>
                 역량
               </h1>
               <p className="mt-2 max-w-3xl text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
-                업무 스킬, 외부 연동, AI 런타임, 학원 운영 pack을 한 흐름에서 설치·설정·장착·점검합니다.
-                운영자는 여기서 준비 상태를 확인하고 case, project, agent에 바로 연결할 수 있습니다.
+                {advancedView
+                  ? "스킬, 시스템, 연동, 런타임을 포함한 기술 구성을 한 화면에서 점검합니다."
+                  : "무슨 일을 자동화할지 먼저 고르세요. 기술 용어는 숨기고, 바로 쓸 수 있는 업무 묶음만 보여줍니다."}
               </p>
             </div>
             <div className="flex items-center gap-3 flex-wrap text-xs" style={{ color: "var(--text-tertiary)" }}>
@@ -530,72 +815,286 @@ export function CapabilitiesPage() {
               <span>런타임 {listQuery.data?.stats?.runtimes ?? 0}</span>
             </div>
           </div>
+          <div
+            className="flex items-center gap-3 rounded-2xl px-4 py-3"
+            style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
+          >
+            <div>
+              <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                고급 보기
+              </p>
+              <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                스킬, 연동, slug, 기술 구성을 모두 봅니다.
+              </p>
+            </div>
+            <Switch checked={advancedView} onCheckedChange={setAdvancedView} />
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <aside
-          className="rounded-3xl overflow-hidden"
-          style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-        >
-          <div className="p-4 border-b" style={{ borderColor: "var(--border-default)" }}>
-            <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as CapabilityTab)}>
-              <TabsList variant="line" className="w-full justify-start gap-2 overflow-x-auto">
-                {TAB_ORDER.map((tab) => (
-                  <TabsTrigger key={tab.value} value={tab.value}>
-                    {tab.label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-            <div
-              className="mt-3 flex items-center gap-2 rounded-xl px-3"
-              style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-            >
-              <Search size={14} style={{ color: "var(--text-tertiary)" }} />
-              <Input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="역량 검색"
-                className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+      {!advancedView ? (
+        <div className="space-y-6">
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {bundleCards.map(({ bundle, stats }) => (
+              <BundleCard
+                key={bundle.id}
+                bundle={bundle}
+                stats={stats}
+                active={selectedBundle?.id === bundle.id}
+                onClick={() => orgPrefix && navigate(`/${orgPrefix}/capabilities/${bundle.primaryKind}/${bundle.primarySlug}`)}
               />
-            </div>
-          </div>
+            ))}
+          </section>
 
-          <ScrollArea className="h-[calc(100vh-21rem)] min-h-[540px]">
-            <div className="p-4 space-y-3">
-              {listQuery.isLoading ? (
-                <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-tertiary)" }}>
-                  <Loader2 size={16} className="animate-spin" />
-                  역량 카탈로그를 불러오는 중...
-                </div>
-              ) : (
-                filtered.map((item: any) => (
-                  <CapabilityCard
-                    key={`${item.capabilityType}/${item.slug}`}
-                    item={item}
-                    active={kind === item.capabilityType && slug === item.slug}
-                    onClick={() => orgPrefix && navigate(`/${orgPrefix}/capabilities/${item.capabilityType}/${item.slug}`)}
-                  />
-                ))
-              )}
-            </div>
-          </ScrollArea>
-        </aside>
-
-        <section
-          className="rounded-3xl overflow-hidden"
-          style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-        >
           {!detail || detailQuery.isLoading ? (
-            <div className="h-full min-h-[720px] flex flex-col items-center justify-center gap-3">
+            <section
+              className="rounded-3xl min-h-[420px] flex flex-col items-center justify-center gap-3"
+              style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
+            >
               <Loader2 size={22} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
               <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                역량 상세 정보를 불러오는 중...
+                업무 묶음 상세를 불러오는 중...
               </p>
+            </section>
+          ) : selectedBundle ? (
+            <section
+              className="rounded-3xl p-6 md:p-8"
+              style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
+            >
+              <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
+                      무엇을 하는 역량인가
+                    </p>
+                    <h2 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
+                      {selectedBundle.title}
+                    </h2>
+                    <p className="text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
+                      {selectedBundle.summary}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedBundle.examples.map((example) => (
+                        <Badge
+                          key={example}
+                          className="border-0"
+                          style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }}
+                        >
+                          {example}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+                    <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      <Zap size={16} />
+                      추천 진입점
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {(detail.recommendedEntrypoints?.length ?? 0) > 0 ? (
+                        detail.recommendedEntrypoints.map((entry: string) => (
+                          <Badge
+                            key={entry}
+                            className="border-0"
+                            style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}
+                          >
+                            {entry}
+                          </Badge>
+                        ))
+                      ) : (
+                        <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                          case, project, agent에서 바로 연결할 수 있습니다.
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <details
+                    className="rounded-2xl p-5"
+                    style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
+                  >
+                    <summary className="cursor-pointer list-none text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      기술 정보
+                    </summary>
+                    <div className="mt-4 space-y-4">
+                      <div>
+                        <p className="text-xs font-semibold" style={{ color: "var(--text-tertiary)" }}>
+                          구성 요소
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {selectedBundle.includedSlugs.map((entry) => (
+                            <Badge
+                              key={entry}
+                              className="border-0"
+                              style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}
+                            >
+                              {entry}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold" style={{ color: "var(--text-tertiary)" }}>
+                          연결 상태
+                        </p>
+                        <div className="mt-2 space-y-2">
+                          {(detail.runtimeHealth ?? []).length > 0 ? (
+                            detail.runtimeHealth.map((item: any) => (
+                              <div key={item.key} className="flex items-center justify-between gap-3">
+                                <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                                  {item.label}
+                                </span>
+                                <Badge
+                                  className="border-0"
+                                  style={{
+                                    backgroundColor: item.ready ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)",
+                                    color: item.ready ? "var(--color-success)" : "#d97706",
+                                  }}
+                                >
+                                  {item.ready ? "준비됨" : "연결 필요"}
+                                </Badge>
+                              </div>
+                            ))
+                          ) : (
+                            <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                              연결 정보가 아직 없습니다.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {(detail.curatedSource || detail.forkInfo || detail.upstreamSync) ? (
+                        <div>
+                          <p className="text-xs font-semibold" style={{ color: "var(--text-tertiary)" }}>
+                            원본/포크
+                          </p>
+                          <div className="mt-2 space-y-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+                            {detail.curatedSource ? <p>원본: {detail.curatedSource.label}</p> : null}
+                            {detail.forkInfo?.forkedFrom ? <p>forked from: {detail.forkInfo.forkedFrom}</p> : null}
+                            {detail.upstreamSync?.status ? <p>업데이트 상태: {detail.upstreamSync.status}</p> : null}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  </details>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+                    <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      <Users size={16} />
+                      추천 팀
+                    </div>
+                    <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+                      {selectedBundle.teamTemplate.label}
+                    </p>
+                    <div className="mt-4 space-y-3">
+                      {bundleAgents.map(({ role, matchedAgent }) => (
+                        <TeamRoleRow key={role.agentType} role={role} matchedAgent={matchedAgent} />
+                      ))}
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button size="sm" onClick={() => createMissingTeamMutation.mutate()} disabled={createMissingTeamMutation.isPending}>
+                        {createMissingTeamMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Users size={14} />}
+                        팀 한 번에 만들기
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => equipBundleTeamMutation.mutate()} disabled={equipBundleTeamMutation.isPending}>
+                        {equipBundleTeamMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Bot size={14} />}
+                        이 팀에 역량 일괄 배정
+                      </Button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button size="sm" variant="ghost" onClick={() => createMissingTeamMutation.mutate()} disabled={createMissingTeamMutation.isPending}>
+                        빠진 역할만 채우기
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => orgPrefix && navigate(`/${orgPrefix}/agents`)}>
+                        개별 조정
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl p-5" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}>
+                    <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                      <Cable size={16} />
+                      연결 안내
+                    </div>
+                    <p className="mt-2 text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
+                      {selectedBundle.settingsHint}
+                    </p>
+                    <Button className="mt-4" variant="outline" onClick={() => orgPrefix && navigate(`/${orgPrefix}/settings#integrations`)}>
+                      <ExternalLink size={14} />
+                      설정으로 이동
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : null}
+        </div>
+      ) : (
+        <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+          <aside
+            className="rounded-3xl overflow-hidden"
+            style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
+          >
+            <div className="p-4 border-b" style={{ borderColor: "var(--border-default)" }}>
+              <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as CapabilityTab)}>
+                <TabsList variant="line" className="w-full justify-start gap-2 overflow-x-auto">
+                  {TAB_ORDER.map((tab) => (
+                    <TabsTrigger key={tab.value} value={tab.value}>
+                      {tab.label}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </Tabs>
+              <div
+                className="mt-3 flex items-center gap-2 rounded-xl px-3"
+                style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
+              >
+                <Search size={14} style={{ color: "var(--text-tertiary)" }} />
+                <Input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder="역량 검색"
+                  className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                />
+              </div>
             </div>
-          ) : (
-            <div className="p-6 md:p-8 space-y-6">
+
+            <ScrollArea className="h-[calc(100vh-21rem)] min-h-[540px]">
+              <div className="p-4 space-y-3">
+                {listQuery.isLoading ? (
+                  <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-tertiary)" }}>
+                    <Loader2 size={16} className="animate-spin" />
+                    역량 카탈로그를 불러오는 중...
+                  </div>
+                ) : (
+                  filtered.map((item: any) => (
+                    <CapabilityCard
+                      key={`${item.capabilityType}/${item.slug}`}
+                      item={item}
+                      active={kind === item.capabilityType && slug === item.slug}
+                      onClick={() => orgPrefix && navigate(`/${orgPrefix}/capabilities/${item.capabilityType}/${item.slug}`)}
+                    />
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </aside>
+
+          <section
+            className="rounded-3xl overflow-hidden"
+            style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
+          >
+            {!detail || detailQuery.isLoading ? (
+              <div className="h-full min-h-[720px] flex flex-col items-center justify-center gap-3">
+                <Loader2 size={22} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
+                <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                  역량 상세 정보를 불러오는 중...
+                </p>
+              </div>
+            ) : (
+              <div className="p-6 md:p-8 space-y-6">
               <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
                 <div className="space-y-4">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -814,6 +1313,7 @@ export function CapabilitiesPage() {
           )}
         </section>
       </div>
+      )}
     </div>
   )
 }

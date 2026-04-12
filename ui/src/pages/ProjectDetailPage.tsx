@@ -8,6 +8,7 @@ import { usePanel } from "@/context/PanelContext"
 import { projectsApi } from "@/api/projects"
 import { agentsApi } from "@/api/agents"
 import { ToastContext } from "@/components/ToastContext"
+import { WorkspacePanel, WorkspaceSubtle } from "@/components/ui/workspace-surface"
 import { queryKeys } from "@/lib/queryKeys"
 import { CaseTypeBadge } from "@/components/CaseTypeBadge"
 import { CaseSeverityBadge } from "@/components/CaseSeverityBadge"
@@ -28,6 +29,12 @@ function recommendProjectCapabilities(projectTrackKey: string) {
     return ["schedule-operations-pack", "hwpx-document-pack"]
   }
   return ["kakao-complaint-pack"]
+}
+
+const panelStyle = {
+  backgroundColor: "var(--bg-elevated)",
+  border: "1px solid var(--border-default)",
+  boxShadow: "var(--shadow-sm)",
 }
 
 export function ProjectDetailPage() {
@@ -144,84 +151,118 @@ export function ProjectDetailPage() {
   const doneCases = cases.filter((c) => c.status === "done")
   useEffect(() => {
     setPanelContent(
-      <div className="space-y-4">
+      <WorkspacePanel className="space-y-4 p-5">
         <div>
-          <p className="text-sm font-semibold text-slate-900">핵심 연결</p>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            핵심 연결
+          </p>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
             연결 케이스, 산출물, 추천 역할과 진행 상태를 이 패널에서 빠르게 확인합니다.
           </p>
         </div>
 
         <div className="grid gap-3">
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">진행 중 케이스</p>
-            <p className="mt-1 text-xl font-semibold text-slate-900">{activeCases.length}건</p>
-          </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">연결 산출물</p>
-            <p className="mt-1 text-xl font-semibold text-slate-900">{documents.length}건</p>
-          </div>
+          <WorkspaceSubtle className="p-4">
+            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              진행 중 케이스
+            </p>
+            <p className="mt-1 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
+              {activeCases.length}건
+            </p>
+          </WorkspaceSubtle>
+          <WorkspaceSubtle className="p-4">
+            <p className="text-xs" style={{ color: "var(--text-secondary)" }}>
+              연결 산출물
+            </p>
+            <p className="mt-1 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
+              {documents.length}건
+            </p>
+          </WorkspaceSubtle>
         </div>
 
-        <div className="rounded-2xl border border-teal-200 bg-teal-50 p-4">
-          <p className="text-xs font-semibold text-teal-700">운영 묶음</p>
-          <p className="mt-1 text-sm font-semibold text-teal-900">{projectTrack.label}</p>
-          <p className="mt-2 text-sm text-teal-800">{projectTrack.summary}</p>
-        </div>
+        <WorkspaceSubtle className="p-4">
+          <p className="text-xs font-semibold" style={{ color: "var(--color-teal-500)" }}>
+            프로젝트 기본 스킬
+          </p>
+          <p className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            {projectTrack.label}
+          </p>
+          <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+            {projectTrack.summary}
+          </p>
+        </WorkspaceSubtle>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-600">Capability Profile</p>
+        <WorkspaceSubtle className="p-4">
+          <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+            추천 스킬
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {capabilityProfile.map((item) => (
               <button
                 key={item}
                 type="button"
                 className="rounded-full px-3 py-1.5 text-xs"
-                style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }}
-                onClick={() => navigate(`/${orgPrefix}/capabilities/pack/${item}`)}
+                style={{ backgroundColor: "var(--bg-base)", color: "var(--text-secondary)" }}
+                onClick={() => navigate(`/${orgPrefix}/skills/${item}`)}
               >
                 {item}
               </button>
             ))}
           </div>
-        </div>
+        </WorkspaceSubtle>
 
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <p className="text-xs font-semibold text-slate-600">AI 팀 준비도</p>
-          <div className="mt-3 space-y-2 text-sm text-slate-700">
+        <WorkspaceSubtle className="p-4">
+          <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+            AI 팀 준비도
+          </p>
+          <div className="mt-3 space-y-2 text-sm" style={{ color: "var(--text-secondary)" }}>
             <div className="flex items-center justify-between gap-3">
               <span>추천 역할</span>
-              <span className="font-medium text-slate-900">{recommendedRoles.length}개</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                {recommendedRoles.length}개
+              </span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>추가 고용 필요</span>
-              <span className="font-medium text-slate-900">{missingRecommendedRoles.length}개</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                {missingRecommendedRoles.length}개
+              </span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>완료 케이스</span>
-              <span className="font-medium text-slate-900">{doneCases.length}건</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                {doneCases.length}건
+              </span>
             </div>
           </div>
-        </div>
+        </WorkspaceSubtle>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs font-semibold text-slate-600">다음 액션</p>
-          <div className="mt-3 space-y-2 text-sm text-slate-700">
+        <WorkspaceSubtle className="p-4">
+          <p className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+            다음 액션
+          </p>
+          <div className="mt-3 space-y-2 text-sm" style={{ color: "var(--text-secondary)" }}>
             <div className="flex items-center justify-between gap-3">
               <span>산출물 검토</span>
-              <span className="font-medium text-slate-900">{documents.length > 0 ? "가능" : "대기"}</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                {documents.length > 0 ? "가능" : "대기"}
+              </span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>고용 요청</span>
-              <span className="font-medium text-slate-900">{missingRecommendedRoles.length > 0 ? `${missingRecommendedRoles.length}개 필요` : "준비됨"}</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                {missingRecommendedRoles.length > 0 ? `${missingRecommendedRoles.length}개 필요` : "준비됨"}
+              </span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>케이스 정리</span>
-              <span className="font-medium text-slate-900">{activeCases.length > 0 ? "진행 중" : "정리됨"}</span>
+              <span className="font-medium" style={{ color: "var(--text-primary)" }}>
+                {activeCases.length > 0 ? "진행 중" : "정리됨"}
+              </span>
             </div>
           </div>
-        </div>
-      </div>,
+        </WorkspaceSubtle>
+      </WorkspacePanel>,
     )
     return () => setPanelContent(null)
   }, [activeCases.length, capabilityProfile, documents.length, doneCases.length, missingRecommendedRoles.length, navigate, orgPrefix, projectTrack.label, projectTrack.summary, recommendedRoles.length, setPanelContent])
@@ -244,137 +285,112 @@ export function ProjectDetailPage() {
   }
 
   return (
-    <div className="p-6">
-      {/* Header */}
-      <div className="flex items-start gap-4 mb-6">
-        <div
-          className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-          style={{ backgroundColor: project.color ? `${project.color}20` : "var(--bg-tertiary)" }}
-        >
-          <FolderKanban size={20} style={{ color: project.color ?? "var(--color-teal-500)" }} />
+    <div className="p-6 space-y-5">
+      <WorkspacePanel className="p-5">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div className="space-y-3">
+            <div className="flex items-start gap-4">
+              <div
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px]"
+                style={{ backgroundColor: project.color ? `${project.color}20` : "var(--bg-tertiary)" }}
+              >
+                <FolderKanban size={20} style={{ color: project.color ?? "var(--color-teal-500)" }} />
+              </div>
+              <div className="space-y-2">
+                <h1 className="text-[28px] font-semibold tracking-[-0.02em]" style={{ color: "var(--text-primary)" }}>
+                  {project.name}
+                </h1>
+                <p className="max-w-3xl text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+                  {project.description ?? "프로젝트 케이스, 산출물, 추천 역할을 한 화면에서 관리합니다."}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium"
+                style={{ backgroundColor: "rgba(20,184,166,0.08)", color: "var(--color-teal-500)" }}
+              >
+                {projectTrack.label}
+              </span>
+              <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                케이스 {cases.length}건 · 산출물 {documents.length}건 · 목표 {goals.length}개
+              </span>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setActiveTab("cases")}
+              className={cn("rounded-full px-3 py-1.5 text-xs font-medium transition-colors", activeTab === "cases" ? "bg-[var(--text-primary)] text-[var(--bg-elevated)]" : "bg-[var(--bg-secondary)] text-[var(--text-secondary)]")}
+            >
+              케이스
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("overview")}
+              className={cn("rounded-full px-3 py-1.5 text-xs font-medium transition-colors", activeTab === "overview" ? "bg-[var(--text-primary)] text-[var(--bg-elevated)]" : "bg-[var(--bg-secondary)] text-[var(--text-secondary)]")}
+            >
+              개요
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("configuration")}
+              className={cn("rounded-full px-3 py-1.5 text-xs font-medium transition-colors", activeTab === "configuration" ? "bg-[var(--text-primary)] text-[var(--bg-elevated)]" : "bg-[var(--bg-secondary)] text-[var(--text-secondary)]")}
+            >
+              설정
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("budget")}
+              className={cn("rounded-full px-3 py-1.5 text-xs font-medium transition-colors", activeTab === "budget" ? "bg-[var(--text-primary)] text-[var(--bg-elevated)]" : "bg-[var(--bg-secondary)] text-[var(--text-secondary)]")}
+            >
+              예산
+            </button>
+          </div>
         </div>
-        <div className="flex-1">
-        <div className="flex items-center gap-3">
-          <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
-            {project.name}
-          </h1>
-          <span
-            className="w-3 h-3 rounded-full"
-            style={{ backgroundColor: project.color ?? "var(--color-teal-500)" }}
-          />
-          <span
-            className="inline-flex items-center rounded-full px-3 py-1 text-xs font-medium"
-            style={{ backgroundColor: "rgba(20,184,166,0.08)", color: "var(--color-teal-500)" }}
-          >
-            {projectTrack.label}
-          </span>
-        </div>
-          {project.description && (
-            <p className="text-sm mt-1" style={{ color: "var(--text-secondary)" }}>
-              {project.description}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div
-        className="flex items-center gap-1 mb-6"
-        style={{ borderBottom: "1px solid var(--border-default)" }}
-      >
-        {(["cases", "overview", "configuration", "budget"] as Tab[]).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={cn(
-              "px-4 py-2 text-sm font-medium transition-colors -mb-px",
-              activeTab === tab
-                ? "border-b-2"
-                : "hover:bg-[var(--bg-secondary)]"
-            )}
-            style={{
-              color: activeTab === tab ? "var(--color-teal-500)" : "var(--text-secondary)",
-              borderColor: activeTab === tab ? "var(--color-teal-500)" : "transparent",
-            }}
-          >
-            {tab === "cases"
-              ? `케이스 (${cases.length})`
-              : tab === "overview"
-              ? "개요"
-              : tab === "configuration"
-              ? "설정"
-              : "예산"}
-          </button>
-        ))}
-      </div>
+      </WorkspacePanel>
 
       {/* Tab: Overview */}
       {activeTab === "overview" && (
         <div className="space-y-4">
-          <div
-            className="rounded-xl p-5 grid grid-cols-2 sm:grid-cols-4 gap-4"
-            style={{
-              backgroundColor: "var(--bg-elevated)",
-              border: "1px solid var(--border-default)",
-              boxShadow: "var(--shadow-sm)",
-            }}
-          >
-            <StatCard label="전체 케이스" value={cases.length} icon={<Layers size={16} />} />
-            <StatCard label="진행 중" value={activeCases.length} color="#f59e0b" icon={<Layers size={16} />} />
-            <StatCard label="완료" value={doneCases.length} color="var(--color-success)" icon={<Layers size={16} />} />
-            <StatCard
-              label="생성일"
-              value={new Date(project.createdAt).toLocaleDateString("ko-KR", { year: "numeric", month: "short", day: "numeric" })}
-              icon={<CalendarDays size={16} />}
-            />
-          </div>
+          <WorkspacePanel className="p-5">
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+              <StatCard label="전체 케이스" value={cases.length} icon={<Layers size={16} />} />
+              <StatCard label="진행 중" value={activeCases.length} color="#f59e0b" icon={<Layers size={16} />} />
+              <StatCard label="완료" value={doneCases.length} color="var(--color-success)" icon={<Layers size={16} />} />
+              <StatCard
+                label="생성일"
+                value={new Date(project.createdAt).toLocaleDateString("ko-KR", { year: "numeric", month: "short", day: "numeric" })}
+                icon={<CalendarDays size={16} />}
+              />
+            </div>
+          </WorkspacePanel>
 
           {project.description && (
-            <div
-              className="rounded-xl p-5"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                border: "1px solid var(--border-default)",
-                boxShadow: "var(--shadow-sm)",
-              }}
-            >
+            <WorkspacePanel className="p-5">
               <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
                 설명
               </h3>
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
                 {project.description}
               </p>
-            </div>
+            </WorkspacePanel>
           )}
 
           {project.sourceInstruction && (
-            <div
-              className="rounded-xl p-5"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                border: "1px solid var(--border-default)",
-                boxShadow: "var(--shadow-sm)",
-              }}
-            >
+            <WorkspacePanel className="p-5">
               <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
                 원본 지시
               </h3>
               <p className="text-sm whitespace-pre-wrap" style={{ color: "var(--text-secondary)" }}>
                 {project.sourceInstruction}
               </p>
-            </div>
+            </WorkspacePanel>
           )}
 
-          <div
-            className="rounded-xl p-5"
-            style={{
-              backgroundColor: "rgba(20,184,166,0.06)",
-              border: "1px solid rgba(20,184,166,0.16)",
-              boxShadow: "var(--shadow-sm)",
-            }}
-          >
+          <WorkspacePanel className="p-5" style={{ backgroundColor: "rgba(20,184,166,0.06)", borderColor: "rgba(20,184,166,0.16)" }}>
             <h3 className="text-sm font-semibold mb-2" style={{ color: "var(--text-primary)" }}>
-              운영 묶음
+              프로젝트 기본 스킬
             </h3>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
               {projectTrack.summary}
@@ -383,7 +399,7 @@ export function ProjectDetailPage() {
               {capabilityProfile.map((item) => (
                 <Link
                   key={item}
-                  to={`/${orgPrefix}/capabilities/pack/${item}`}
+                  to={`/${orgPrefix}/skills/${item}`}
                   className="rounded-full px-3 py-1.5 text-xs"
                   style={{ backgroundColor: "var(--bg-base)", color: "var(--text-secondary)" }}
                 >
@@ -391,13 +407,10 @@ export function ProjectDetailPage() {
                 </Link>
               ))}
             </div>
-          </div>
+          </WorkspacePanel>
 
           {/* 목표 섹션 */}
-          <div
-            className="rounded-xl p-5"
-            style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)", boxShadow: "var(--shadow-sm)" }}
-          >
+          <WorkspacePanel className="p-5">
             <div className="flex items-center gap-2 mb-3">
               <Target size={15} style={{ color: "var(--color-teal-500)" }} />
               <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -439,17 +452,10 @@ export function ProjectDetailPage() {
                 })}
               </div>
             )}
-          </div>
+          </WorkspacePanel>
 
           {recommendedRoles.length > 0 && (
-            <div
-              className="rounded-xl p-5"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                border: "1px solid var(--border-default)",
-                boxShadow: "var(--shadow-sm)",
-              }}
-            >
+            <WorkspacePanel className="p-5">
               <div className="flex items-center gap-2">
                 <Sparkles size={16} style={{ color: "var(--color-teal-500)" }} />
                 <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -504,7 +510,7 @@ export function ProjectDetailPage() {
                   ))}
                 </div>
               )}
-            </div>
+            </WorkspacePanel>
           )}
         </div>
       )}
@@ -513,27 +519,14 @@ export function ProjectDetailPage() {
       {activeTab === "cases" && (
         <div>
           {cases.length === 0 ? (
-            <div
-              className="rounded-xl p-10 flex flex-col items-center justify-center gap-3"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                border: "1px solid var(--border-default)",
-                boxShadow: "var(--shadow-sm)",
-              }}
-            >
+            <WorkspacePanel className="flex flex-col items-center justify-center gap-3 p-10">
               <Layers size={36} style={{ color: "var(--text-tertiary)" }} />
               <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
                 이 프로젝트에 연결된 케이스가 없습니다.
               </p>
-            </div>
+            </WorkspacePanel>
           ) : (
-            <div
-              className="rounded-xl overflow-hidden"
-              style={{
-                border: "1px solid var(--border-default)",
-                boxShadow: "var(--shadow-sm)",
-              }}
-            >
+            <WorkspacePanel className="overflow-hidden">
               {cases.map((c, idx) => (
                 <Link
                   key={c.id}
@@ -567,7 +560,7 @@ export function ProjectDetailPage() {
                   </div>
                 </Link>
               ))}
-            </div>
+            </WorkspacePanel>
           )}
         </div>
       )}
@@ -575,14 +568,7 @@ export function ProjectDetailPage() {
       {/* Tab: Configuration */}
       {activeTab === "configuration" && (
         <div className="space-y-4">
-          <div
-            className="rounded-xl p-5"
-            style={{
-              backgroundColor: "var(--bg-elevated)",
-              border: "1px solid var(--border-default)",
-              boxShadow: "var(--shadow-sm)",
-            }}
-          >
+          <WorkspacePanel className="p-5">
             <h3 className="text-sm font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
               프로젝트 설정
             </h3>
@@ -611,16 +597,9 @@ export function ProjectDetailPage() {
                 {new Date(project.updatedAt).toLocaleDateString("ko-KR", { year: "numeric", month: "short", day: "numeric" })}
               </dd>
             </dl>
-          </div>
+          </WorkspacePanel>
 
-          <div
-            className="rounded-xl p-5"
-            style={{
-              backgroundColor: "var(--bg-elevated)",
-              border: "1px solid var(--border-default)",
-              boxShadow: "var(--shadow-sm)",
-            }}
-          >
+          <WorkspacePanel className="p-5">
             <h3 className="text-sm font-semibold mb-3" style={{ color: "var(--text-primary)" }}>
               연결 정보
             </h3>
@@ -629,16 +608,9 @@ export function ProjectDetailPage() {
               <p>산출물: {documents.length}건</p>
               <p>추천 역할: {recommendedRoles.length}개</p>
             </div>
-          </div>
+          </WorkspacePanel>
 
-          <div
-            className="rounded-xl p-5"
-            style={{
-              backgroundColor: "rgba(239,68,68,0.06)",
-              border: "1px solid rgba(239,68,68,0.24)",
-              boxShadow: "var(--shadow-sm)",
-            }}
-          >
+          <WorkspacePanel className="p-5" style={{ backgroundColor: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.24)" }}>
             <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "#dc2626" }}>
               Danger Zone
             </p>
@@ -658,37 +630,26 @@ export function ProjectDetailPage() {
               <Archive size={14} />
               {archiveMutation.isPending ? "숨기는 중..." : "Archive project"}
             </button>
-          </div>
+          </WorkspacePanel>
         </div>
       )}
 
       {activeTab === "budget" && (
         <div>
           {documents.length === 0 ? (
-            <div
-              className="rounded-xl p-10 flex flex-col items-center justify-center gap-3"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                border: "1px solid var(--border-default)",
-                boxShadow: "var(--shadow-sm)",
-              }}
-            >
+            <WorkspacePanel className="flex flex-col items-center justify-center gap-3 p-10">
               <FileText size={36} style={{ color: "var(--text-tertiary)" }} />
               <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
                 아직 연결된 산출물 문서가 없습니다.
               </p>
-            </div>
+            </WorkspacePanel>
           ) : (
             <div className="space-y-3">
               {documents.map((document) => (
                 <div
                   key={document.id}
-                  className="rounded-xl border p-4"
-                  style={{
-                    borderColor: "var(--border-default)",
-                    backgroundColor: "var(--bg-elevated)",
-                    boxShadow: "var(--shadow-sm)",
-                  }}
+                  className="rounded-[20px] border p-4"
+                  style={panelStyle}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div>

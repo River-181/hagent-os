@@ -2,7 +2,7 @@ import { useContext, useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
-import { useOrganization } from "@/context/OrganizationContext"
+import { useActiveOrgId } from "@/context/OrganizationContext"
 import { casesApi } from "@/api/cases"
 import { agentsApi } from "@/api/agents"
 import { approvalsApi } from "@/api/approvals"
@@ -64,6 +64,11 @@ function matchesToday(schedule: Record<string, unknown>, today: Date, todayKey: 
 
   const normalizedDay = today.getDay() === 0 ? 0 : today.getDay()
   return Number(schedule.dayOfWeek ?? -1) === normalizedDay
+}
+
+function isDoneCaseApproval(approval: any) {
+  const caseStatus = approval?.case?.status ?? approval?.caseStatus ?? null
+  return caseStatus === "done" || caseStatus === "closed" || caseStatus === "resolved"
 }
 
 // ─── Churn warning card ───────────────────────────────────────────────────────
@@ -162,8 +167,8 @@ function RecentCaseRow({ c, orgPrefix }: { c: any; orgPrefix: string }) {
 
 export function DashboardPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
-  const { selectedOrgId } = useOrganization()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
+  const activeOrgId = useActiveOrgId(orgPrefix)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
@@ -176,15 +181,15 @@ export function DashboardPage() {
 
   const dispatchMutation = useMutation({
     mutationFn: () =>
-      orchestratorApi.dispatch({ instruction, organizationId: selectedOrgId! }),
+      orchestratorApi.dispatch({ instruction, organizationId: activeOrgId! }),
     onSuccess: (data) => {
       setInstruction("")
       setLastDispatchResult(data)
       toast?.success(`오케스트레이터 실행 완료 — ${data.runs.length}개 에이전트 배정`)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(selectedOrgId ?? "") })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.agents.list(selectedOrgId ?? "") })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(selectedOrgId ?? "") })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.agents.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(activeOrgId ?? "") })
       // Auto-dismiss after 8 seconds
       setTimeout(() => setLastDispatchResult(null), 8000)
     },
@@ -197,38 +202,38 @@ export function DashboardPage() {
 
   // ── queries ────────────────────────────────────────────────────────────────
   const { data: cases = [], isLoading: casesLoading } = useQuery({
-    queryKey: queryKeys.cases.list(selectedOrgId ?? ""),
-    queryFn: () => casesApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.cases.list(activeOrgId ?? ""),
+    queryFn: () => casesApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
 
   const { data: agents = [], isLoading: agentsLoading } = useQuery({
-    queryKey: queryKeys.agents.list(selectedOrgId ?? ""),
-    queryFn: () => agentsApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.agents.list(activeOrgId ?? ""),
+    queryFn: () => agentsApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
 
   const { data: approvals = [], isLoading: approvalsLoading } = useQuery({
-    queryKey: queryKeys.approvals.list(selectedOrgId ?? ""),
-    queryFn: () => approvalsApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.approvals.list(activeOrgId ?? ""),
+    queryFn: () => approvalsApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
 
   const { data: schedules = [], isLoading: schedulesLoading } = useQuery({
-    queryKey: queryKeys.schedules.list(selectedOrgId ?? ""),
-    queryFn: () => schedulesApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.schedules.list(activeOrgId ?? ""),
+    queryFn: () => schedulesApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
 
   const { data: activity = [], isLoading: activityLoading } = useQuery({
-    queryKey: queryKeys.activity.list(selectedOrgId ?? ""),
-    queryFn: () => activityApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.activity.list(activeOrgId ?? ""),
+    queryFn: () => activityApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
   const { data: documents = [], isLoading: documentsLoading } = useQuery({
-    queryKey: queryKeys.documents.list(selectedOrgId ?? ""),
-    queryFn: () => documentsApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.documents.list(activeOrgId ?? ""),
+    queryFn: () => documentsApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
 
   // ── derived ────────────────────────────────────────────────────────────────
@@ -236,7 +241,7 @@ export function DashboardPage() {
     (c: any) => c.status === "open" || c.status === "in_progress"
   )
   const pendingApprovals = (approvals as any[]).filter(
-    (a: any) => a.status === "pending"
+    (a: any) => a.status === "pending" && !isDoneCaseApproval(a)
   )
   const runningAgents = (agents as any[]).filter(
     (a: any) => a.status === "running"
@@ -265,13 +270,34 @@ export function DashboardPage() {
     .slice(0, 5)
 
   const recentActivity = (activity as any[]).slice(0, 10)
-  const recentInbound = (activity as any[])
-    .filter((event: any) => event.action === "case.created_from_channel" || event.action === "case.appended_from_channel")
-    .slice(0, 5)
-  const recentDocuments = (documents as any[])
-    .slice()
-    .sort((a: any, b: any) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? "")))
-    .slice(0, 5)
+  const recentInbound = (() => {
+    const seen = new Set<string>()
+    return (activity as any[])
+      .filter((event: any) => event.action === "case.created_from_channel" || event.action === "case.appended_from_channel")
+      .filter((event: any) => {
+        const key = String(event.entityId ?? event.metadata?.caseId ?? event.id ?? "")
+        if (!key || seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .slice(0, 5)
+  })()
+  const recentDocuments = (() => {
+    const seen = new Set<string>()
+    return (documents as any[])
+      .slice()
+      .sort((a: any, b: any) => String(b.updatedAt ?? "").localeCompare(String(a.updatedAt ?? "")))
+      .filter((document: any) => {
+        const linkedCaseId = String(document.linkedCase?.id ?? "")
+        const key = linkedCaseId
+          ? `case:${linkedCaseId}:${document.documentRole ?? ""}`
+          : `doc:${String(document.title ?? "").trim().toLowerCase()}:${document.documentRole ?? ""}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+      .slice(0, 5)
+  })()
 
   // Collect all runs from agents for ActiveAgentsPanel
   const allRuns = (agents as any[]).flatMap(
@@ -307,7 +333,7 @@ export function DashboardPage() {
           onChange={setInstruction}
           onSubmit={() => dispatchMutation.mutate()}
           loading={dispatchMutation.isPending}
-          disabled={!selectedOrgId}
+          disabled={!activeOrgId}
           placeholder="오케스트레이터에게 지시하기..."
         />
       </div>

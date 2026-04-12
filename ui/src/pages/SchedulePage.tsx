@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
-import { useOrganization } from "@/context/OrganizationContext"
+import { useActiveOrgId, useOrganization } from "@/context/OrganizationContext"
 import { usePanel } from "@/context/PanelContext"
 import { schedulesApi } from "@/api/schedules"
 import { casesApi } from "@/api/cases"
@@ -1466,10 +1466,10 @@ function InstructorList({ schedules }: { schedules: ScheduleItem[] }) {
 
 export function SchedulePage() {
   const { setBreadcrumbs } = useBreadcrumbs()
-  const { selectedOrgId } = useOrganization()
   const { setPanelContent, openPanel } = usePanel()
   const navigate = useNavigate()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
+  const activeOrgId = useActiveOrgId(orgPrefix)
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [viewMode, setViewMode] = useState<"weekly" | "monthly">("weekly")
@@ -1489,24 +1489,24 @@ export function SchedulePage() {
   }, [setBreadcrumbs])
 
   const { data: schedules = [], isLoading, isError } = useQuery({
-    queryKey: selectedOrgId ? queryKeys.schedules.list(selectedOrgId) : [],
-    queryFn: () => schedulesApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: activeOrgId ? queryKeys.schedules.list(activeOrgId) : [],
+    queryFn: () => schedulesApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
 
   const { data: studentSchedules = [] } = useQuery({
-    queryKey: ["student-schedules", selectedOrgId],
-    enabled: !!selectedOrgId,
-    queryFn: () => api.get<StudentScheduleRow[]>(`/organizations/${selectedOrgId}/student-schedules`),
+    queryKey: ["student-schedules", activeOrgId],
+    enabled: !!activeOrgId,
+    queryFn: () => api.get<StudentScheduleRow[]>(`/organizations/${activeOrgId}/student-schedules`),
   })
 
   const { data: cases = [] } = useQuery<any[]>({
-    queryKey: queryKeys.cases.list(selectedOrgId ?? ""),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.cases.list(activeOrgId ?? ""),
+    enabled: !!activeOrgId,
     queryFn: async () => {
-      if (!selectedOrgId) return []
+      if (!activeOrgId) return []
       try {
-        return await casesApi.list(selectedOrgId)
+        return await casesApi.list(activeOrgId)
       } catch {
         return []
       }
@@ -1514,9 +1514,9 @@ export function SchedulePage() {
   })
 
   const { data: instructorOptions = [] } = useQuery<InstructorOption[]>({
-    queryKey: ["instructors", selectedOrgId, "schedule-page"],
-    enabled: !!selectedOrgId,
-    queryFn: () => instructorsApi.list(selectedOrgId!),
+    queryKey: ["instructors", activeOrgId, "schedule-page"],
+    enabled: !!activeOrgId,
+    queryFn: () => instructorsApi.list(activeOrgId!),
   })
 
   const instructorFilterId = searchParams.get("instructor")
@@ -1596,16 +1596,16 @@ export function SchedulePage() {
       startTime: string
       endTime: string
     }) => {
-      if (!selectedOrgId) throw new Error("Organization not selected")
-      return schedulesApi.update(selectedOrgId, scheduleId, {
+      if (!activeOrgId) throw new Error("Organization not selected")
+      return schedulesApi.update(activeOrgId, scheduleId, {
         dayOfWeek,
         startTime,
         endTime,
       })
     },
     onSuccess: () => {
-      if (!selectedOrgId) return
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(selectedOrgId) })
+      if (!activeOrgId) return
+      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(activeOrgId) })
     },
   })
 
@@ -1619,7 +1619,7 @@ export function SchedulePage() {
       boundary: "start" | "end"
       nextTime: string
     }) => {
-      if (!selectedOrgId) throw new Error("Organization not selected")
+      if (!activeOrgId) throw new Error("Organization not selected")
       const target = (schedules as ScheduleItem[]).find((item) => item.id === scheduleId)
       if (!target) throw new Error("Schedule not found")
       const nextStartTime = boundary === "start" ? nextTime : target.startTime
@@ -1629,14 +1629,14 @@ export function SchedulePage() {
       if (endMinutes - startMinutes < SLOT_MINUTES) {
         throw new Error("최소 15분 이상이어야 합니다.")
       }
-      return schedulesApi.update(selectedOrgId, scheduleId, {
+      return schedulesApi.update(activeOrgId, scheduleId, {
         startTime: nextStartTime,
         endTime: nextEndTime,
       })
     },
     onSuccess: () => {
-      if (!selectedOrgId) return
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(selectedOrgId) })
+      if (!activeOrgId) return
+      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(activeOrgId) })
     },
   })
 
@@ -1648,14 +1648,14 @@ export function SchedulePage() {
       scheduleId: string
       instructorId: string | null
     }) => {
-      if (!selectedOrgId) throw new Error("Organization not selected")
-      return schedulesApi.update(selectedOrgId, scheduleId, {
+      if (!activeOrgId) throw new Error("Organization not selected")
+      return schedulesApi.update(activeOrgId, scheduleId, {
         instructorId,
       })
     },
     onSuccess: () => {
-      if (!selectedOrgId) return
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(selectedOrgId) })
+      if (!activeOrgId) return
+      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(activeOrgId) })
     },
   })
 

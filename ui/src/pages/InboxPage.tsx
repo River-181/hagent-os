@@ -59,6 +59,8 @@ interface ApprovalItem {
   decision?: Record<string, unknown> | null
   caseId?: string | null
   caseTitle?: string | null
+  caseStatus?: string | null
+  case?: { status?: string | null } | null
   createdAt?: string
   created_at?: string
 }
@@ -104,6 +106,12 @@ type ReplayHistoryItem = {
   summary: string
   createdAt: string
   href: string
+}
+
+type FeedCandidate = {
+  item: FeedItem
+  priority: number
+  contentKey: string
 }
 
 const DEMO_SCENARIOS = {
@@ -221,6 +229,79 @@ function buildApprovalBody(approval: ApprovalItem) {
   return approval.caseTitle ? `${approval.caseTitle} 관련 승인이 필요합니다.` : "검토가 필요한 승인 요청입니다."
 }
 
+function normalizeFeedText(value: string) {
+  return value.trim().replace(/\s+/g, " ").toLowerCase()
+}
+
+function getFeedContentKey(item: FeedItem) {
+  const anchor =
+    item.kind === "approval"
+      ? `case:${item.caseId ?? item.approvalId}`
+      : item.entityType && item.entityId
+        ? `${item.entityType}:${item.entityId}`
+        : item.entityId
+          ? `entity:${item.entityId}`
+          : item.kind
+
+  return [
+    anchor,
+    normalizeFeedText(item.title),
+    normalizeFeedText(item.body),
+  ].join("|")
+}
+
+function getFeedPriority(item: FeedItem) {
+  if (item.kind === "approval") return 0
+  if (item.kind === "notification" && item.category === "inquiry") return 1
+  return 2
+}
+
+function dedupeFeedItems(items: FeedItem[]) {
+  const orderedCandidates: FeedCandidate[] = items.map((item) => ({
+    item,
+    priority: getFeedPriority(item),
+    contentKey: getFeedContentKey(item),
+  }))
+
+  orderedCandidates.sort((a, b) => {
+    if (a.priority !== b.priority) return a.priority - b.priority
+    return b.item.createdAt.localeCompare(a.item.createdAt)
+  })
+
+  const seenContentKeys = new Set<string>()
+  const deduped = orderedCandidates.flatMap(({ item, contentKey }) => {
+    if (seenContentKeys.has(contentKey)) return []
+    seenContentKeys.add(contentKey)
+    return [item]
+  })
+
+  return deduped.sort((a, b) => {
+    const byCreatedAt = b.createdAt.localeCompare(a.createdAt)
+    if (byCreatedAt !== 0) return byCreatedAt
+    return getFeedPriority(a) - getFeedPriority(b)
+  })
+}
+
+function dedupeLatestByKey<T extends { createdAt: string }>(items: T[], getKey: (item: T) => string) {
+  const seenKeys = new Set<string>()
+  return [...items]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .flatMap((item) => {
+      const key = getKey(item)
+      if (seenKeys.has(key)) return []
+      seenKeys.add(key)
+      return [item]
+    })
+}
+
+function isDoneCaseApproval(approval: ApprovalItem) {
+  const normalized =
+    approval.case?.status ??
+    approval.caseStatus ??
+    null
+  return normalized === "done" || normalized === "closed" || normalized === "resolved"
+}
+
 export function InboxPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId, organizations } = useOrganization()
@@ -259,6 +340,22 @@ export function InboxPage() {
     queryFn: () => approvalsApi.list(activeOrgId!),
     enabled: !!activeOrgId,
   })
+  const doneCaseApprovalIds = useMemo(
+    () =>
+      new Set(
+        (allApprovals as ApprovalItem[])
+          .filter((approval) => isDoneCaseApproval(approval))
+          .map((approval) => approval.id),
+      ),
+    [allApprovals],
+  )
+  const visiblePendingApprovals = useMemo(
+    () =>
+      (approvals as ApprovalItem[]).filter(
+        (approval) => !isDoneCaseApproval(approval) && !doneCaseApprovalIds.has(approval.id),
+      ),
+    [approvals, doneCaseApprovalIds],
+  )
   const { data: channels = {} } = useQuery<Record<string, any>>({
     queryKey: [...queryKeys.organizations.detail(activeOrgId ?? ""), "channels"],
     queryFn: () => organizationsApi.getChannels(activeOrgId!),
@@ -272,7 +369,8 @@ export function InboxPage() {
   const replayHistory = useMemo<ReplayHistoryItem[]>(() => {
     if (!orgPrefix) return []
 
-    return activity
+    return dedupeLatestByKey(
+      activity
       .flatMap<ReplayHistoryItem>((event) => {
         const metadata = event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
           ? event.metadata
@@ -340,14 +438,26 @@ export function InboxPage() {
 
         return []
       })
-      .slice(0, 6)
+      ,
+      (item) => `${item.kind}|${item.title}|${item.summary}|${item.href}`,
+    ).slice(0, 6)
   }, [activity, orgPrefix])
 
   const recentInbound = useMemo(
     () =>
-      (activity as ActivityItem[])
-        .filter((event) => event.action === "case.created_from_channel" || event.action === "case.appended_from_channel")
-        .slice(0, 5),
+      dedupeLatestByKey(
+        (activity as ActivityItem[])
+          .filter((event) => event.action === "case.created_from_channel" || event.action === "case.appended_from_channel"),
+        (event) => {
+          const metadata =
+            event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+              ? (event.metadata as Record<string, unknown>)
+              : {}
+          const senderName = typeof metadata.senderName === "string" ? metadata.senderName : "외부 발신자"
+          const channelKey = metadata.channelKey === "telegram" ? "telegram" : "kakao"
+          return `${event.entityId ?? "unknown"}|${event.entityTitle ?? event.action}|${senderName}|${channelKey}`
+        },
+      ).slice(0, 5),
     [activity],
   )
 
@@ -521,7 +631,7 @@ export function InboxPage() {
   })
 
   const feedItems = useMemo<FeedItem[]>(() => {
-    const approvalItems: FeedItem[] = approvals.map((approval) => ({
+    const approvalItems: FeedItem[] = visiblePendingApprovals.map((approval) => ({
       id: `approval:${approval.id}`,
       kind: "approval",
       category: "pending_approvals",
@@ -578,10 +688,8 @@ export function InboxPage() {
         }]
       })
 
-    return [...approvalItems, ...notificationItems, ...inquiryItems].sort((a, b) =>
-      b.createdAt.localeCompare(a.createdAt)
-    )
-  }, [activity, approvals, notifications])
+    return dedupeFeedItems([...approvalItems, ...notificationItems, ...inquiryItems])
+  }, [activity, notifications, visiblePendingApprovals])
 
   const filteredItems = useMemo(() => {
     if (activeFilter === "all") return feedItems

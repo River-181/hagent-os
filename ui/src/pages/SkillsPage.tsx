@@ -9,24 +9,41 @@ import { useToast } from "@/context/ToastContext"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  WorkspaceEmptyState,
+  WorkspaceHeader,
+  WorkspacePanel,
+} from "@/components/ui/workspace-surface"
 import { queryKeys } from "@/lib/queryKeys"
+import { CAPABILITY_BUNDLES, findBundleByCapability } from "@/lib/capabilityBundles"
 import {
   Bot,
+  ChevronDown,
   CircleAlert,
   CloudDownload,
   Copy,
   Download,
   FileCode2,
-  FileText,
   FolderTree,
   GitBranch,
   Loader2,
+  MoreHorizontal,
   PackagePlus,
-  Puzzle,
+  Trash2,
   RefreshCcw,
   Rocket,
   Search,
@@ -56,6 +73,7 @@ type SkillListItem = {
 }
 
 type SkillDetail = SkillListItem & {
+  curatedSource?: { label: string; repo?: string }
   runtime: {
     injectionMode: string
     requiredIntegrations: string[]
@@ -91,6 +109,7 @@ type SkillMount = {
 }
 
 type FilterKey = "all" | "installed" | "owned" | "imported" | "issues"
+type CategoryKey = "all" | string
 
 const FILTERS: Array<{ key: FilterKey; label: string }> = [
   { key: "all", label: "전체" },
@@ -222,7 +241,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
               key={index}
               className="rounded-xl p-4 overflow-x-auto text-xs leading-relaxed"
               style={{
-                backgroundColor: "var(--bg-secondary)",
+                backgroundColor: "var(--bg-muted)",
                 border: "1px solid var(--border-default)",
                 color: "var(--text-primary)",
               }}
@@ -268,7 +287,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
               key={index}
               className="rounded-xl p-4 text-xs leading-relaxed"
               style={{
-                backgroundColor: "var(--bg-secondary)",
+                backgroundColor: "var(--bg-muted)",
                 border: "1px solid var(--border-default)",
                 color: "var(--text-tertiary)",
               }}
@@ -310,8 +329,8 @@ function FileTree({
               className="w-full rounded-lg px-3 py-2 text-left flex items-center gap-2 transition-colors"
               style={{
                 paddingLeft: 12 + depth * 14,
-                backgroundColor: isSelected ? "rgba(20,184,166,0.08)" : "transparent",
-                color: isSelected ? "var(--color-teal-500)" : "var(--text-secondary)",
+                backgroundColor: isSelected ? "var(--accent-primary-soft)" : "transparent",
+                color: isSelected ? "var(--accent-primary)" : "var(--text-secondary)",
               }}
               onClick={() => node.type === "file" && onSelect(node.path)}
             >
@@ -334,33 +353,55 @@ function FileTree({
 }
 
 function SkillStatusBadge({ item }: { item: SkillListItem }) {
+  // §7.2 규칙: 상태 1개만. 문제 있을 때만 warning을 추가.
+  if (!item.ready) {
+    return (
+      <Badge
+        className="border-0 text-xs"
+        style={{
+          backgroundColor: "var(--status-warning-soft)",
+          color: "var(--status-warning)",
+        }}
+      >
+        설정 필요
+      </Badge>
+    )
+  }
   return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <Badge className="border-0 text-xs" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }}>
-        {item.namespace}
-      </Badge>
-      <Badge
-        className="border-0 text-xs"
-        style={{
-          backgroundColor: item.installed ? "rgba(20,184,166,0.12)" : "var(--bg-secondary)",
-          color: item.installed ? "var(--color-teal-500)" : "var(--text-tertiary)",
-        }}
-      >
-        {item.installed ? "설치됨" : "미설치"}
-      </Badge>
-      <Badge
-        className="border-0 text-xs"
-        style={{
-          backgroundColor: item.ready ? "rgba(34,197,94,0.12)" : "rgba(245,158,11,0.12)",
-          color: item.ready ? "var(--color-success)" : "var(--color-warning, #f59e0b)",
-        }}
-      >
-        {item.ready ? "사용 가능" : "설정 필요"}
-      </Badge>
-      <Badge className="border-0 text-xs" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-tertiary)" }}>
-        {item.sourceBadge}
-      </Badge>
-    </div>
+    <Badge
+      className="border-0 text-xs"
+      style={{
+        backgroundColor: item.installed ? "var(--accent-primary-soft)" : "var(--bg-muted)",
+        color: item.installed ? "var(--accent-primary)" : "var(--text-tertiary)",
+      }}
+    >
+      {item.installed ? "설치됨" : "미설치"}
+    </Badge>
+  )
+}
+
+function DetailSection({
+  title,
+  icon,
+  children,
+  action,
+}: {
+  title: string
+  icon?: React.ReactNode
+  children: React.ReactNode
+  action?: React.ReactNode
+}) {
+  return (
+    <section className="border-t pt-5 first:border-t-0 first:pt-0" style={{ borderColor: "var(--border-default)" }}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+          {icon}
+          {title}
+        </div>
+        {action}
+      </div>
+      <div className="mt-4">{children}</div>
+    </section>
   )
 }
 
@@ -373,54 +414,31 @@ function SkillCard({
   active: boolean
   onClick: () => void
 }) {
+  // §7.6 dense row: 제목 / 보조 1줄 / 우측 메타 1개. 아이콘 타일 제거.
+  const bundleTitle = findBundleByCapability(item.slug)?.title
+  const metaBits = [bundleTitle, item.namespace !== "hagent" ? item.sourceBadge : null].filter(Boolean)
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full rounded-2xl p-4 text-left transition-all"
+      className="w-full px-4 py-2.5 text-left transition-colors"
       style={{
-        background: active
-          ? "linear-gradient(180deg, rgba(20,184,166,0.12), rgba(15,23,42,0.02))"
-          : "var(--bg-elevated)",
-        border: `1px solid ${active ? "rgba(20,184,166,0.32)" : "var(--border-default)"}`,
-        boxShadow: active ? "0 16px 30px rgba(15,23,42,0.08)" : "var(--shadow-sm)",
+        backgroundColor: active ? "var(--accent-primary-soft)" : "transparent",
+        boxShadow: active ? "inset 2px 0 0 var(--accent-primary)" : "none",
       }}
     >
-      <div className="flex items-start gap-3">
-        <div
-          className="h-10 w-10 rounded-xl flex items-center justify-center shrink-0"
-          style={{
-            backgroundColor: active ? "rgba(20,184,166,0.14)" : "var(--bg-secondary)",
-            color: active ? "var(--color-teal-500)" : "var(--text-tertiary)",
-          }}
-        >
-          <Puzzle size={18} />
-        </div>
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-              {item.displayName}
-            </p>
-            <span className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-              v{item.version}
-            </span>
-          </div>
-          <p className="mt-1 text-xs leading-relaxed line-clamp-2" style={{ color: "var(--text-secondary)" }}>
-            {item.summary}
+          <p className="truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+            {item.displayName}
           </p>
-          <div className="mt-3 flex items-center gap-2 flex-wrap">
-            <Badge className="border-0 text-[11px]" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-tertiary)" }}>
-              {item.packageType}
-            </Badge>
-            <Badge className="border-0 text-[11px]" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-tertiary)" }}>
-              {item.mountedAgents.length} agents
-            </Badge>
-            {!item.ready && (
-              <Badge className="border-0 text-[11px]" style={{ backgroundColor: "rgba(245,158,11,0.12)", color: "#d97706" }}>
-                dependency
-              </Badge>
-            )}
-          </div>
+          <p className="mt-0.5 line-clamp-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+            {[item.summary, ...metaBits].filter(Boolean).join(" · ")}
+          </p>
+        </div>
+        <div className="shrink-0">
+          <SkillStatusBadge item={item} />
         </div>
       </div>
     </button>
@@ -533,13 +551,15 @@ export function SkillsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const [search, setSearch] = useState("")
   const [filter, setFilter] = useState<FilterKey>("all")
+  const [category, setCategory] = useState<CategoryKey>("all")
   const [selectedFilePath, setSelectedFilePath] = useState("SKILL.md")
+  const [showRaw, setShowRaw] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
 
   useEffect(() => {
     setBreadcrumbs([
-      { label: "스킬 라이브러리", href: `/${orgPrefix}/skills` },
+      { label: "스킬", href: `/${orgPrefix}/skills` },
       ...(slug ? [{ label: slug }] : []),
     ])
   }, [orgPrefix, setBreadcrumbs, slug])
@@ -548,15 +568,19 @@ export function SkillsPage() {
     queryKey: [...queryKeys.skills.all, selectedOrgId],
     queryFn: async () => {
       const data = await skillsApi.list(selectedOrgId ?? undefined)
-      return Array.isArray(data) ? data.map(normalizeSkillListItem) : []
+      if (!Array.isArray(data)) {
+        throw new Error("Unexpected /api/skills response")
+      }
+      return data.map(normalizeSkillListItem)
     },
     enabled: Boolean(selectedOrgId),
   })
 
-  const filteredSkills = useMemo(
-    () => filterSkills(skillsQuery.data ?? [], search, filter),
-    [filter, search, skillsQuery.data],
-  )
+  const filteredSkills = useMemo(() => {
+    const base = filterSkills(skillsQuery.data ?? [], search, filter)
+    if (category === "all") return base
+    return base.filter((item) => findBundleByCapability(item.slug)?.id === category)
+  }, [category, filter, search, skillsQuery.data])
 
   useEffect(() => {
     if (!slug && filteredSkills.length > 0 && orgPrefix) {
@@ -584,6 +608,7 @@ export function SkillsPage() {
 
   useEffect(() => {
     setSelectedFilePath("SKILL.md")
+    setShowRaw(false)
   }, [slug])
 
   const invalidateSkills = async () => {
@@ -650,6 +675,18 @@ export function SkillsPage() {
     onError: () => toast.error("sync check에 실패했습니다."),
   })
 
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
+  const deleteMutation = useMutation({
+    mutationFn: () => skillsApi.delete(slug!),
+    onSuccess: async () => {
+      setDeleteConfirmOpen(false)
+      toast.success("스킬을 삭제했습니다.")
+      await queryClient.invalidateQueries({ queryKey: queryKeys.skills.all })
+      if (orgPrefix) navigate(`/${orgPrefix}/skills`, { replace: true })
+    },
+    onError: (error) => toast.error(error instanceof Error ? error.message : "스킬 삭제에 실패했습니다."),
+  })
+
   const exportMutation = useMutation({
     mutationFn: (target: "codex" | "claude-code" | "cursor") => skillsApi.exportBundle(slug!, target),
     onSuccess: (bundle) => {
@@ -691,7 +728,24 @@ export function SkillsPage() {
   })
 
   const detail = detailQuery.data as SkillDetail | undefined
-  const headings = useMemo(() => (detail ? extractHeadings(detail.skillMarkdown) : []), [detail])
+  const categoryOptions = useMemo(
+    () => {
+      const discoveredIds = new Set(
+        (skillsQuery.data ?? [])
+          .map((item) => findBundleByCapability(item.slug)?.id)
+          .filter((value): value is string => Boolean(value)),
+      )
+      return [
+        { id: "all", title: "전체" },
+        ...CAPABILITY_BUNDLES.filter((item) => discoveredIds.has(item.id)).map((item) => ({ id: item.id, title: item.title })),
+      ]
+    },
+    [skillsQuery.data],
+  )
+  const detailCategory = detail ? findBundleByCapability(detail.slug) : null
+  const detailMode = detail ? (detail.readOnly ? "읽기 전용" : detail.distribution.editable ? "편집 가능" : "관리형") : "-"
+  const usedByLabel = detail ? (detail.mountedAgents.length > 0 ? `${detail.mountedAgents.length}명 장착` : "장착 없음") : "-"
+  const hasConnectionNeeds = detail ? (detail.runtime.requiredIntegrations.length > 0 || detail.runtimeHealth.some((item) => !item.ready)) : false
 
   return (
     <>
@@ -701,6 +755,31 @@ export function SkillsPage() {
         onSubmit={(payload) => createMutation.mutate(payload)}
         loading={createMutation.isPending}
       />
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>스킬 삭제</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            <strong>{detail?.displayName}</strong> 스킬을 삭제하면 파일과 DB 레코드가 모두 제거됩니다.
+            장착된 에이전트에서도 해제됩니다. 이 작업은 되돌릴 수 없습니다.
+          </p>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setDeleteConfirmOpen(false)}>
+              취소
+            </Button>
+            <Button
+              disabled={deleteMutation.isPending}
+              className="gap-2 border-0 text-white"
+              style={{ backgroundColor: "var(--color-danger)" }}
+              onClick={() => deleteMutation.mutate()}
+            >
+              {deleteMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+              삭제
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <ImportSkillDialog
         open={importOpen}
         onOpenChange={setImportOpen}
@@ -708,38 +787,16 @@ export function SkillsPage() {
         loading={importMutation.isPending}
       />
 
-      <div className="space-y-6">
-        <div
-          className="rounded-3xl p-6 md:p-8"
-          style={{
-            background:
-              "radial-gradient(circle at top left, rgba(20,184,166,0.18), rgba(15,23,42,0.02) 55%), var(--bg-elevated)",
-            border: "1px solid var(--border-default)",
-          }}
-        >
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div className="space-y-3">
-              <Badge className="border-0 text-xs" style={{ backgroundColor: "rgba(20,184,166,0.12)", color: "var(--color-teal-500)" }}>
-                운영용 업무 스킬
-              </Badge>
-              <div>
-                <h1 className="text-2xl md:text-3xl font-semibold" style={{ color: "var(--text-primary)" }}>
-                  업무 스킬 라이브러리
-                </h1>
-                <p className="mt-2 max-w-3xl text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
-                  업무 스킬은 에이전트가 실제 업무를 처리할 때 참고하는 규칙, 템플릿, 체크리스트, 자동화 묶음입니다.
-                  여기서 스킬 내용을 읽고, 어떤 에이전트에 장착되어 있으며, 실행에 필요한 연동이 무엇인지 함께 확인합니다.
-                </p>
-              </div>
-              <div className="flex items-center gap-3 flex-wrap text-xs" style={{ color: "var(--text-tertiary)" }}>
-                <span>전체 {(skillsQuery.data?.length ?? 0)}개</span>
-                <span>•</span>
-                <span>설치 {(skillsQuery.data ?? []).filter((item) => item.installed).length}개</span>
-                <span>•</span>
-                <span>설정 필요 {(skillsQuery.data ?? []).filter((item) => !item.ready).length}개</span>
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
+      <div className="p-6 md:p-8 space-y-6">
+        <WorkspaceHeader
+          title="스킬"
+          description={
+            <>
+              작업에 쓰는 스킬을 고르고 내용을 확인합니다. 연결은 <span className="font-medium">설정 &gt; 연결</span>에서 따로 준비합니다.
+            </>
+          }
+          action={
+            <div className="flex flex-wrap items-center justify-end gap-2">
               <Button variant="outline" className="gap-2" onClick={() => setImportOpen(true)}>
                 <Upload size={15} />
                 가져오기
@@ -749,52 +806,99 @@ export function SkillsPage() {
                 스킬 만들기
               </Button>
             </div>
-          </div>
-        </div>
+          }
+        />
 
-        <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-          <aside
-            className="rounded-3xl overflow-hidden"
-            style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-          >
-            <div className="p-4 border-b" style={{ borderColor: "var(--border-default)" }}>
-              <div
-                className="flex items-center gap-2 rounded-xl px-3"
-                style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-              >
+        <div className="grid gap-5 xl:grid-cols-[340px_minmax(0,1fr)]">
+          <WorkspacePanel className="overflow-hidden">
+            <div className="p-3 border-b space-y-2" style={{ borderColor: "var(--border-default)" }}>
+              <div className="flex items-center gap-2 rounded-md px-2.5 py-1.5" style={{ border: "1px solid var(--border-default)" }}>
                 <Search size={14} style={{ color: "var(--text-tertiary)" }} />
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="스킬 검색"
-                  className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+                  className="border-0 bg-transparent px-0 shadow-none focus-visible:ring-0 h-6"
                 />
               </div>
-              <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-                {FILTERS.map((item) => (
-                  <button
-                    key={item.key}
-                    type="button"
-                    onClick={() => setFilter(item.key)}
-                    className="rounded-full px-3 py-1.5 text-xs whitespace-nowrap transition-colors"
-                    style={{
-                      backgroundColor: filter === item.key ? "rgba(20,184,166,0.12)" : "var(--bg-secondary)",
-                      color: filter === item.key ? "var(--color-teal-500)" : "var(--text-tertiary)",
-                    }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors hover:bg-[var(--bg-muted)]"
+                      style={{
+                        color: "var(--text-secondary)",
+                        border: "1px solid var(--border-default)",
+                      }}
+                    >
+                      {FILTERS.find((f) => f.key === filter)?.label ?? "전체"}
+                      <ChevronDown size={12} />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-[180px]">
+                    <DropdownMenuRadioGroup value={filter} onValueChange={(v) => setFilter(v as FilterKey)}>
+                      {FILTERS.map((item) => (
+                        <DropdownMenuRadioItem key={item.key} value={item.key}>
+                          {item.label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {categoryOptions.length > 1 ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors hover:bg-[var(--bg-muted)]"
+                        style={{
+                          color: "var(--text-secondary)",
+                          border: "1px solid var(--border-default)",
+                        }}
+                      >
+                        {categoryOptions.find((c) => c.id === category)?.title ?? "전체 분류"}
+                        <ChevronDown size={12} />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="min-w-[200px]">
+                      <DropdownMenuRadioGroup value={category} onValueChange={(v) => setCategory(v)}>
+                        {categoryOptions.map((item) => (
+                          <DropdownMenuRadioItem key={item.id} value={item.id}>
+                            {item.title}
+                          </DropdownMenuRadioItem>
+                        ))}
+                      </DropdownMenuRadioGroup>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
               </div>
             </div>
 
-            <ScrollArea className="h-[calc(100vh-21rem)] min-h-[540px]">
-              <div className="p-4 space-y-3">
+            <ScrollArea className="h-[calc(100vh-20rem)] min-h-[540px]">
+              <div className="divide-y" style={{ borderColor: "var(--border-subtle)" }}>
                 {skillsQuery.isLoading ? (
-                  <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-tertiary)" }}>
-                    <Loader2 size={16} className="animate-spin" />
-                    스킬 카탈로그를 불러오는 중...
-                  </div>
+                  <WorkspaceEmptyState
+                    className="min-h-[200px]"
+                    icon={<Loader2 size={18} className="animate-spin" />}
+                    title="스킬 카탈로그를 불러오는 중입니다."
+                    description="설치된 스킬과 가져온 스킬을 정리하고 있습니다."
+                  />
+                ) : skillsQuery.isError ? (
+                  <WorkspaceEmptyState
+                    className="min-h-[200px]"
+                    icon={<CircleAlert size={18} />}
+                    title="스킬 목록을 불러오지 못했습니다."
+                    description={(skillsQuery.error as Error | undefined)?.message ?? "서버 응답을 다시 확인해 주세요."}
+                  />
+                ) : filteredSkills.length === 0 ? (
+                  <WorkspaceEmptyState
+                    className="min-h-[200px]"
+                    icon={<Search size={18} />}
+                    title="조건에 맞는 스킬이 없습니다."
+                    description="검색어나 카테고리를 바꿔 다시 확인해 주세요."
+                  />
                 ) : (
                   filteredSkills.map((item) => (
                     <SkillCard
@@ -807,52 +911,64 @@ export function SkillsPage() {
                 )}
               </div>
             </ScrollArea>
-          </aside>
+          </WorkspacePanel>
 
-          <section
-            className="rounded-3xl overflow-hidden"
-            style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
-          >
-            {detailQuery.isLoading || !detail ? (
-              <div className="h-full min-h-[720px] flex flex-col items-center justify-center gap-3">
-                <Loader2 size={22} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
-                <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                  스킬 상세 정보를 불러오는 중...
-                </p>
+          <WorkspacePanel className="overflow-hidden">
+            {detailQuery.isLoading || (!detail && !detailQuery.isError) ? (
+              <div className="p-6 md:p-8">
+                <WorkspaceEmptyState
+                  className="min-h-[720px]"
+                  icon={<Loader2 size={22} className="animate-spin" />}
+                  title="스킬 상세 정보를 불러오는 중입니다."
+                  description="SKILL.md와 연결 상태, 에이전트 장착 현황을 정리하고 있습니다."
+                />
+              </div>
+            ) : detailQuery.isError || !detail ? (
+              <div className="p-6 md:p-8">
+                <WorkspaceEmptyState
+                  className="min-h-[720px]"
+                  icon={<CircleAlert size={22} />}
+                  title="스킬 상세를 불러오지 못했습니다."
+                  description={(detailQuery.error as Error | undefined)?.message ?? "선택한 스킬의 메타데이터를 다시 확인해 주세요."}
+                />
               </div>
             ) : (
               <>
                 <div className="p-6 md:p-8 border-b" style={{ borderColor: "var(--border-default)" }}>
-                  <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
-                    <div className="space-y-4">
-                      <SkillStatusBadge item={detail} />
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <h2 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
-                            {detail.displayName}
-                          </h2>
-                          <span className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                            {detail.namespace}/{detail.slug}
-                          </span>
+                  <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="min-w-0 flex-1 space-y-5">
+                      <div className="space-y-3">
+                        {detailCategory ? (
+                          <p className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: "var(--text-tertiary)" }}>
+                            {detailCategory.title}
+                          </p>
+                        ) : null}
+                        <h2 className="text-[28px] font-semibold tracking-[-0.02em]" style={{ color: "var(--text-primary)" }}>
+                          {detail.displayName}
+                        </h2>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                          <span>출처 {detail.curatedSource?.label ?? detail.sourceBadge}</span>
+                          <span>키 {detail.namespace}/{detail.slug}</span>
+                          <span>모드 {detailMode}</span>
+                          <span>사용 에이전트 {usedByLabel}</span>
                         </div>
                         <p className="max-w-3xl text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
                           {detail.summary}
                         </p>
                       </div>
-                      <div className="flex gap-2 flex-wrap">
-                        {detail.compatibility.agentTypes.map((agentType) => (
-                          <Badge key={agentType} className="border-0 text-xs" style={{ backgroundColor: "var(--bg-secondary)", color: "var(--text-tertiary)" }}>
-                            {agentType}
-                          </Badge>
-                        ))}
+                      <div className="flex items-center gap-3 flex-wrap text-xs" style={{ color: "var(--text-tertiary)" }}>
+                        <SkillStatusBadge item={detail} />
+                        {detail.compatibility.agentTypes.length > 0 ? (
+                          <span>추천 역할 {detail.compatibility.agentTypes.join(", ")}</span>
+                        ) : null}
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2 xl:justify-end">
+                    <div className="flex shrink-0 items-center gap-2">
                       {detail.installed ? (
                         <Button
-                          variant="outline"
                           disabled={uninstallMutation.isPending}
+                          variant="outline"
                           className="gap-2"
                           onClick={() => uninstallMutation.mutate()}
                         >
@@ -869,272 +985,262 @@ export function SkillsPage() {
                           기관에 설치
                         </Button>
                       )}
-                      {detail.readOnly && (
-                        <Button variant="outline" className="gap-2" disabled={forkMutation.isPending} onClick={() => forkMutation.mutate()}>
-                          {forkMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <GitBranch size={15} />}
-                          로컬 복제
-                        </Button>
-                      )}
-                      <Button variant="outline" className="gap-2" disabled={syncMutation.isPending} onClick={() => syncMutation.mutate()}>
-                        {syncMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <RefreshCcw size={15} />}
-                        동기화 점검
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="icon" aria-label="추가 작업">
+                            <MoreHorizontal size={16} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-[200px]">
+                          {detail.readOnly && (
+                            <DropdownMenuItem disabled={forkMutation.isPending} onClick={() => forkMutation.mutate()}>
+                              <GitBranch size={14} />
+                              로컬 복제
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem disabled={syncMutation.isPending} onClick={() => syncMutation.mutate()}>
+                            <RefreshCcw size={14} />
+                            동기화 점검
+                          </DropdownMenuItem>
+                          {detail.source.repo ? (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => window.open(detail.source.repo, "_blank", "noreferrer")}>
+                                <CloudDownload size={14} />
+                                저장소 열기
+                              </DropdownMenuItem>
+                            </>
+                          ) : null}
+                          {!detail.readOnly ? (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-red-500 focus:text-red-500"
+                                onClick={() => setDeleteConfirmOpen(true)}
+                              >
+                                <Trash2 size={14} />
+                                스킬 삭제
+                              </DropdownMenuItem>
+                            </>
+                          ) : null}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </div>
 
-                <Tabs defaultValue="overview" className="min-h-[660px]">
+                <Tabs defaultValue="overview" className="min-h-[560px]">
                   <div className="px-6 pt-4 md:px-8">
                     <TabsList variant="line" className="w-full justify-start gap-2 overflow-x-auto">
                       <TabsTrigger value="overview">개요</TabsTrigger>
                       <TabsTrigger value="files">파일</TabsTrigger>
-                      <TabsTrigger value="skillmd">SKILL.md</TabsTrigger>
-                      <TabsTrigger value="runtime">실행</TabsTrigger>
                       <TabsTrigger value="agents">에이전트</TabsTrigger>
-                      <TabsTrigger value="source">출처</TabsTrigger>
                     </TabsList>
                   </div>
 
-                  <TabsContent value="overview" className="p-6 md:p-8 space-y-6">
-                    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                      {[
-                        { label: "버전", value: `v${detail.version}`, icon: <FileText size={16} /> },
-                        { label: "스킬 유형", value: detail.packageType, icon: <Puzzle size={16} /> },
-                        { label: "장착 에이전트", value: String(detail.mountedAgents.length), icon: <Bot size={16} /> },
-                        { label: "파일 수", value: String(detail.fileTree.length), icon: <FolderTree size={16} /> },
-                      ].map((card) => (
-                        <div
-                          key={card.label}
-                          className="rounded-2xl p-4"
-                          style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
+                  <TabsContent value="overview" className="p-6 md:p-8 space-y-8">
+                    <div className="grid gap-8 xl:grid-cols-[minmax(0,1.1fr)_320px]">
+                      <div className="space-y-8">
+                        <DetailSection
+                          title="필요한 연결"
+                          icon={<Zap size={16} />}
+                          action={
+                            hasConnectionNeeds ? (
+                              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => orgPrefix && navigate(`/${orgPrefix}/settings#integrations`)}>
+                                <Zap size={14} />
+                                설정으로 이동
+                              </Button>
+                            ) : undefined
+                          }
                         >
-                          <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                            {card.icon}
-                            {card.label}
-                          </div>
-                          <p className="mt-3 text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-                            {card.value}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-                      <div
-                        className="rounded-2xl p-5"
-                        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                      >
-                        <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          <Sparkles size={16} />
-                          스킬 요약
-                        </div>
-                        <p className="mt-4 text-sm leading-7" style={{ color: "var(--text-secondary)" }}>
-                          {detail.summary}
-                        </p>
-                        <div className="mt-5 flex gap-2 flex-wrap">
-                          {detail.distribution.exportTargets.map((target) => (
-                            <Button
-                              key={target}
-                              size="sm"
-                              variant="outline"
-                              className="gap-1.5"
-                              disabled={exportMutation.isPending}
-                              onClick={() => exportMutation.mutate(target as "codex" | "claude-code" | "cursor")}
-                            >
-                              {exportMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                              {target} 내보내기
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div
-                        className="rounded-2xl p-5"
-                        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                      >
-                        <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          <ShieldCheck size={16} />
-                          실행 준비 상태
-                        </div>
-                        <div className="mt-4 space-y-3">
-                          {detail.runtimeHealth.length === 0 ? (
-                            <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                              등록된 external dependency가 없습니다.
+                          <div className="space-y-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+                            <p>
+                              {detail.runtime.requiredIntegrations.length > 0 ? detail.runtime.requiredIntegrations.join(", ") : "별도 연결 없이 바로 사용할 수 있습니다."}
                             </p>
-                          ) : (
-                            detail.runtimeHealth.map((item) => (
-                              <div key={item.key} className="rounded-xl px-4 py-3" style={{ backgroundColor: "var(--bg-elevated)" }}>
-                                <div className="flex items-center gap-2">
-                                  {item.ready ? (
-                                    <ShieldCheck size={15} style={{ color: "var(--color-success)" }} />
-                                  ) : (
-                                    <CircleAlert size={15} style={{ color: "#d97706" }} />
-                                  )}
-                                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                                    {item.label}
-                                  </span>
-                                </div>
-                                {item.missingEnv.length > 0 && (
-                                  <p className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                                    필요한 환경 변수: {item.missingEnv.join(", ")}
-                                  </p>
-                                )}
+                            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                              주입 방식 {detail.runtime.injectionMode}
+                              {detail.runtime.requiredSecrets.length > 0 ? ` · 비밀값 ${detail.runtime.requiredSecrets.join(", ")}` : ""}
+                              {detail.runtime.requiredEnv.length > 0 ? ` · 환경 변수 ${detail.runtime.requiredEnv.join(", ")}` : ""}
+                            </p>
+                          </div>
+                        </DetailSection>
+
+                        <DetailSection
+                          title="내보내기"
+                          icon={<Download size={16} />}
+                          action={
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button size="sm" variant="outline" className="gap-1.5" disabled={exportMutation.isPending}>
+                                  {exportMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                                  내보내기
+                                  <ChevronDown size={12} />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>타겟 선택</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                {detail.distribution.exportTargets.map((target) => (
+                                  <DropdownMenuItem
+                                    key={target}
+                                    onClick={() => exportMutation.mutate(target as "codex" | "claude-code" | "cursor")}
+                                  >
+                                    <Download size={14} />
+                                    {target}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          }
+                        >
+                          <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                            Codex / Claude Code / Cursor 중 선택해 번들을 다운로드합니다.
+                          </p>
+                        </DetailSection>
+
+                        <DetailSection title="출처" icon={<CloudDownload size={16} />}>
+                          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+                            {[
+                              ["kind", detail.source.kind],
+                              ["repo", detail.source.repo ?? "-"],
+                              ["commit", detail.source.commit ?? "-"],
+                              ["license", detail.source.license ?? "-"],
+                              ["path", detail.source.path ?? "-"],
+                            ].map(([key, value]) => (
+                              <div key={key as string} className="contents">
+                                <dt className="text-xs" style={{ color: "var(--text-tertiary)" }}>{key}</dt>
+                                <dd className="truncate" style={{ color: "var(--text-secondary)" }}>{value}</dd>
                               </div>
-                            ))
-                          )}
-                        </div>
+                            ))}
+                          </dl>
+                        </DetailSection>
                       </div>
+
+                      <DetailSection title="연결 상태" icon={<ShieldCheck size={16} />}>
+                        {detail.runtimeHealth.length === 0 ? (
+                          <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
+                            별도 연결 없이 바로 사용할 수 있습니다.
+                          </p>
+                        ) : (
+                          <div className="space-y-3">
+                            {detail.runtimeHealth.map((item) => (
+                              <div key={item.key} className="flex items-start justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    {item.ready ? (
+                                      <ShieldCheck size={15} style={{ color: "var(--color-success)" }} />
+                                    ) : (
+                                      <CircleAlert size={15} style={{ color: "var(--status-warning)" }} />
+                                    )}
+                                    <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                                      {item.label}
+                                    </span>
+                                  </div>
+                                  {item.missingEnv.length > 0 && (
+                                    <p className="mt-1 text-xs leading-5" style={{ color: "var(--text-tertiary)" }}>
+                                      필요한 환경 변수: {item.missingEnv.join(", ")}
+                                    </p>
+                                  )}
+                                </div>
+                                {!item.ready ? (
+                                  <span className="shrink-0 text-[11px]" style={{ color: "var(--status-warning)" }}>
+                                    설정 필요
+                                  </span>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </DetailSection>
                     </div>
                   </TabsContent>
 
                   <TabsContent value="files" className="p-6 md:p-8">
-                    <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-                      <div
-                        className="rounded-2xl p-4"
-                        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                      >
-                        <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          <FolderTree size={16} />
-                          스킬 파일 트리
-                        </div>
-                        <div className="mt-4">
-                          <FileTree nodes={detail.fileTree} selectedPath={selectedFilePath} onSelect={setSelectedFilePath} />
-                        </div>
+                    <div className="grid gap-8 xl:grid-cols-[280px_minmax(0,1fr)]">
+                      <div className="space-y-3">
+                        <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                          파일 트리
+                        </p>
+                        <FileTree nodes={detail.fileTree} selectedPath={selectedFilePath} onSelect={(p) => { setSelectedFilePath(p); setShowRaw(false) }} />
                       </div>
 
-                      <div
-                        className="rounded-2xl overflow-hidden"
-                        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                      >
-                        <div className="px-4 py-3 border-b flex items-center justify-between" style={{ borderColor: "var(--border-default)" }}>
-                          <div>
-                            <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                              {fileContentQuery.data?.path ?? selectedFilePath}
-                            </p>
-                            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                              {fileContentQuery.data?.language ?? "text"}
-                            </p>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1.5"
-                            onClick={() => navigator.clipboard.writeText(fileContentQuery.data?.content ?? "")}
-                          >
-                            <Copy size={14} />
-                            복사
-                          </Button>
-                        </div>
-                        <ScrollArea className="h-[480px]">
-                          <pre className="p-4 text-xs leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-primary)" }}>
-                            <code>{fileContentQuery.data?.content ?? detail.skillMarkdown}</code>
-                          </pre>
-                        </ScrollArea>
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="skillmd" className="p-6 md:p-8">
-                    <div className="grid gap-6 xl:grid-cols-[220px_minmax(0,1fr)]">
-                      <div
-                        className="rounded-2xl p-4"
-                        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                      >
-                        <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          <Zap size={16} />
-                          문서 목차
-                        </div>
-                        <div className="mt-4 space-y-2">
-                          {headings.map((heading) => (
-                            <button
-                              key={heading.id}
-                              type="button"
-                              className="block w-full rounded-lg px-3 py-2 text-left text-xs"
-                              style={{
-                                paddingLeft: heading.depth === 1 ? 12 : heading.depth === 2 ? 18 : 26,
-                                backgroundColor: "var(--bg-elevated)",
-                                color: "var(--text-secondary)",
-                              }}
-                              onClick={() => document.getElementById(heading.id)?.scrollIntoView({ behavior: "smooth", block: "center" })}
-                            >
-                              {heading.text}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div
-                        className="rounded-2xl p-6"
-                        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                      >
-                        <MarkdownPreview markdown={detail.skillMarkdown} />
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="runtime" className="p-6 md:p-8">
-                    <div className="grid gap-6 xl:grid-cols-2">
-                      <div
-                        className="rounded-2xl p-5"
-                        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                      >
-                        <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          실행 계약
-                        </h3>
-                        <div className="mt-4 space-y-3 text-sm" style={{ color: "var(--text-secondary)" }}>
-                          <p>주입 방식: <strong>{detail.runtime.injectionMode}</strong></p>
-                          <p>필요 연동: {detail.runtime.requiredIntegrations.join(", ") || "없음"}</p>
-                          <p>필요 비밀값: {detail.runtime.requiredSecrets.join(", ") || "없음"}</p>
-                          <p>필요 환경 변수: {detail.runtime.requiredEnv.join(", ") || "없음"}</p>
-                          <p>필요 파일: {detail.runtime.requiredFiles.join(", ") || "없음"}</p>
-                        </div>
-                      </div>
-                      <div
-                        className="rounded-2xl p-5"
-                        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                      >
-                        <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          의존성 상태
-                        </h3>
-                        <div className="mt-4 space-y-3">
-                          {detail.runtimeHealth.map((item) => (
-                            <div key={item.key} className="rounded-xl p-4" style={{ backgroundColor: "var(--bg-elevated)" }}>
-                              <div className="flex items-center gap-2">
-                                {item.ready ? (
-                                  <ShieldCheck size={15} style={{ color: "var(--color-success)" }} />
-                                ) : (
-                                  <CircleAlert size={15} style={{ color: "#d97706" }} />
-                                )}
-                                <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                                  {item.label}
-                                </span>
+                      <div className="overflow-hidden">
+                        {(() => {
+                          const content = fileContentQuery.data?.content ?? (selectedFilePath === "SKILL.md" ? detail.skillMarkdown : "")
+                          const isMarkdown = selectedFilePath.endsWith(".md")
+                          return (
+                            <>
+                              <div className="flex items-center justify-between gap-3 pb-4">
+                                <div>
+                                  <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                                    {fileContentQuery.data?.path ?? selectedFilePath}
+                                  </p>
+                                  {!isMarkdown || showRaw ? (
+                                    <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                                      {fileContentQuery.data?.language ?? "text"}
+                                    </p>
+                                  ) : null}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {isMarkdown && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowRaw((v) => !v)}
+                                      className="rounded-md px-2 py-1 text-xs transition-colors hover:bg-[var(--bg-muted)]"
+                                      style={{
+                                        color: "var(--text-tertiary)",
+                                        border: "1px solid var(--border-default)",
+                                      }}
+                                    >
+                                      {showRaw ? "미리보기" : "Raw"}
+                                    </button>
+                                  )}
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1.5"
+                                    onClick={() => navigator.clipboard.writeText(content)}
+                                  >
+                                    <Copy size={14} />
+                                    복사
+                                  </Button>
+                                </div>
                               </div>
-                              <p className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                                필요한 환경 변수: {item.requiredEnv.join(", ") || "없음"}
-                              </p>
-                            </div>
-                          ))}
-                        </div>
+                              {isMarkdown && !showRaw ? (
+                                <div className="overflow-y-auto" style={{ maxHeight: 480 }}>
+                                  <MarkdownPreview markdown={content} />
+                                </div>
+                              ) : (
+                                <ScrollArea className="h-[480px]">
+                                  <pre className="p-4 text-xs leading-relaxed whitespace-pre-wrap" style={{ color: "var(--text-primary)" }}>
+                                    <code>{content}</code>
+                                  </pre>
+                                </ScrollArea>
+                              )}
+                            </>
+                          )
+                        })()}
                       </div>
                     </div>
                   </TabsContent>
 
                   <TabsContent value="agents" className="p-6 md:p-8">
-                    <div className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-                      <div
-                        className="rounded-2xl p-5"
-                        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                      >
+                    <div className="grid gap-8 xl:grid-cols-[0.95fr_1.05fr]">
+                      <div className="space-y-4 border-t pt-4" style={{ borderColor: "var(--border-default)" }}>
                         <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                           장착한 에이전트
                         </h3>
                         <div className="mt-4 space-y-3">
                           {detail.mountedAgents.length === 0 ? (
-                            <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                              아직 이 스킬을 장착한 에이전트가 없습니다.
-                            </p>
+                            <WorkspaceEmptyState
+                              className="min-h-[180px]"
+                              icon={<Bot size={18} />}
+                              title="아직 이 스킬을 장착한 에이전트가 없습니다."
+                              description="필요한 에이전트에 장착하면 케이스와 프로젝트에서 바로 사용할 수 있습니다."
+                            />
                           ) : (
                             detail.mountedAgents.map((agent) => (
-                              <div key={agent.agentId} className="rounded-xl p-4" style={{ backgroundColor: "var(--bg-elevated)" }}>
+                              <div key={agent.agentId} className="border-t pt-4 first:border-t-0 first:pt-0" style={{ borderColor: "var(--border-default)" }}>
                                 <div className="flex items-center justify-between gap-3">
                                   <div>
                                     <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
@@ -1155,19 +1261,16 @@ export function SkillsPage() {
                         </div>
                       </div>
 
-                      <div
-                        className="rounded-2xl p-5"
-                        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                      >
+                      <div className="space-y-4 border-t pt-4" style={{ borderColor: "var(--border-default)" }}>
                         <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          Equip to Agent
+                          에이전트에 장착
                         </h3>
                         <div className="mt-4 space-y-3">
                           {(agentsQuery.data ?? []).map((agent) => {
                             const mounted = detail.mountedAgents.find((item) => item.agentId === agent.id)
                             return (
-                              <div key={agent.id} className="rounded-xl p-4 flex items-center gap-3" style={{ backgroundColor: "var(--bg-elevated)" }}>
-                                <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "rgba(20,184,166,0.08)", color: "var(--color-teal-500)" }}>
+                              <div key={agent.id} className="flex items-center gap-3 border-t pt-4 first:border-t-0 first:pt-0" style={{ borderColor: "var(--border-default)" }}>
+                                <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "var(--accent-primary-soft)", color: "var(--accent-primary)" }}>
                                   <Bot size={16} />
                                 </div>
                                 <div className="min-w-0 flex-1">
@@ -1195,48 +1298,10 @@ export function SkillsPage() {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="source" className="p-6 md:p-8">
-                    <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
-                      <div
-                        className="rounded-2xl p-5"
-                        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                      >
-                        <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          Source & Provenance
-                        </h3>
-                        <div className="mt-4 space-y-3 text-sm" style={{ color: "var(--text-secondary)" }}>
-                          <p>kind: <strong>{detail.source.kind}</strong></p>
-                          <p>repo: {detail.source.repo ?? "-"}</p>
-                          <p>commit: {detail.source.commit ?? "-"}</p>
-                          <p>license: {detail.source.license ?? "-"}</p>
-                          <p>path: {detail.source.path ?? "-"}</p>
-                        </div>
-                        {detail.source.repo && (
-                          <Button variant="outline" className="mt-4 gap-1.5" asChild>
-                            <a href={detail.source.repo} target="_blank" rel="noreferrer">
-                              <CloudDownload size={14} />
-                              Open Source Repo
-                            </a>
-                          </Button>
-                        )}
-                      </div>
-                      <div
-                        className="rounded-2xl p-5"
-                        style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                      >
-                        <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          agents/openai.yaml
-                        </h3>
-                        <pre className="mt-4 rounded-xl p-4 text-xs overflow-x-auto" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-primary)" }}>
-                          <code>{detail.openaiYaml ?? "No agents/openai.yaml"}</code>
-                        </pre>
-                      </div>
-                    </div>
-                  </TabsContent>
                 </Tabs>
               </>
             )}
-          </section>
+          </WorkspacePanel>
         </div>
       </div>
     </>

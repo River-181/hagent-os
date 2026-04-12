@@ -2,31 +2,46 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-@theme {
-  /* Toss-style spacing */
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.625rem;
-  --radius-xl: 0.75rem;
+/* ═══════════════════════════════════════════════════════════════════════
+ * HagentOS Design Tokens — Phase A (2026-04-13)
+ * 정본: [[03_제품/DESIGN-TOKENS.md]]
+ *
+ * 구조:
+ *   Tier 1  Primitives     (raw 값, 코드에서 직접 사용 금지)
+ *   Tier 2  Semantic       (canonical — 신규 코드는 이것만 참조)
+ *   Legacy  Aliases        (기존 코드 호환, 신규 사용 금지)
+ *   shadcn  Semantic       (shadcn/ui 호환용)
+ * ═══════════════════════════════════════════════════════════════════════ */
 
-  /* Toss teal brand */
-  --color-teal-50: #e6fafa;
+@theme {
+  /* ─── Tier 1: Primitives ─────────────────────────────────────────────── */
+
+  /* Radius */
+  --radius-sm: 0.375rem;   /*  6px  — input, small button */
+  --radius-md: 0.5rem;     /*  8px  — button, chip */
+  --radius-lg: 0.625rem;   /* 10px  — card, tab */
+  --radius-xl: 1rem;       /* 16px  — legacy, 신규 사용 금지 */
+
+  /* Toss teal brand primitives */
+  --color-teal-50:  #e6fafa;
   --color-teal-100: #b3f0f0;
   --color-teal-300: #26c7c7;
-  --color-teal-500: #0ea5b0;
+  --color-teal-500: #0ea5b0;   /* PRIMARY */
   --color-teal-600: #0891a0;
   --color-teal-700: #077e8d;
 
-  --color-primary: var(--color-teal-500);
-  --color-primary-hover: var(--color-teal-600);
-  --color-primary-bg: var(--color-teal-50);
+  /* ─── Tier 2: Brand & status (semantic, 코드에서 사용) ──────────────── */
+  --color-primary:       var(--accent-primary);
+  --color-primary-hover: var(--accent-primary-hover);
+  --color-primary-soft:  var(--accent-primary-soft);   /* canonical */
+  --color-primary-bg:    var(--accent-primary-soft);   /* legacy alias */
 
   --color-success: #03b26c;
   --color-warning: #ffc342;
-  --color-danger: #f04452;
-  --color-info: var(--color-teal-500);
+  --color-danger:  #f04452;
+  --color-info:    var(--color-teal-500);
 
-  /* shadcn Tailwind v4 color mappings */
+  /* ─── shadcn 매핑 (Tailwind v4 요구) ─────────────────────────────────── */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -47,103 +62,204 @@
   --color-ring: var(--ring);
 }
 
+/* ═══════════════════════════════════════════════════════════════════════
+ * LIGHT MODE (기본)
+ * ═══════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --bg-base: #ffffff;
-  --bg-secondary: #f6f7f9;
-  --bg-tertiary: #f2f4f6;
-  --bg-elevated: #ffffff;
+  /* ─── 배경 (canonical 5) ──────────────────────────────────────────────
+   * §2.1 DESIGN-TOKENS
+   * rail과 body는 --bg-canvas 하나로 통일. 구분은 border-right 로만.
+   * ──────────────────────────────────────────────────────────────────── */
+  --bg-canvas:   #ffffff;                        /* 앱 shell (rail + body 통일) */
+  --bg-elevated: #ffffff;                        /* panel / card / popover */
+  --bg-muted:    #f2f4f6;                        /* input / chip / code */
+  --bg-subtle:   #f6f8fb;                        /* empty state / 비강조 */
+  --bg-overlay:  rgba(15, 23, 42, 0.36);         /* modal backdrop */
 
-  --text-primary: #191f28;
-  --text-secondary: #4e5968;
-  --text-tertiary: #8b95a1;
-  --text-disabled: #b0b8c1;
+  /* ─── 텍스트 (canonical 4) ──────────────────────────────────────────── */
+  --text-primary:    #191f28;
+  --text-secondary:  #4e5968;
+  --text-tertiary:   #8b95a1;
+  --text-on-primary: #ffffff;
 
+  /* ─── 경계 (canonical 2) ────────────────────────────────────────────── */
   --border-default: #e5e8eb;
-  --border-focus: var(--color-teal-500);
+  --border-focus:   var(--color-teal-500);
 
-  --shadow-sm: 0 1px 4px rgba(2,32,71,0.05);
-  --shadow-md: 0 4px 16px rgba(2,32,71,0.08), 0 1px 4px rgba(2,32,71,0.04);
-  --shadow-lg: 0 8px 32px rgba(2,32,71,0.10), 0 2px 8px rgba(2,32,71,0.06);
+  /* ─── 브랜드 (Tier 2) ───────────────────────────────────────────────── */
+  --accent-primary:         #0ea5b0;
+  --accent-primary-hover:   #0891a0;
+  --accent-primary-pressed: #077e8d;
+  --accent-primary-soft:    #e8f8f8;
 
-  /* shadcn semantic colors — required for ui/* components */
-  --background: #ffffff;
-  --foreground: #191f28;
-  --card: #ffffff;
-  --card-foreground: #191f28;
-  --popover: #ffffff;
-  --popover-foreground: #191f28;
-  --primary: #0ea5b0;
-  --primary-foreground: #ffffff;
-  --secondary: #f6f7f9;
-  --secondary-foreground: #191f28;
-  --muted: #f2f4f6;
-  --muted-foreground: #8b95a1;
-  --accent: #f2f4f6;
-  --accent-foreground: #191f28;
-  --destructive: #f04452;
-  --destructive-foreground: #ffffff;
-  --border: #e5e8eb;
-  --input: #e5e8eb;
-  --ring: #0ea5b0;
+  /* ─── 상태 (Tier 2, 직접 사용 가능) ─────────────────────────────────── */
+  --status-success:      #03b26c;
+  --status-success-soft: #ecfbf4;
+  --status-warning:      #ffc342;
+  --status-warning-soft: #fff8e8;
+  --status-danger:       #f04452;
+  --status-danger-soft:  #fff1f3;
+  --status-info:         #0ea5b0;
+  --status-info-soft:    #e8f8f8;
+
+  /* ─── Input ─────────────────────────────────────────────────────────── */
+  --input-bg:           #ffffff;
+  --input-bg-disabled:  #f7f8fa;
+  --input-border:       #e5e8eb;
+  --input-border-error: #f04452;
+
+  /* ─── Shadow (3단계만) ──────────────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px rgba(17, 24, 39, 0.025);
+  --shadow-sm: 0 3px 10px rgba(17, 24, 39, 0.045);
+  --shadow-md: 0 10px 28px rgba(17, 24, 39, 0.08);
+
+  /* ═════════════════════════════════════════════════════════════════════
+   * Legacy aliases — Phase A 호환용. 신규 코드에서 사용 금지.
+   * Phase B-C에서 점진적으로 위 canonical 토큰으로 대체한다.
+   * ═════════════════════════════════════════════════════════════════════ */
+
+  /* Background legacy → 5 canonical에 수렴 */
+  --bg-base:      var(--bg-canvas);       /* 과거 body bg */
+  --bg-page:      var(--bg-elevated);     /* 과거 panel bg */
+  --bg-surface:   var(--bg-elevated);     /* 과거 surface */
+  --bg-secondary: var(--bg-muted);
+  --bg-tertiary:  var(--bg-subtle);
+
+  /* Text legacy */
+  --text-strong:   var(--text-primary);
+  --text-muted:    var(--text-tertiary);
+  --text-disabled: #b0b8c1;               /* disabled 상태용 — 의미상 유지 */
+
+  /* Border legacy */
+  --border-subtle: var(--border-default);
+  --border-strong: var(--border-default);
+
+  /* Shadow legacy */
+  --shadow-lg: var(--shadow-md);
+
+  /* ─── shadcn semantic ──────────────────────────────────────────────── */
+  --background:             var(--bg-canvas);
+  --foreground:             var(--text-primary);
+  --card:                   var(--bg-elevated);
+  --card-foreground:        var(--text-primary);
+  --popover:                var(--bg-elevated);
+  --popover-foreground:     var(--text-primary);
+  --primary:                var(--accent-primary);
+  --primary-foreground:     var(--text-on-primary);
+  --secondary:              var(--bg-muted);
+  --secondary-foreground:   var(--text-primary);
+  --muted:                  var(--bg-subtle);
+  --muted-foreground:       var(--text-tertiary);
+  --accent:                 var(--bg-muted);
+  --accent-foreground:      var(--text-primary);
+  --destructive:            var(--status-danger);
+  --destructive-foreground: var(--text-on-primary);
+  --border:                 var(--border-default);
+  --input:                  var(--input-border);
+  --ring:                   var(--border-focus);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * DARK MODE
+ * light와 달리 canvas < elevated로 두어 panel elevation 단서를 남긴다.
+ * ═══════════════════════════════════════════════════════════════════════ */
 
 .dark {
-  --bg-base: #17171c;
-  --bg-secondary: #202027;
-  --bg-tertiary: #2c2c35;
-  --bg-elevated: #2c2c35;
+  /* ─── 배경 (canonical 5, dark) ──────────────────────────────────────── */
+  --bg-canvas:   #17171c;
+  --bg-elevated: #1d232c;
+  --bg-muted:    #242c36;
+  --bg-subtle:   #1f262f;
+  --bg-overlay:  rgba(0, 0, 0, 0.5);
 
-  --text-primary: #ffffff;
-  --text-secondary: #c3c3c6;
-  --text-tertiary: #8b8b92;
+  /* ─── 텍스트 (canonical 4, dark) ───────────────────────────────────── */
+  --text-primary:    #ffffff;
+  --text-secondary:  #c9d1db;
+  --text-tertiary:   #8a95a3;
+  --text-on-primary: #ffffff;
 
-  --border-default: #2c2c35;
+  /* ─── 경계 (canonical 2, dark) ─────────────────────────────────────── */
+  --border-default: #34404d;
+  --border-focus:   #26c7c7;
 
-  /* shadcn semantic colors — dark */
-  --background: #17171c;
-  --foreground: #ffffff;
-  --card: #202027;
-  --card-foreground: #ffffff;
-  --popover: #202027;
-  --popover-foreground: #ffffff;
-  --primary: #0ea5b0;
-  --primary-foreground: #ffffff;
-  --secondary: #2c2c35;
-  --secondary-foreground: #ffffff;
-  --muted: #2c2c35;
-  --muted-foreground: #8b8b92;
-  --accent: #2c2c35;
-  --accent-foreground: #ffffff;
-  --destructive: #f04452;
-  --destructive-foreground: #ffffff;
-  --border: #2c2c35;
-  --input: #2c2c35;
-  --ring: #0ea5b0;
+  /* ─── 브랜드 (dark, 더 밝게) ───────────────────────────────────────── */
+  --accent-primary:         #26c7c7;
+  --accent-primary-hover:   #0ea5b0;
+  --accent-primary-pressed: #0891a0;
+  --accent-primary-soft:    rgba(14, 165, 176, 0.12);
+
+  /* ─── 상태 soft (dark) ──────────────────────────────────────────────── */
+  --status-success-soft: rgba(3, 178, 108, 0.12);
+  --status-warning-soft: rgba(255, 195, 66, 0.12);
+  --status-danger-soft:  rgba(240, 68, 82, 0.12);
+  --status-info-soft:    rgba(14, 165, 176, 0.12);
+
+  /* ─── Input (dark) ──────────────────────────────────────────────────── */
+  --input-bg:           #1d232c;
+  --input-bg-disabled:  #202731;
+  --input-border:       #34404d;
+  --input-border-error: #f04452;
+
+  /* ─── Legacy aliases (dark) ─────────────────────────────────────────── */
+  --bg-base:       var(--bg-canvas);
+  --bg-page:       var(--bg-elevated);
+  --bg-surface:    var(--bg-elevated);
+  --bg-secondary:  var(--bg-muted);
+  --bg-tertiary:   var(--bg-subtle);
+  --text-strong:   var(--text-primary);
+  --text-muted:    var(--text-tertiary);
+  --text-disabled: #5c6673;
+  --border-subtle: var(--border-default);
+  --border-strong: var(--border-default);
+
+  /* ─── shadcn semantic (dark) ───────────────────────────────────────── */
+  --background:             var(--bg-canvas);
+  --foreground:             var(--text-primary);
+  --card:                   var(--bg-elevated);
+  --card-foreground:        var(--text-primary);
+  --popover:                var(--bg-elevated);
+  --popover-foreground:     var(--text-primary);
+  --primary:                var(--accent-primary);
+  --primary-foreground:     var(--text-on-primary);
+  --secondary:              var(--bg-muted);
+  --secondary-foreground:   var(--text-primary);
+  --muted:                  var(--bg-subtle);
+  --muted-foreground:       var(--text-tertiary);
+  --accent:                 var(--bg-muted);
+  --accent-foreground:      var(--text-primary);
+  --destructive:            var(--status-danger);
+  --destructive-foreground: var(--text-on-primary);
+  --border:                 var(--border-default);
+  --input:                  var(--input-border);
+  --ring:                   var(--border-focus);
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+ * Base styles
+ * ═══════════════════════════════════════════════════════════════════════ */
 
 body {
   font-family: "Toss Product Sans", "Noto Sans KR", -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 16px;
   color: var(--text-primary);
-  background-color: var(--bg-base);
+  background-color: var(--bg-canvas);
 }
 
 /* ─── Global transitions ────────────────────────────────────────────────── */
 
 /* Smooth transitions for all interactive elements */
 button, a, [role="button"] {
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
-/* Card hover effect — subtle lift */
+/* Card hover effect — no floating lift */
 [data-card-hover]:hover {
-  box-shadow: var(--shadow-md) !important;
-  transform: translateY(-1px);
-  transition: all 0.2s ease;
+  box-shadow: var(--shadow-xs) !important;
 }
 
 [data-card-hover] {
-  transition: all 0.2s ease;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
 }
 
 /* Skeleton loading shimmer */

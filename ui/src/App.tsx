@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom"
+import { Routes, Route, Navigate, useParams } from "react-router-dom"
 import { useOrganization } from "@/context/OrganizationContext"
 import { Layout } from "@/components/Layout"
 import { DashboardPage } from "@/pages/DashboardPage"
@@ -14,7 +14,6 @@ import { AgentDetailPage } from "@/pages/AgentDetailPage"
 import { SchedulePage } from "@/pages/SchedulePage"
 import { ActivityPage } from "@/pages/ActivityPage"
 import { SkillsPage } from "@/pages/SkillsPage"
-import { CapabilitiesPage } from "@/pages/CapabilitiesPage"
 import { PluginsPage } from "@/pages/PluginsPage"
 import { AdaptersPage } from "@/pages/AdaptersPage"
 import { SettingsPage } from "@/pages/SettingsPage"
@@ -48,6 +47,12 @@ function RootRedirect() {
   return <Navigate to={`/${preferred.prefix}/dashboard`} replace />
 }
 
+function CapabilitiesRedirect() {
+  const { orgPrefix, slug } = useParams<{ orgPrefix: string; slug?: string }>()
+  if (!orgPrefix) return <Navigate to="/" replace />
+  return <Navigate to={slug ? `/${orgPrefix}/skills/${slug}` : `/${orgPrefix}/skills`} replace />
+}
+
 export function App() {
   return (
     <Routes>
@@ -70,8 +75,8 @@ export function App() {
         <Route path="activity" element={<ActivityPage />} />
         <Route path="skills" element={<SkillsPage />} />
         <Route path="skills/:slug" element={<SkillsPage />} />
-        <Route path="capabilities" element={<CapabilitiesPage />} />
-        <Route path="capabilities/:kind/:slug" element={<CapabilitiesPage />} />
+        <Route path="capabilities" element={<CapabilitiesRedirect />} />
+        <Route path="capabilities/:kind/:slug" element={<CapabilitiesRedirect />} />
         <Route path="plugins" element={<PluginsPage />} />
         <Route path="adapters" element={<AdaptersPage />} />
         <Route path="settings" element={<SettingsPage />} />

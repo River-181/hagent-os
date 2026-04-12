@@ -9,6 +9,7 @@ import { OrganizationProvider } from "@/context/OrganizationContext"
 import { SidebarProvider } from "@/context/SidebarContext"
 import { PanelProvider } from "@/context/PanelContext"
 import { BreadcrumbProvider } from "@/context/BreadcrumbContext"
+import { AssistantProvider } from "@/context/AssistantContext"
 import { App } from "./App"
 import "./index.css"
 
@@ -32,7 +33,9 @@ createRoot(document.getElementById("root")!).render(
                 <SidebarProvider>
                   <PanelProvider>
                     <BreadcrumbProvider>
-                      <App />
+                      <AssistantProvider>
+                        <App />
+                      </AssistantProvider>
                     </BreadcrumbProvider>
                   </PanelProvider>
                 </SidebarProvider>

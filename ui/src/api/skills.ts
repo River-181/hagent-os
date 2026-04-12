@@ -21,4 +21,5 @@ export const skillsApi = {
   exportBundle: (slug: string, target: "codex" | "claude-code" | "cursor") =>
     api.post<any>(`/skills/${slug}/export`, { target }),
   syncCheck: (slug: string) => api.post<any>(`/skills/${slug}/sync-check`, {}),
+  delete: (slug: string) => api.delete<{ deleted: boolean; slug: string }>(`/skills/${slug}`),
 }

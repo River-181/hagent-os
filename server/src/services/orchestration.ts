@@ -1,9 +1,10 @@
-import { desc, eq } from "drizzle-orm"
+import { and, desc, eq, isNull } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { runOrchestrator } from "../lib/agents/orchestrator.js"
 import { executeAgentRun } from "./execution.js"
 import { createCaseWithRetry } from "../lib/case-create.js"
+import { recoverStaleRuns } from "./run-recovery.js"
 
 export function getApprovalLevelForAgentType(agentType: string) {
   if (agentType === "complaint" || agentType === "scheduler") return 1
@@ -26,6 +27,7 @@ export async function dispatchInstruction(
     preferredProjectId?: string | null
   },
 ) {
+  await recoverStaleRuns(db, input.organizationId)
   const [org] = await db
     .select()
     .from(schema.organizations)
@@ -41,8 +43,32 @@ export async function dispatchInstruction(
   const pendingCases = await db
     .select()
     .from(schema.cases)
-    .where(eq(schema.cases.organizationId, input.organizationId))
+    .where(and(
+      eq(schema.cases.organizationId, input.organizationId),
+      isNull(schema.cases.archivedAt),
+    ))
     .orderBy(desc(schema.cases.createdAt))
+  const existingRuns = await db
+    .select()
+    .from(schema.agentRuns)
+    .where(eq(schema.agentRuns.organizationId, input.organizationId))
+  const existingApprovals = await db
+    .select()
+    .from(schema.approvals)
+    .where(eq(schema.approvals.organizationId, input.organizationId))
+
+  const activeRunCaseIds = new Set(
+    existingRuns
+      .filter((item) => item.status === "queued" || item.status === "running" || item.status === "pending_approval")
+      .map((item) => item.caseId)
+      .filter((value): value is string => typeof value === "string"),
+  )
+  const pendingApprovalCaseIds = new Set(
+    existingApprovals
+      .filter((item) => item.status === "pending")
+      .map((item) => item.caseId)
+      .filter((value): value is string => typeof value === "string"),
+  )
 
   const orchestratorAgent = agents.find(
     (agent: typeof schema.agents.$inferSelect) => agent.agentType === "orchestrator",
@@ -81,9 +107,12 @@ export async function dispatchInstruction(
 
     const matchingOpenCase = pendingCases.find(
       (item: typeof schema.cases.$inferSelect) =>
+        !item.archivedAt &&
         (item.assigneeAgentId === null || item.assigneeAgentId === agent.id) &&
         item.status !== "done" &&
         item.status !== "in_review" &&
+        !activeRunCaseIds.has(item.id) &&
+        !pendingApprovalCaseIds.has(item.id) &&
         item.type === inferCaseType(agent.agentType),
     )
 

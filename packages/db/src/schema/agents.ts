@@ -26,8 +26,13 @@ export const agentTypeEnum = pgEnum("agent_type", [
   "scheduler",
   "intake",
   "staff",
+  "finance",
   "compliance",
   "notification",
+  "analytics",
+  "operations",
+  "counseling",
+  "marketing",
 ])
 
 export const agents = pgTable(

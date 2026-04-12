@@ -6,7 +6,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
 import { cn, timeAgo } from "@/lib/utils"
 import { StatusIcon } from "./StatusIcon"
 import { PriorityIcon, priorityLabel } from "./PriorityIcon"
@@ -73,7 +72,7 @@ const priorityOptions: { value: string; label: string; priority: number }[] = [
   { value: "4", label: "없음", priority: 4 },
 ]
 
-function PropertyRow({
+function PropertyField({
   label,
   children,
 }: {
@@ -81,11 +80,11 @@ function PropertyRow({
   children: React.ReactNode
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-2">
-      <span className="text-xs shrink-0 w-24" style={{ color: "var(--text-tertiary)" }}>
+    <div className="space-y-1.5">
+      <span className="block text-[11px] font-medium uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
         {label}
       </span>
-      <div className="flex-1 flex justify-end">{children}</div>
+      <div>{children}</div>
     </div>
   )
 }
@@ -129,182 +128,153 @@ export function CaseProperties({
   }
 
   const canEdit = !!(onStatusChange ?? onUpdate)
+  const editableTriggerClassName =
+    "h-9 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-base)] px-3 text-xs text-[var(--text-primary)] shadow-none transition-colors hover:bg-[var(--bg-tertiary)] focus:ring-0"
+  const staticBadgeClassName = "border-0 px-2 py-1 text-xs font-medium"
 
   return (
-    <div className={cn("text-sm", className)}>
-      {/* Status */}
-      <PropertyRow label="상태">
-        <Select value={status} onValueChange={handleStatusChange} disabled={!canEdit}>
-          <SelectTrigger
-            className="h-7 text-xs w-36 border-0 focus:ring-0"
-            style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-primary)" }}
-          >
-            <SelectValue>
-              <span className="flex items-center gap-1.5">
-                <StatusIcon status={status} size={12} />
-                {statusOptions.find((s) => s.value === status)?.label ?? status}
-              </span>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {statusOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
+    <div className={cn("space-y-4 text-sm", className)}>
+      {canEdit ? (
+        <p className="text-[11px] leading-5" style={{ color: "var(--text-tertiary)" }}>
+          드롭다운으로 표시된 항목은 이 패널에서 바로 수정됩니다.
+        </p>
+      ) : null}
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <PropertyField label="상태">
+          <Select value={status} onValueChange={handleStatusChange} disabled={!canEdit}>
+            <SelectTrigger className={editableTriggerClassName}>
+              <SelectValue>
                 <span className="flex items-center gap-1.5">
-                  <StatusIcon status={opt.value} size={12} />
-                  {opt.label}
+                  <StatusIcon status={status} size={12} />
+                  {statusOptions.find((s) => s.value === status)?.label ?? status}
                 </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </PropertyRow>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {statusOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  <span className="flex items-center gap-1.5">
+                    <StatusIcon status={opt.value} size={12} />
+                    {opt.label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </PropertyField>
 
-      <Separator style={{ backgroundColor: "var(--border-default)" }} />
-
-      {/* Priority */}
-      <PropertyRow label="우선순위">
-        <Select
-          value={String(priority)}
-          onValueChange={handlePriorityChange}
-          disabled={!onUpdate}
-        >
-          <SelectTrigger
-            className="h-7 text-xs w-36 border-0 focus:ring-0"
-            style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-primary)" }}
-          >
-            <SelectValue>
-              <span className="flex items-center gap-1.5">
-                <PriorityIcon priority={priority as 0 | 1 | 2 | 3 | 4} size={12} />
-                {priorityLabel(priority)}
-              </span>
-            </SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {priorityOptions.map((opt) => (
-              <SelectItem key={opt.value} value={opt.value}>
+        <PropertyField label="우선순위">
+          <Select value={String(priority)} onValueChange={handlePriorityChange} disabled={!onUpdate}>
+            <SelectTrigger className={editableTriggerClassName}>
+              <SelectValue>
                 <span className="flex items-center gap-1.5">
-                  <PriorityIcon priority={opt.priority as 0 | 1 | 2 | 3 | 4} size={12} />
-                  {opt.label}
+                  <PriorityIcon priority={priority as 0 | 1 | 2 | 3 | 4} size={12} />
+                  {priorityLabel(priority)}
                 </span>
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </PropertyRow>
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {priorityOptions.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  <span className="flex items-center gap-1.5">
+                    <PriorityIcon priority={opt.priority as 0 | 1 | 2 | 3 | 4} size={12} />
+                    {opt.label}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </PropertyField>
 
-      <Separator style={{ backgroundColor: "var(--border-default)" }} />
+        <PropertyField label="담당 에이전트">
+          <Select value={assigneeAgentId ?? "__none__"} onValueChange={handleAssigneeChange} disabled={!onUpdate}>
+            <SelectTrigger className={editableTriggerClassName}>
+              <SelectValue placeholder="미배정" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">미배정</SelectItem>
+              {agents.map((agent) => (
+                <SelectItem key={agent.id} value={agent.id}>
+                  {agent.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </PropertyField>
 
-      <PropertyRow label="담당 에이전트">
-        <Select value={assigneeAgentId ?? "__none__"} onValueChange={handleAssigneeChange} disabled={!onUpdate}>
-          <SelectTrigger
-            className="h-7 text-xs w-44 border-0 focus:ring-0"
-            style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-primary)" }}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">미배정</SelectItem>
-            {agents.map((agent) => (
-              <SelectItem key={agent.id} value={agent.id}>
-                {agent.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </PropertyRow>
+        <PropertyField label="프로젝트">
+          <Select value={projectId ?? "__none__"} onValueChange={handleProjectChange} disabled={!onUpdate}>
+            <SelectTrigger className={editableTriggerClassName}>
+              <SelectValue placeholder="미연결" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">미연결</SelectItem>
+              {projects.map((projectOption) => (
+                <SelectItem key={projectOption.id} value={projectOption.id}>
+                  {projectOption.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </PropertyField>
+      </div>
 
-      <Separator style={{ backgroundColor: "var(--border-default)" }} />
-
-      <PropertyRow label="프로젝트">
-        <Select value={projectId ?? "__none__"} onValueChange={handleProjectChange} disabled={!onUpdate}>
-          <SelectTrigger
-            className="h-7 text-xs w-44 border-0 focus:ring-0"
-            style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-primary)" }}
-          >
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__none__">미연결</SelectItem>
-            {projects.map((projectOption) => (
-              <SelectItem key={projectOption.id} value={projectOption.id}>
-                {projectOption.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </PropertyRow>
-
-      {data.type && (
-        <>
-          <Separator style={{ backgroundColor: "var(--border-default)" }} />
-          <PropertyRow label="유형">
+      <div className="grid gap-3 sm:grid-cols-2">
+        {data.type && (
+          <PropertyField label="유형">
             <Badge
-              className="text-xs border-0 px-2 py-0.5 font-medium"
+              className={staticBadgeClassName}
               style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
             >
               {data.type}
             </Badge>
-          </PropertyRow>
-        </>
-      )}
+          </PropertyField>
+        )}
 
-      {data.severity && (
-        <>
-          <Separator style={{ backgroundColor: "var(--border-default)" }} />
-          <PropertyRow label="심각도">
+        {data.severity && (
+          <PropertyField label="심각도">
             <Badge
-              className="text-xs border-0 px-2 py-0.5 font-medium"
+              className={staticBadgeClassName}
               style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
             >
               {data.severity}
             </Badge>
-          </PropertyRow>
-        </>
-      )}
+          </PropertyField>
+        )}
 
-      {data.reporter && (
-        <>
-          <Separator style={{ backgroundColor: "var(--border-default)" }} />
-          <PropertyRow label="보고자">
-            <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+        {data.reporter && (
+          <PropertyField label="보고자">
+            <span className="text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
               {data.reporter}
             </span>
-          </PropertyRow>
-        </>
-      )}
+          </PropertyField>
+        )}
 
-      {studentName && (
-        <>
-          <Separator style={{ backgroundColor: "var(--border-default)" }} />
-          <PropertyRow label="학생">
-            <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+        {studentName && (
+          <PropertyField label="학생">
+            <span className="text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
               {studentName}
             </span>
-          </PropertyRow>
-        </>
-      )}
+          </PropertyField>
+        )}
 
-      {createdAt && (
-        <>
-          <Separator style={{ backgroundColor: "var(--border-default)" }} />
-          <PropertyRow label="생성일">
-            <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+        {createdAt && (
+          <PropertyField label="생성일">
+            <span className="text-xs leading-5" style={{ color: "var(--text-tertiary)" }}>
               {timeAgo(createdAt)}
             </span>
-          </PropertyRow>
-        </>
-      )}
+          </PropertyField>
+        )}
 
-      {dueAt && (
-        <>
-          <Separator style={{ backgroundColor: "var(--border-default)" }} />
-          <PropertyRow label="마감일">
-            <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+        {dueAt && (
+          <PropertyField label="마감일">
+            <span className="text-xs leading-5" style={{ color: "var(--text-tertiary)" }}>
               {timeAgo(dueAt)}
             </span>
-          </PropertyRow>
-        </>
-      )}
+          </PropertyField>
+        )}
+      </div>
     </div>
   )
 }

@@ -2,6 +2,7 @@ import { Router } from "express"
 import type { Db } from "@hagent/db"
 import {
   createSkillPackage,
+  deleteSkill,
   exportSkillPackage,
   forkSkillPackage,
   getSkillDetail,
@@ -92,6 +93,14 @@ export function skillRoutes(_db: Db): Router {
       res.json(await runSkillSyncCheck(_db, req.params.slug))
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "Failed to run sync check" })
+    }
+  })
+
+  router.delete("/:slug", async (req, res) => {
+    try {
+      res.json(await deleteSkill(_db, req.params.slug))
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to delete skill" })
     }
   })
 

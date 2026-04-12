@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState, type ChangeEvent, type DragEvent } from "react"
+import React, { useContext, useEffect, useMemo, useState, type ChangeEvent, type DragEvent, type ReactNode } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useParams } from "react-router-dom"
 import { studentsApi } from "@/api/students"
@@ -34,8 +34,9 @@ import {
 } from "@/components/ui/sheet"
 import { Switch } from "@/components/ui/switch"
 import { ToastContext } from "@/components/ToastContext"
+import { CommonPropertiesRows, PropertiesCard, PropertiesRow } from "@/components/PropertiesRows"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
-import { useOrganization } from "@/context/OrganizationContext"
+import { useActiveOrgId, useOrganization } from "@/context/OrganizationContext"
 import { usePanel } from "@/context/PanelContext"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
@@ -462,6 +463,9 @@ function normalizeStudent(value: unknown): StudentRecord {
 
 function normalizeSchedule(value: unknown): ScheduleRecord {
   const record = isRecord(value) ? value : {}
+  const gradeSource =
+    record.grades ??
+    (typeof record.grade === "string" && record.grade.trim() ? [record.grade] : [])
   const instructor = isRecord(record.instructor) ? record.instructor : null
   return {
     id: toStringValue(record.id),
@@ -475,18 +479,25 @@ function normalizeSchedule(value: unknown): ScheduleRecord {
       if (isRecord(entry)) return toStringValue(entry.id)
       return ""
     }).filter(Boolean),
-    grades: toArray<unknown>(record.grades ?? record.grade ? [record.grade] : []).map((entry) => {
+    grades: toArray<unknown>(gradeSource).map((entry) => {
       if (typeof entry === "string") return entry
       return ""
     }).filter(Boolean),
   }
 }
 
+function normalizeSchedules(value: unknown): ScheduleRecord[] {
+  return toArray<unknown>(value).map(normalizeSchedule)
+}
+
 function matchesScheduleToStudent(schedule: ScheduleRecord, student: StudentRecord): boolean {
-  if (schedule.studentIds.includes(student.id)) return true
-  if (schedule.grades.includes(student.grade)) return true
+  const studentIds = Array.isArray(schedule.studentIds) ? schedule.studentIds : []
+  const grades = Array.isArray(schedule.grades) ? schedule.grades : []
+  const title = typeof schedule.title === "string" ? schedule.title : ""
+  if (studentIds.includes(student.id)) return true
+  if (grades.includes(student.grade)) return true
   const group = gradeGroup(student.grade)
-  return schedule.title.includes(student.grade) || schedule.title.includes(group)
+  return title.includes(student.grade) || title.includes(group)
 }
 
 function matchesScheduleToStudentStrict(schedule: ScheduleRecord, student: StudentRecord): boolean {
@@ -1178,13 +1189,8 @@ function StudentDetailSheet({
               })()}
               <ScrollArea className="h-[calc(100vh-4rem)]">
                 <div className="space-y-5 px-6 py-5">
-                  <Card className={cn("gap-4 py-5", themeClass.surface)}>
-                    <div className="space-y-4 px-5">
-                      <div className="flex items-center gap-2">
-                        <User className={cn("h-4 w-4", themeClass.textSecondary)} />
-                        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>기본 정보</h3>
-                      </div>
-                      <div className={cn("grid gap-3 rounded-2xl p-4 sm:grid-cols-2", themeClass.surfaceTertiary)}>
+                  <DetailSection icon={<User className={cn("h-4 w-4", themeClass.textSecondary)} />} title="기본 정보">
+                    <div className={cn("grid gap-3 rounded-[18px] p-4 sm:grid-cols-2", themeClass.surfaceTertiary)}>
                         <div>
                           <p className={cn("text-xs", themeClass.textSecondary)}>이름</p>
                           <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{mergedStudent.name}</p>
@@ -1208,16 +1214,10 @@ function StudentDetailSheet({
                           <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{mergedStudent.registeredAt}</p>
                         </div>
                       </div>
-                    </div>
-                  </Card>
+                  </DetailSection>
 
-                  <Card className={cn("gap-4 py-5", themeClass.surface)}>
-                    <div className="space-y-4 px-5">
-                      <div className="flex items-center gap-2">
-                        <Phone className={cn("h-4 w-4", themeClass.textSecondary)} />
-                        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>보호자 · 결제 정보</h3>
-                      </div>
-                      <div className={cn("grid gap-3 rounded-2xl p-4 sm:grid-cols-2", themeClass.surfaceTertiary)}>
+                  <DetailSection icon={<Phone className={cn("h-4 w-4", themeClass.textSecondary)} />} title="보호자 · 결제 정보">
+                    <div className={cn("grid gap-3 rounded-[18px] p-4 sm:grid-cols-2", themeClass.surfaceTertiary)}>
                         <div>
                           <p className={cn("text-xs", themeClass.textSecondary)}>주 보호자</p>
                           <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{mergedStudent.parent?.name ?? "-"}</p>
@@ -1277,29 +1277,23 @@ function StudentDetailSheet({
                           <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{billingSummary(mergedStudent.billing)}</p>
                         </div>
                       </div>
-                    </div>
-                  </Card>
+                  </DetailSection>
 
-                  <Card className={cn("gap-4 py-5", themeClass.surface)}>
-                    <div className="space-y-4 px-5">
-                      <div className="flex items-center gap-2">
-                        <BookOpen className={cn("h-4 w-4", themeClass.textSecondary)} />
-                        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>수강 중인 수업</h3>
-                      </div>
+                  <DetailSection icon={<BookOpen className={cn("h-4 w-4", themeClass.textSecondary)} />} title="수강 중인 수업">
 
                       {scheduleQuery.isLoading ? (
-                        <div className={cn("flex items-center gap-2 rounded-2xl border px-4 py-6 text-sm", themeClass.surfaceMuted, themeClass.textSecondary)}>
+                        <div className={cn("flex items-center gap-2 rounded-[18px] border px-4 py-6 text-sm", themeClass.surfaceMuted, themeClass.textSecondary)}>
                           <Loader2 className="h-4 w-4 animate-spin" />
                           수업 정보를 불러오는 중입니다.
                         </div>
                       ) : schedules.length === 0 ? (
-                        <div className={cn("rounded-2xl border px-4 py-4 text-sm", themeClass.surfaceMuted, themeClass.textSecondary)}>
+                        <div className={cn("rounded-[18px] border px-4 py-4 text-sm", themeClass.surfaceMuted, themeClass.textSecondary)}>
                           연결된 수업이 없습니다.
                         </div>
                       ) : (
                         <div className="space-y-3">
                           {schedules.map((schedule) => (
-                            <div key={schedule.id} className={cn("rounded-2xl border px-4 py-3", themeClass.surfaceMuted)}>
+                            <div key={schedule.id} className={cn("rounded-[18px] border px-4 py-3", themeClass.surfaceMuted)}>
                               <div className="flex items-center justify-between gap-3">
                                 <div>
                                   <p className={cn("text-sm font-semibold", themeClass.textPrimary)}>{schedule.title}</p>
@@ -1313,40 +1307,28 @@ function StudentDetailSheet({
                           ))}
                         </div>
                       )}
-                    </div>
-                  </Card>
+                  </DetailSection>
 
-                  <Card className={cn("gap-4 py-5", themeClass.surface)}>
-                    <div className="space-y-4 px-5">
-                      <div className="flex items-center gap-2">
-                        <MessageSquare className={cn("h-4 w-4", themeClass.textSecondary)} />
-                        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>상담 기록</h3>
-                      </div>
+                  <DetailSection icon={<MessageSquare className={cn("h-4 w-4", themeClass.textSecondary)} />} title="상담 기록">
 
                       {mergedStudent.counselingHistory.length === 0 ? (
-                        <div className={cn("rounded-2xl border px-4 py-4 text-sm", themeClass.surfaceMuted, themeClass.textSecondary)}>
+                        <div className={cn("rounded-[18px] border px-4 py-4 text-sm", themeClass.surfaceMuted, themeClass.textSecondary)}>
                           상담 기록이 없습니다.
                         </div>
                       ) : (
                         <div className="space-y-3">
                           {mergedStudent.counselingHistory.map((entry) => (
-                            <div key={entry.id} className={cn("rounded-2xl border px-4 py-3", themeClass.surfaceMuted)}>
+                            <div key={entry.id} className={cn("rounded-[18px] border px-4 py-3", themeClass.surfaceMuted)}>
                               <p className={cn("text-xs font-medium", themeClass.textSecondary)}>{entry.date}</p>
                               <p className={cn("mt-2 text-sm", themeClass.textPrimary)}>{entry.content}</p>
                             </div>
                           ))}
                         </div>
                       )}
-                    </div>
-                  </Card>
+                  </DetailSection>
 
-                  <Card className={cn("gap-4 py-5", themeClass.surface)}>
-                    <div className="space-y-4 px-5">
-                      <div className="flex items-center gap-2">
-                        <Bus className={cn("h-4 w-4", themeClass.textSecondary)} />
-                        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>차량 탑승</h3>
-                      </div>
-                      <div className={cn("flex items-center justify-between rounded-2xl border px-4 py-4", themeClass.surfaceMuted)}>
+                  <DetailSection icon={<Bus className={cn("h-4 w-4", themeClass.textSecondary)} />} title="차량 탑승" muted>
+                      <div className={cn("flex items-center justify-between rounded-[18px] border px-4 py-4", themeClass.surfaceMuted)}>
                         <div>
                           <p className={cn("text-sm font-medium", themeClass.textPrimary)}>셔틀 이용 여부</p>
                           <p className={cn("mt-1 text-xs", themeClass.textSecondary)}>수강생 등하원 차량 상태를 관리합니다.</p>
@@ -1357,15 +1339,9 @@ function StudentDetailSheet({
                           disabled={shuttleMutation.isPending}
                         />
                       </div>
-                    </div>
-                  </Card>
+                  </DetailSection>
 
-                  <Card className={cn("gap-4 py-5", themeClass.surface)}>
-                    <div className="space-y-4 px-5">
-                      <div className="flex items-center gap-2">
-                        <BookOpen className={cn("h-4 w-4", themeClass.textSecondary)} />
-                        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>운영 바로가기</h3>
-                      </div>
+                  <DetailSection icon={<BookOpen className={cn("h-4 w-4", themeClass.textSecondary)} />} title="운영 바로가기">
                       <div className="grid gap-2 sm:grid-cols-2">
                         <Button variant="outline" onClick={() => orgPrefix && navigate(`/${orgPrefix}/cases`)}>
                           관련 케이스 보기
@@ -1387,8 +1363,7 @@ function StudentDetailSheet({
                           학생 정보 수정
                         </Button>
                       </div>
-                    </div>
-                  </Card>
+                  </DetailSection>
                 </div>
               </ScrollArea>
             </>
@@ -1409,7 +1384,7 @@ function EmptyState({
   onCreate: () => void
 }) {
   return (
-    <div className={cn("flex flex-col items-center justify-center rounded-3xl border border-dashed px-8 py-14 text-center", themeClass.surface)}>
+    <div className={cn("flex flex-col items-center justify-center rounded-[20px] border border-dashed px-8 py-14 text-center", themeClass.surface)}>
       <div className={cn("flex h-14 w-14 items-center justify-center rounded-full", themeClass.surfaceTertiary)}>
         <GraduationCap className={cn("h-7 w-7", themeClass.textSecondary)} />
       </div>
@@ -1429,12 +1404,34 @@ function EmptyState({
   )
 }
 
+function DetailSection({
+  icon,
+  title,
+  children,
+  muted = false,
+}: {
+  icon: ReactNode
+  title: string
+  children: ReactNode
+  muted?: boolean
+}) {
+  return (
+    <section className={cn("space-y-4 rounded-[20px] border p-5", muted ? themeClass.surfaceMuted : themeClass.surface)}>
+      <div className="flex items-center gap-2">
+        {icon}
+        <h3 className={cn("text-sm font-semibold", themeClass.textPrimary)}>{title}</h3>
+      </div>
+      {children}
+    </section>
+  )
+}
+
 export function StudentsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
-  const { selectedOrgId } = useOrganization()
   const { setPanelContent, openPanel } = usePanel()
   const navigate = useNavigate()
   const { orgPrefix, id: routeStudentId } = useParams<{ orgPrefix: string; id?: string }>()
+  const activeOrgId = useActiveOrgId(orgPrefix)
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
   const [viewMode, setViewMode] = useState<ViewMode>("table")
@@ -1455,12 +1452,12 @@ export function StudentsPage() {
   const debouncedSearch = useDebounce(search, 300)
 
   const studentsQuery = useQuery<StudentRecord[]>({
-    queryKey: queryKeys.students.list(selectedOrgId ?? ""),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.students.list(activeOrgId ?? ""),
+    enabled: !!activeOrgId,
     queryFn: async () => {
-      if (!selectedOrgId) return []
+      if (!activeOrgId) return []
       try {
-        const response = await studentsApi.list(selectedOrgId)
+        const response = await studentsApi.list(activeOrgId)
         return toArray<unknown>(response).map(normalizeStudent)
       } catch (error) {
         throw error
@@ -1469,26 +1466,26 @@ export function StudentsPage() {
   })
 
   const schedulesQuery = useQuery<ScheduleRecord[]>({
-    queryKey: queryKeys.schedules.list(selectedOrgId ?? ""),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.schedules.list(activeOrgId ?? ""),
+    enabled: !!activeOrgId,
     queryFn: async () => {
-      if (!selectedOrgId) return []
+      if (!activeOrgId) return []
       try {
-        const response = await schedulesApi.list(selectedOrgId)
-        return toArray<unknown>(response).map(normalizeSchedule)
+        return await schedulesApi.list(activeOrgId)
       } catch (error) {
         return []
       }
     },
+    select: normalizeSchedules,
   })
 
   const casesQuery = useQuery<any[]>({
-    queryKey: queryKeys.cases.list(selectedOrgId ?? ""),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.cases.list(activeOrgId ?? ""),
+    enabled: !!activeOrgId,
     queryFn: async () => {
-      if (!selectedOrgId) return []
+      if (!activeOrgId) return []
       try {
-        return await casesApi.list(selectedOrgId)
+        return await casesApi.list(activeOrgId)
       } catch {
         return []
       }
@@ -1589,7 +1586,6 @@ export function StudentsPage() {
     () => students.find((student) => student.id === selectedStudentId) ?? null,
     [selectedStudentId, students]
   )
-
   const selectedStudentSchedules = useMemo(
     () =>
       selectedStudent
@@ -1625,11 +1621,11 @@ export function StudentsPage() {
 
   const createStudentCaseMutation = useMutation({
     mutationFn: async (input: { type: "inquiry" | "churn"; title: string; description: string }) => {
-      if (!selectedOrgId || !selectedStudent) {
+      if (!activeOrgId || !selectedStudent) {
         throw new Error("학생을 먼저 선택하세요.")
       }
 
-      return casesApi.create(selectedOrgId, {
+      return casesApi.create(activeOrgId, {
         title: input.title,
         description: input.description,
         type: input.type,
@@ -1645,7 +1641,7 @@ export function StudentsPage() {
       })
     },
     onSuccess: async (created: any) => {
-      await queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(selectedOrgId ?? "") })
+      await queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(activeOrgId ?? "") })
       toast?.success("학생 운영 케이스를 생성했습니다.")
       if (orgPrefix && created?.id) navigate(`/${orgPrefix}/cases/${created.id}`)
     },
@@ -1662,43 +1658,27 @@ export function StudentsPage() {
     if (!selectedStudent) {
       return (
         <div className="space-y-4">
-          <div>
-            <p className={cn("text-sm font-semibold", themeClass.textPrimary)}>핵심 연결</p>
-            <p className={cn("mt-1 text-sm", themeClass.textSecondary)}>
-              보호자, 결제, 연결 수업, 최근 상담, 관련 케이스를 같은 구조로 확인합니다.
-            </p>
-          </div>
-
-          <div className="grid gap-3">
-            <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
-              <p className={cn("text-xs", themeClass.textSecondary)}>전체 학생</p>
-              <p className={cn("mt-1 text-xl font-semibold", themeClass.textPrimary)}>{students.length}명</p>
-            </div>
-            <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
-              <p className="text-xs text-orange-700">이탈 위험</p>
-              <p className="mt-1 text-xl font-semibold text-orange-900">{atRiskStudents.length}명</p>
-            </div>
-          </div>
-
-          <div className={cn("rounded-2xl border p-4", themeClass.surfaceMuted)}>
-            <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>바로 실행</p>
-            <div className="mt-3 flex flex-col gap-2">
-              <Button size="sm" className="justify-start border-0 text-white" style={{ backgroundColor: "var(--color-teal-500)" }} onClick={() => setShowNewDialog(true)}>
-                학생 등록
-              </Button>
-              <Button size="sm" variant="outline" className="justify-start" onClick={() => setShowImportDialog(true)}>
-                CSV 가져오기
-              </Button>
-            </div>
-          </div>
+          <CommonPropertiesRows
+            status="unselected"
+            priority={atRiskStudents.length > 0 ? "high" : "normal"}
+            assignee="-"
+            project="-"
+            created="-"
+            updated="-"
+          />
+          <PropertiesCard>
+            <PropertiesRow label="Students" value={`${students.length}명`} />
+            <PropertiesRow label="At Risk" value={`${atRiskStudents.length}명`} />
+            <PropertiesRow label="Guardian Alert" value={`${guardianAttentionCount}명`} />
+            <PropertiesRow label="Billing Alert" value={`${billingAttentionCount}명`} />
+          </PropertiesCard>
         </div>
       )
     }
 
     const primaryGuardian = selectedStudent.parent ?? selectedStudent.parents[0] ?? null
     const attendanceSummary = summarizeAttendance(selectedStudent.attendance)
-    const opsAlerts = studentOpsAlerts(selectedStudent, selectedStudentCases.length)
-    const readiness = studentOpsReadiness(selectedStudent)
+    const riskPriority = selectedStudent.riskPercent >= 70 ? "high" : selectedStudent.riskPercent >= 40 ? "medium" : "normal"
     const relatedProjects = Array.from(
       new Map(
         selectedStudentCases
@@ -1712,172 +1692,28 @@ export function StudentsPage() {
           ]),
       ).values(),
     )
+    const latestCounselingDate = selectedStudent.counselingHistory[0]?.date ?? "-"
+    const relatedProjectLabel = relatedProjects[0]?.name ?? (relatedProjects.length > 1 ? `${relatedProjects.length} projects` : "-")
 
     return (
       <div className="space-y-4">
-        <div>
-          <p className={cn("text-lg font-semibold", themeClass.textPrimary)}>{selectedStudent.name}</p>
-          <p className={cn("mt-1 text-sm", themeClass.textSecondary)}>
-            {selectedStudent.grade} · {statusLabel(selectedStudent.status)}
-          </p>
-        </div>
+        <CommonPropertiesRows
+          status={statusLabel(selectedStudent.status)}
+          priority={`${riskPriority} (${selectedStudent.riskPercent}%)`}
+          assignee={primaryGuardian?.name ?? "미배정"}
+          project={relatedProjectLabel}
+          created={selectedStudent.registeredAt}
+          updated={latestCounselingDate}
+        />
 
-        <div className="grid gap-3">
-          <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
-            <p className={cn("text-xs", themeClass.textSecondary)}>이탈 위험</p>
-            <p className={cn("mt-1 text-xl font-semibold", themeClass.textPrimary)}>{selectedStudent.riskPercent}%</p>
-          </div>
-          <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
-            <p className={cn("text-xs", themeClass.textSecondary)}>차량 탑승</p>
-            <p className={cn("mt-1 text-base font-semibold", themeClass.textPrimary)}>{selectedStudent.shuttle ? "탑승" : "미탑승"}</p>
-          </div>
-        </div>
+        <PropertiesCard>
+          <PropertiesRow label="Schedules" value={`${selectedStudentSchedules.length}개`} />
+          <PropertiesRow label="Cases" value={`${selectedStudentCases.length}건`} />
+          <PropertiesRow label="Attendance" value={`결석 ${attendanceSummary.absent} / 지각 ${attendanceSummary.late}`} />
+          <PropertiesRow label="Billing" value={paymentMethodLabel(selectedStudent.billing.paymentMethod)} />
+        </PropertiesCard>
 
-        <div className={cn(
-          "rounded-2xl border p-4",
-          opsAlerts.length > 0 ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50",
-        )}>
-          <p className={cn("text-xs font-semibold", opsAlerts.length > 0 ? "text-amber-700" : "text-emerald-700")}>
-            운영 경고
-          </p>
-          {opsAlerts.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {opsAlerts.map((alert) => (
-                <Badge key={alert} className="border-amber-200 bg-[var(--bg-elevated)] text-amber-800">{alert}</Badge>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-emerald-900">보호자와 결제 레코드가 기본 운영 기준을 충족합니다.</p>
-          )}
-        </div>
-
-        <div className={cn("rounded-2xl border p-4", themeClass.surfaceMuted)}>
-          <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>운영 연결</p>
-          <div className={cn("mt-3 space-y-2 text-sm", themeClass.textSecondary)}>
-            <div className="flex items-center justify-between gap-3">
-              <span>보호자 레코드</span>
-              <span className={cn("font-medium", readiness.guardian === "ready" ? "text-emerald-700" : "text-amber-700")}>
-                {readiness.guardian === "ready" ? "준비됨" : "보완 필요"}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>보호자</span>
-              <span className={cn("font-medium", themeClass.textPrimary)}>
-                {primaryGuardian?.name ?? "미등록"}
-                {selectedStudent.parents.length > 1 ? ` 외 ${selectedStudent.parents.length - 1}명` : ""}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>결제 레코드</span>
-              <span className={cn("font-medium", readiness.billing === "ready" ? "text-emerald-700" : "text-amber-700")}>
-                {readiness.billing === "ready" ? "준비됨" : "보완 필요"}
-              </span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>결제 방식</span>
-              <span className={cn("font-medium", themeClass.textPrimary)}>{paymentMethodLabel(selectedStudent.billing.paymentMethod)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>결제 수단</span>
-              <span className={cn("font-medium", themeClass.textPrimary)}>{billingSummary(selectedStudent.billing)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>청구 방식</span>
-              <span className={cn("font-medium", themeClass.textPrimary)}>{autoBillingLabel(selectedStudent.billing)}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>연결 수업</span>
-              <span className={cn("font-medium", themeClass.textPrimary)}>{selectedStudentSchedules.length}개</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>최근 상담</span>
-              <span className={cn("font-medium", themeClass.textPrimary)}>{selectedStudent.counselingHistory.length}건</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>관련 케이스</span>
-              <span className={cn("font-medium", themeClass.textPrimary)}>{selectedStudentCases.length}건</span>
-            </div>
-            <div className="flex items-center justify-between gap-3">
-              <span>연결 프로젝트</span>
-              <span className={cn("font-medium", themeClass.textPrimary)}>{relatedProjects.length}건</span>
-            </div>
-          </div>
-        </div>
-
-        <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
-          <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>출결 이상 신호</p>
-          <div className="mt-3 grid grid-cols-3 gap-2">
-            <div className="rounded-xl bg-rose-50 px-3 py-2">
-              <p className="text-[11px] text-rose-600">결석</p>
-              <p className="mt-1 text-base font-semibold text-rose-900">{attendanceSummary.absent}회</p>
-            </div>
-            <div className="rounded-xl bg-amber-50 px-3 py-2">
-              <p className="text-[11px] text-amber-600">지각</p>
-              <p className="mt-1 text-base font-semibold text-amber-900">{attendanceSummary.late}회</p>
-            </div>
-            <div className="rounded-xl bg-sky-50 px-3 py-2">
-              <p className="text-[11px] text-sky-600">공결</p>
-              <p className="mt-1 text-base font-semibold text-sky-900">{attendanceSummary.excused}회</p>
-            </div>
-          </div>
-        </div>
-
-        <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
-          <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>연결 수업 미리보기</p>
-          <div className="mt-3 space-y-2">
-            {selectedStudentSchedules.length > 0 ? selectedStudentSchedules.slice(0, 3).map((schedule) => (
-              <div key={schedule.id} className={cn("rounded-xl px-3 py-2", themeClass.surfaceTertiary)}>
-                <p className={cn("text-sm font-medium", themeClass.textPrimary)}>{schedule.title}</p>
-                <p className={cn("mt-0.5 text-xs", themeClass.textSecondary)}>
-                  {schedule.instructorName || "담당 미지정"} · {schedule.startTime.slice(0, 5)}-{schedule.endTime.slice(0, 5)}
-                </p>
-              </div>
-            )) : (
-              <p className={cn("text-sm", themeClass.textSecondary)}>아직 연결된 수업이 없습니다.</p>
-            )}
-          </div>
-        </div>
-
-        <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
-          <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>연결 프로젝트</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            {relatedProjects.length > 0 ? relatedProjects.slice(0, 4).map((project) => (
-              <button
-                key={project.id}
-                type="button"
-                onClick={() => orgPrefix && navigate(`/${orgPrefix}/projects/${project.id}`)}
-                className="rounded-full"
-              >
-                <Badge variant="outline">
-                  {project.name}
-                </Badge>
-              </button>
-            )) : (
-              <p className={cn("text-sm", themeClass.textSecondary)}>아직 연결된 프로젝트가 없습니다.</p>
-            )}
-          </div>
-        </div>
-
-        <div className={cn("rounded-2xl border p-4", themeClass.surface)}>
-          <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>관련 케이스 바로가기</p>
-          <div className="mt-3 space-y-2">
-            {selectedStudentCases.length > 0 ? selectedStudentCases.slice(0, 3).map((item: any) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => orgPrefix && navigate(`/${orgPrefix}/cases/${item.id}`)}
-                className={cn("w-full rounded-xl px-3 py-2 text-left", themeClass.surfaceTertiary)}
-              >
-                <p className={cn("text-sm font-medium", themeClass.textPrimary)}>{item.title}</p>
-                <p className={cn("mt-0.5 text-xs", themeClass.textSecondary)}>{item.identifier ?? item.type ?? "케이스"}</p>
-              </button>
-            )) : (
-              <p className={cn("text-sm", themeClass.textSecondary)}>관련 케이스가 없습니다.</p>
-            )}
-          </div>
-        </div>
-
-        <div className={cn("rounded-2xl border p-4", themeClass.surfaceMuted)}>
+        <PropertiesCard className={cn(themeClass.surfaceMuted)}>
           <p className={cn("text-xs font-semibold", themeClass.textSecondary)}>바로 실행</p>
           <div className="mt-3 flex flex-col gap-2">
             <Button
@@ -1923,7 +1759,7 @@ export function StudentsPage() {
               출결/이탈 점검 케이스 생성
             </Button>
           </div>
-        </div>
+        </PropertiesCard>
       </div>
     )
   }, [
@@ -1939,24 +1775,6 @@ export function StudentsPage() {
     students.length,
   ])
 
-  const panelContentKey = useMemo(
-    () =>
-      JSON.stringify({
-        selectedStudentId: selectedStudent?.id ?? null,
-        studentCount: students.length,
-        atRiskCount: atRiskStudents.length,
-        caseCount: selectedStudentCases.length,
-        scheduleCount: selectedStudentSchedules.length,
-      }),
-    [
-      atRiskStudents.length,
-      selectedStudent?.id,
-      selectedStudentCases.length,
-      selectedStudentSchedules.length,
-      students.length,
-    ],
-  )
-
   useEffect(() => {
     openPanel()
   }, [openPanel])
@@ -1964,7 +1782,7 @@ export function StudentsPage() {
   useEffect(() => {
     setPanelContent(panelContent)
     return () => setPanelContent(null)
-  }, [panelContentKey, setPanelContent])
+  }, [panelContent, setPanelContent])
 
   function openStudentDetail(studentId: string) {
     setSelectedStudentId(studentId)
@@ -2006,7 +1824,7 @@ export function StudentsPage() {
     ]
 
     return (
-      <div className={cn("overflow-hidden rounded-3xl border", themeClass.surface)}>
+      <div className={cn("overflow-hidden rounded-[20px] border", themeClass.surface)}>
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead className={themeClass.surfaceTertiary}>
@@ -2134,7 +1952,7 @@ export function StudentsPage() {
                 </div>
 
                 <div className="space-y-4 px-5">
-                  <div className={cn("rounded-2xl p-4", themeClass.surfaceTertiary)}>
+                  <div className={cn("rounded-[18px] p-4", themeClass.surfaceTertiary)}>
                     <div className="mb-2 flex items-center justify-between">
                       <span className={cn("text-xs font-medium", themeClass.textSecondary)}>이탈 위험</span>
                       <span className={cn("text-xs font-semibold", tone.text)}>{student.riskPercent}%</span>
@@ -2143,11 +1961,11 @@ export function StudentsPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className={cn("rounded-2xl border p-4", themeClass.surfaceMuted)}>
+                    <div className={cn("rounded-[18px] border p-4", themeClass.surfaceMuted)}>
                       <p className={cn("text-xs", themeClass.textSecondary)}>연락처</p>
                       <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{maskPhone(student.primaryPhone)}</p>
                     </div>
-                    <div className={cn("rounded-2xl border p-4", themeClass.surfaceMuted)}>
+                    <div className={cn("rounded-[18px] border p-4", themeClass.surfaceMuted)}>
                       <p className={cn("text-xs", themeClass.textSecondary)}>수업 수</p>
                       <p className={cn("mt-1 text-sm font-medium", themeClass.textPrimary)}>{classCount}</p>
                     </div>
@@ -2188,12 +2006,12 @@ export function StudentsPage() {
           }}
         >
           <div className="mx-auto flex w-full max-w-[1600px] flex-col gap-6 px-5 py-6">
-            <div className="rounded-3xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-800 shadow-sm">
+            <div className="rounded-[20px] border border-[var(--border-default)] bg-[var(--bg-secondary)] px-4 py-3 text-sm text-[var(--text-secondary)] shadow-sm">
               학생 개인정보는 마스킹 처리되어 표시됩니다. 상세 패널에서도 최소 정보만 노출합니다.
             </div>
 
             <section
-              className="rounded-[28px] border p-5 backdrop-blur"
+              className="rounded-[24px] border p-5 backdrop-blur"
               style={{
                 borderColor: "var(--border-default)",
                 backgroundColor: "color-mix(in srgb, var(--bg-elevated) 90%, transparent)",
@@ -2203,7 +2021,7 @@ export function StudentsPage() {
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
                   <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--text-primary)] text-[var(--bg-elevated)]">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-[var(--text-primary)] text-[var(--bg-elevated)]">
                       <GraduationCap className="h-5 w-5" />
                     </div>
                     <div>
@@ -2216,7 +2034,7 @@ export function StudentsPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className={cn("inline-flex rounded-2xl border p-1", themeClass.surfaceMuted)}>
+                  <div className={cn("inline-flex rounded-[18px] border p-1", themeClass.surfaceMuted)}>
                     <Button
                       size="sm"
                       variant={viewMode === "table" ? "default" : "ghost"}
@@ -2255,7 +2073,7 @@ export function StudentsPage() {
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="이름 / 학년 / 상태 검색"
-                    className="h-11 rounded-2xl border-[var(--border-default)] bg-[var(--bg-secondary)] pl-10 text-[var(--text-primary)]"
+                    className="h-11 rounded-[18px] border-[var(--border-default)] bg-[var(--bg-secondary)] pl-10 text-[var(--text-primary)]"
                   />
                 </div>
 
@@ -2281,27 +2099,27 @@ export function StudentsPage() {
             </section>
 
             {viewMode === "table" && atRiskStudents.length > 0 && (
-              <div className="flex items-center gap-3 rounded-3xl border border-orange-200 bg-orange-50 px-5 py-4 text-orange-900 shadow-sm">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[var(--bg-elevated)]">
-                  <AlertTriangle className="h-5 w-5 text-orange-500" />
+              <div className="flex items-center gap-3 rounded-[20px] border border-[var(--border-default)] bg-[var(--bg-secondary)] px-5 py-4 text-[var(--text-primary)] shadow-sm">
+                <div className="flex h-10 w-10 items-center justify-center rounded-[18px] bg-[var(--bg-elevated)]">
+                  <AlertTriangle className="h-5 w-5 text-amber-500" />
                 </div>
                 <div>
                   <p className="text-sm font-semibold">위험 학생 {atRiskStudents.length}명이 있습니다</p>
-                  <p className="text-xs text-orange-700">이탈위험 50% 초과 학생을 우선 확인해 주세요.</p>
+                  <p className="text-xs" style={{ color: "var(--text-secondary)" }}>이탈위험 50% 초과 학생을 우선 확인해 주세요.</p>
                 </div>
               </div>
             )}
 
             <div className="grid gap-3 md:grid-cols-3">
-              <div className={cn("rounded-3xl border px-5 py-4", themeClass.surface)}>
+              <div className={cn("rounded-[20px] border px-5 py-4", themeClass.surface)}>
                 <p className={cn("text-xs", themeClass.textSecondary)}>보호자 보완 필요</p>
                 <p className={cn("mt-1 text-xl font-semibold", themeClass.textPrimary)}>{guardianAttentionCount}명</p>
               </div>
-              <div className={cn("rounded-3xl border px-5 py-4", themeClass.surface)}>
+              <div className={cn("rounded-[20px] border px-5 py-4", themeClass.surface)}>
                 <p className={cn("text-xs", themeClass.textSecondary)}>결제 레코드 보완</p>
                 <p className={cn("mt-1 text-xl font-semibold", themeClass.textPrimary)}>{billingAttentionCount}명</p>
               </div>
-              <div className={cn("rounded-3xl border px-5 py-4", themeClass.surface)}>
+              <div className={cn("rounded-[20px] border px-5 py-4", themeClass.surface)}>
                 <p className={cn("text-xs", themeClass.textSecondary)}>이탈 위험 학생</p>
                 <p className={cn("mt-1 text-xl font-semibold", themeClass.textPrimary)}>{atRiskStudents.length}명</p>
               </div>
@@ -2309,7 +2127,7 @@ export function StudentsPage() {
 
             <section>
               {studentsQuery.isLoading ? (
-                <div className={cn("flex min-h-[320px] items-center justify-center rounded-3xl border", themeClass.surface)}>
+                <div className={cn("flex min-h-[320px] items-center justify-center rounded-[20px] border", themeClass.surface)}>
                   <div className={cn("flex items-center gap-2 text-sm", themeClass.textSecondary)}>
                     <Loader2 className="h-4 w-4 animate-spin" />
                     학생 목록을 불러오는 중입니다.
@@ -2326,17 +2144,19 @@ export function StudentsPage() {
       </div>
 
       <StudentFormDialog open={showNewDialog} onClose={() => setShowNewDialog(false)} />
-      <CsvImportDialog open={showImportDialog} onOpenChange={setShowImportDialog} orgId={selectedOrgId} />
-      <StudentDetailSheet
-        open={Boolean(selectedStudentId)}
-        onOpenChange={(open) => {
-          if (!open) closeStudentDetail()
-        }}
-        student={selectedStudent}
-        orgId={selectedOrgId}
-        orgPrefix={orgPrefix}
-        relatedCases={selectedStudentCases}
-      />
+      <CsvImportDialog open={showImportDialog} onOpenChange={setShowImportDialog} orgId={activeOrgId} />
+      {Boolean(selectedStudentId) ? (
+        <StudentDetailSheet
+          open={Boolean(selectedStudentId)}
+          onOpenChange={(open) => {
+            if (!open) closeStudentDetail()
+          }}
+          student={selectedStudent}
+          orgId={activeOrgId}
+          orgPrefix={orgPrefix}
+          relatedCases={selectedStudentCases}
+        />
+      ) : null}
     </>
   )
 }

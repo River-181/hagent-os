@@ -1,6 +1,6 @@
 // v0.3.0
 import { Router } from "express"
-import { desc, eq } from "drizzle-orm"
+import { and, desc, eq, isNull } from "drizzle-orm"
 import { mkdirSync, writeFileSync } from "fs"
 import { join } from "path"
 import type { Db } from "@hagent/db"
@@ -9,6 +9,7 @@ import { executeAgentRun } from "../services/execution.js"
 import { publishEvent } from "../services/live-events.js"
 import { getAgentMountedSkills, updateAgentSkillMounts } from "../services/skills.js"
 import { getApprovalLevelForAgentType, inferCaseType } from "../services/orchestration.js"
+import { recoverStaleRuns } from "../services/run-recovery.js"
 
 const AGENT_DATA_DIR = join(import.meta.dirname, "../../data/agents")
 
@@ -43,6 +44,7 @@ export function agentRoutes(db: Db): Router {
 
   router.get("/organizations/:orgId/agents", async (req, res) => {
     try {
+      await recoverStaleRuns(db, req.params.orgId)
       const agents = await db
         .select()
         .from(schema.agents)
@@ -261,6 +263,11 @@ export function agentRoutes(db: Db): Router {
 
   router.post("/agents/:id/wakeup", async (req, res) => {
     try {
+      const organizationId = typeof req.body?.orgId === "string" ? req.body.orgId : undefined
+      if (organizationId) {
+        await recoverStaleRuns(db, organizationId)
+      }
+
       const { reason: _reason, caseId: requestedCaseId } = req.body as {
         reason?: string
         caseId?: string
@@ -276,6 +283,18 @@ export function agentRoutes(db: Db): Router {
         return
       }
 
+      const allRuns = await db
+        .select()
+        .from(schema.agentRuns)
+        .where(eq(schema.agentRuns.agentId, req.params.id))
+      const activeRun = allRuns.find(
+        (r: typeof schema.agentRuns.$inferSelect) => r.status === "running" || r.status === "queued",
+      )
+      if (activeRun) {
+        res.status(409).json({ error: "Agent already has an active run", runId: activeRun.id })
+        return
+      }
+
       let caseId = requestedCaseId
 
       if (!caseId) {
@@ -283,13 +302,35 @@ export function agentRoutes(db: Db): Router {
         const pendingCases = await db
           .select()
           .from(schema.cases)
-          .where(eq(schema.cases.organizationId, agent.organizationId))
+          .where(and(
+            eq(schema.cases.organizationId, agent.organizationId),
+            isNull(schema.cases.archivedAt),
+          ))
+        const approvals = await db
+          .select()
+          .from(schema.approvals)
+          .where(eq(schema.approvals.organizationId, agent.organizationId))
+        const pendingApprovalCaseIds = new Set(
+          approvals
+            .filter((item) => item.status === "pending")
+            .map((item) => item.caseId)
+            .filter((value): value is string => typeof value === "string"),
+        )
+        const activeRunCaseIds = new Set(
+          allRuns
+            .filter((item) => item.status === "queued" || item.status === "running" || item.status === "pending_approval")
+            .map((item) => item.caseId)
+            .filter((value): value is string => typeof value === "string"),
+        )
 
         const openCase = pendingCases.find(
           (c: typeof schema.cases.$inferSelect) =>
+            !c.archivedAt &&
             c.status !== "done" &&
             c.status !== "in_review" &&
             c.assigneeAgentId === null &&
+            !activeRunCaseIds.has(c.id) &&
+            !pendingApprovalCaseIds.has(c.id) &&
             (c.type === inferCaseType(agent.agentType) ||
               (agent.agentType === "complaint" && (c.type === "refund" || c.type === "inquiry"))),
         )
@@ -302,6 +343,37 @@ export function agentRoutes(db: Db): Router {
         caseId = openCase.id
       }
 
+      const dedupKey = `${agent.organizationId}:${agent.id}:${caseId}`
+      const [existingWakeup] = await db
+        .select()
+        .from(schema.wakeupRequests)
+        .where(eq(schema.wakeupRequests.dedupKey, dedupKey))
+      if (existingWakeup && existingWakeup.status === "pending") {
+        res.status(409).json({ error: "Wakeup already pending", wakeupRequestId: existingWakeup.id })
+        return
+      }
+
+      const [wakeupRequest] = existingWakeup
+        ? await db
+            .update(schema.wakeupRequests)
+            .set({
+              caseId,
+              agentId: agent.id,
+              status: "pending",
+            })
+            .where(eq(schema.wakeupRequests.id, existingWakeup.id))
+            .returning()
+        : await db
+            .insert(schema.wakeupRequests)
+            .values({
+              organizationId: agent.organizationId,
+              caseId,
+              agentId: agent.id,
+              status: "pending",
+              dedupKey,
+            })
+            .returning()
+
       const { runId } = await executeAgentRun(db, {
         organizationId: agent.organizationId,
         agentId: agent.id,
@@ -310,7 +382,23 @@ export function agentRoutes(db: Db): Router {
         approvalLevel: getApprovalLevelForAgentType(agent.agentType),
       })
 
-      res.status(202).json({ runId })
+      await db
+        .update(schema.wakeupRequests)
+        .set({ status: "sent" })
+        .where(eq(schema.wakeupRequests.id, wakeupRequest.id))
+
+      await db.insert(schema.activityEvents).values({
+        organizationId: agent.organizationId,
+        actorType: "user",
+        actorId: "agents",
+        action: "run.wakeup_requested",
+        entityType: "agent_run",
+        entityId: runId,
+        entityTitle: `${agent.name} wakeup`,
+        metadata: { caseId, agentId: agent.id, wakeupRequestId: wakeupRequest.id } as Record<string, unknown>,
+      })
+
+      res.status(202).json({ runId, wakeupRequestId: wakeupRequest.id })
     } catch (err) {
       res.status(500).json({ error: "Failed to wake up agent" })
     }
@@ -349,9 +437,21 @@ export function agentRoutes(db: Db): Router {
         .set({
           status: "failed",
           error: "Cancelled by user",
+          completedAt: new Date(),
           updatedAt: new Date(),
         })
         .where(eq(schema.agentRuns.id, activeRun.id))
+
+      await db.insert(schema.activityEvents).values({
+        organizationId: agent.organizationId,
+        actorType: "user",
+        actorId: "agents",
+        action: "run.cancelled",
+        entityType: "agent_run",
+        entityId: activeRun.id,
+        entityTitle: `${agent.name} cancelled`,
+        metadata: { caseId: activeRun.caseId, agentId: agent.id } as Record<string, unknown>,
+      })
 
       publishEvent(agent.organizationId, "agent.run.cancelled", {
         runId: activeRun.id,

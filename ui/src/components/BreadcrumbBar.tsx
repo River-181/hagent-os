@@ -1,14 +1,18 @@
 import { Link } from "react-router-dom"
-import { ChevronRight, PanelRightOpen, PanelRightClose } from "lucide-react"
+import { ChevronRight, PanelRightOpen, PanelRightClose, Sparkles, Menu } from "lucide-react"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useSidebar } from "@/context/SidebarContext"
 import { usePanel } from "@/context/PanelContext"
-import { Menu } from "lucide-react"
+import { useAssistant } from "@/context/AssistantContext"
 
 export function BreadcrumbBar() {
   const { breadcrumbs } = useBreadcrumbs()
   const { toggleSidebar, isMobile } = useSidebar()
-  const { panelVisible, togglePanel } = usePanel()
+  const { panelContent, panelVisible, togglePanel } = usePanel()
+  const { openAssistant } = useAssistant()
+
+  // Properties 토글은 페이지가 panelContent를 등록한 경우에만 노출
+  const showPropertiesToggle = !isMobile && panelContent !== null
 
   return (
     <div
@@ -16,7 +20,7 @@ export function BreadcrumbBar() {
       style={{
         height: 52,
         borderBottom: "1px solid var(--border-default)",
-        backgroundColor: "var(--bg-base)",
+        backgroundColor: "var(--bg-page)",
       }}
     >
       {isMobile && (
@@ -63,22 +67,38 @@ export function BreadcrumbBar() {
         })}
       </nav>
 
+      {/* Assistant 트리거 (구 FAB 대체) */}
+      <button
+        type="button"
+        onClick={openAssistant}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors hover:bg-[var(--bg-muted)]"
+        style={{
+          color: "var(--text-tertiary)",
+          border: "1px solid var(--border-default)",
+        }}
+        aria-label="Assistant 열기"
+      >
+        <Sparkles size={13} />
+        Assistant
+      </button>
+
       {/* Cmd+K hint */}
       <kbd
-        className="hidden sm:inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs shrink-0"
+        className="hidden shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs sm:inline-flex"
         style={{
-          backgroundColor: "var(--bg-tertiary)",
+          backgroundColor: "var(--bg-muted)",
           color: "var(--text-tertiary)",
           border: "1px solid var(--border-default)",
         }}
       >
         <span style={{ fontSize: 11 }}>&#8984;</span>K
       </kbd>
-      {!isMobile && (
+
+      {showPropertiesToggle && (
         <button
           type="button"
           onClick={togglePanel}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs shrink-0 transition-colors hover:bg-[var(--bg-tertiary)]"
+          className="inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors hover:bg-[var(--bg-muted)]"
           style={{
             color: "var(--text-tertiary)",
             border: "1px solid var(--border-default)",
@@ -86,7 +106,7 @@ export function BreadcrumbBar() {
           aria-label={panelVisible ? "속성 패널 닫기" : "속성 패널 열기"}
         >
           {panelVisible ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
-          Properties
+          속성
         </button>
       )}
     </div>

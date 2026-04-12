@@ -1,0 +1,36 @@
+{
+  "id": "community/k-skill-registry",
+  "slug": "k-skill-registry",
+  "namespace": "community",
+  "displayName": "k-skill 레지스트리",
+  "version": "0.1.0",
+  "summary": "한국형 외부 스킬 레지스트리를 curated upstream asset으로 등록하고 필요한 skill만 선별 수입합니다.",
+  "packageType": "imported",
+  "capabilityType": "system",
+  "source": {
+    "kind": "github_repo",
+    "repo": "https://github.com/NomaDamas/k-skill.git",
+    "license": "Unknown",
+    "importedAt": "2026-04-13T00:00:00.000Z"
+  },
+  "compatibility": {
+    "agentTypes": ["orchestrator", "staff", "analytics"],
+    "adapters": ["codex_local", "claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": false,
+    "publishable": true
+  },
+  "recommendedAgents": ["orchestrator", "staff"],
+  "launchEntrypoints": ["agent", "project", "onboarding"]
+}
+

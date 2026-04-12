@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useState,
   type ReactNode,
 } from "react"
@@ -62,4 +63,22 @@ export function useOrganization(): OrganizationContextValue {
   const ctx = useContext(OrganizationContext)
   if (!ctx) throw new Error("useOrganization must be used within OrganizationProvider")
   return ctx
+}
+
+export function useActiveOrgId(orgPrefix?: string): string | null {
+  const { selectedOrgId, organizations, setSelectedOrgByPrefix } = useOrganization()
+
+  useEffect(() => {
+    if (orgPrefix) {
+      setSelectedOrgByPrefix(orgPrefix)
+    }
+  }, [orgPrefix, setSelectedOrgByPrefix])
+
+  return useMemo(() => {
+    if (!orgPrefix) return selectedOrgId
+    const matchedOrganization = organizations.find(
+      (organization) => organization.prefix === orgPrefix || organization.slug === orgPrefix,
+    )
+    return matchedOrganization?.id ?? selectedOrgId
+  }, [orgPrefix, organizations, selectedOrgId])
 }

@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, type ReactNode } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { usePanel } from "@/context/PanelContext"
@@ -17,6 +17,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import {
+  WorkspaceHeader,
+  WorkspacePanel,
+} from "@/components/ui/workspace-surface"
 import {
   Dialog,
   DialogContent,
@@ -85,7 +89,7 @@ function SectionCard({
   return (
     <section
       id={id}
-      className="rounded-3xl border p-5"
+      className="rounded-[20px] border p-5"
       style={{
         backgroundColor: "var(--bg-elevated)",
         borderColor: "var(--border-default)",
@@ -147,7 +151,7 @@ function ToggleRow({
 }) {
   return (
     <div
-      className="flex items-start justify-between gap-4 rounded-2xl border px-4 py-4"
+      className="flex items-start justify-between gap-4 rounded-[18px] border px-4 py-4"
       style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
     >
       <div>
@@ -205,6 +209,8 @@ export function SettingsPage() {
   const { success, error: toastError } = useToast()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
+  const location = useLocation()
+  const pageRef = useRef<HTMLDivElement>(null)
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteConfirmText, setDeleteConfirmText] = useState("")
@@ -399,6 +405,16 @@ export function SettingsPage() {
     },
   })
 
+  useEffect(() => {
+    const hash = location.hash
+    if (!hash || !pageRef.current) return
+    const id = hash.replace(/^#/, "")
+    const target = pageRef.current.querySelector<HTMLElement>(`#${CSS.escape(id)}`)
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" })
+    }
+  }, [location.hash])
+
   const deleteMutation = useMutation({
     mutationFn: () => {
       if (!selectedOrgId) throw new Error("선택된 기관이 없습니다.")
@@ -435,9 +451,9 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl gap-6 px-6 py-8">
+    <div ref={pageRef} className="mx-auto flex w-full max-w-7xl gap-6 px-6 py-8">
       <aside
-        className="sticky top-20 hidden h-fit w-72 shrink-0 rounded-3xl border p-4 xl:block"
+        className="sticky top-20 hidden h-fit w-72 shrink-0 rounded-[20px] border p-4 xl:block"
         style={{
           backgroundColor: "var(--bg-elevated)",
           borderColor: "var(--border-default)",
@@ -448,22 +464,22 @@ export function SettingsPage() {
           <div className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
             운영 설정
           </div>
-          <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-            학원 기본 정보, AI 실행 정책, 외부 연동 상태를 한 화면에서 관리합니다.
+          <div className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+            학원 기본 정보, AI 실행 정책, 연결 상태를 한 화면에서 관리합니다.
           </div>
         </div>
         <div className="space-y-2">
           {[
             { href: "#company-settings", label: "기관 기본 정보", icon: <Building2 size={15} /> },
             { href: "#ai-policy", label: "AI 운영 정책", icon: <Bot size={15} /> },
-            { href: "#integrations", label: "외부 연동", icon: <Cable size={15} /> },
+            { href: "#integrations", label: "연결", icon: <Cable size={15} /> },
             { href: "#channel-operations", label: "채널 운영", icon: <MessageSquare size={15} /> },
             { href: "#instance", label: "앱 환경", icon: <SlidersHorizontal size={15} /> },
           ].map((item) => (
             <a
               key={item.href}
               href={item.href}
-              className="flex items-center gap-2 rounded-2xl px-3 py-2 text-sm transition-colors"
+              className="flex items-center gap-2 rounded-[18px] px-3 py-2 text-sm transition-colors"
               style={{ color: "var(--text-secondary)", backgroundColor: "var(--bg-secondary)" }}
             >
               {item.icon}
@@ -482,28 +498,24 @@ export function SettingsPage() {
             </StatusPill>
           </div>
           <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-            연결된 연동 {connectedIntegrations.length} / {integrations.length}
+            연결 수 {connectedIntegrations.length} / {integrations.length}
           </div>
         </div>
       </aside>
 
       <div className="min-w-0 flex-1 space-y-6">
-        <div className="flex items-end justify-between gap-6">
-          <div>
-            <h1 className="text-2xl font-semibold" style={{ color: "var(--text-primary)" }}>
-              설정
-            </h1>
-            <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-              기관 정보, Codex 실행 상태, 외부 연동 준비 여부와 운영 기본값을 여기서 조정합니다.
-            </p>
-          </div>
+        <WorkspacePanel className="p-5">
+          <WorkspaceHeader
+            title="설정"
+            description="기관 정보, Codex 실행 상태, 연결 준비 여부와 운영 기본값을 여기서 조정합니다."
+          />
           {saveMutation.isPending ? (
-            <div className="flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+            <div className="mt-3 flex items-center gap-2 text-sm" style={{ color: "var(--text-secondary)" }}>
               <Loader2 size={14} className="animate-spin" />
               저장 중
             </div>
           ) : null}
-        </div>
+        </WorkspacePanel>
 
         <div className="grid gap-3 xl:grid-cols-4">
           {[
@@ -515,7 +527,7 @@ export function SettingsPage() {
             {
               label: "연동 준비",
               value: `${connectedIntegrations.length}/${integrations.length}`,
-              detail: connectedIntegrations.length > 0 ? "실제 연결된 외부 연동 기준" : "연결 테스트가 더 필요합니다.",
+              detail: connectedIntegrations.length > 0 ? "실제 연결된 항목 기준" : "연결 테스트가 더 필요합니다.",
             },
             {
               label: "월 예산",
@@ -536,7 +548,7 @@ export function SettingsPage() {
           ].map((item) => (
             <div
               key={item.label}
-              className="rounded-3xl border px-4 py-4"
+              className="rounded-[20px] border px-4 py-4"
               style={{
                 backgroundColor: "var(--bg-elevated)",
                 borderColor: "var(--border-default)",
@@ -584,7 +596,7 @@ export function SettingsPage() {
           </Field>
 
           <div className="grid gap-3 lg:grid-cols-3">
-            <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
               <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
                 스킬
               </div>
@@ -595,7 +607,7 @@ export function SettingsPage() {
                 설치된 기본 스킬
               </div>
             </div>
-            <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
               <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
                 연동
               </div>
@@ -603,10 +615,10 @@ export function SettingsPage() {
                 {connectedIntegrations.length}
               </div>
               <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-                연결된 외부 연동
+                연결 상태
               </div>
             </div>
-            <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
               <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
                 조치 필요
               </div>
@@ -698,7 +710,7 @@ export function SettingsPage() {
               label="현재 실행 상태"
               hint="연결 여부는 서버 env 기준이고, 저장값은 이 기관의 기본 정책입니다."
             >
-              <div className="flex h-10 items-center gap-2 rounded-2xl border px-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+              <div className="flex h-10 items-center gap-2 rounded-[18px] border px-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
                 {selectedAdapter?.connected ? <CheckCircle2 size={15} style={{ color: "var(--color-success)" }} /> : <TriangleAlert size={15} style={{ color: "#d97706" }} />}
                 <span className="text-sm" style={{ color: "var(--text-primary)" }}>
                   {selectedAdapter?.connected ? "실연동 가능" : "degraded mode 예정"}
@@ -728,7 +740,7 @@ export function SettingsPage() {
 
           {connectionTestEntries.length > 0 ? (
             <div
-              className="rounded-2xl border px-4 py-4"
+              className="rounded-[18px] border px-4 py-4"
               style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
             >
               <div className="flex items-center justify-between gap-3">
@@ -746,7 +758,7 @@ export function SettingsPage() {
                 {connectionTestEntries.map(([key, value]) => (
                   <div
                     key={key}
-                    className="flex items-center justify-between gap-3 rounded-2xl px-3 py-2"
+                    className="flex items-center justify-between gap-3 rounded-[18px] px-3 py-2"
                     style={{ backgroundColor: "var(--bg-base)" }}
                   >
                     <div className="min-w-0">
@@ -815,7 +827,7 @@ export function SettingsPage() {
           </div>
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
               <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                 <ShieldCheck size={14} style={{ color: "var(--color-teal-500)" }} />
                 Codex 연결 상태
@@ -871,7 +883,7 @@ export function SettingsPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+            <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
               <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                 <ShieldCheck size={14} style={{ color: "var(--color-teal-500)" }} />
                 법령 조회 상태
@@ -964,8 +976,8 @@ export function SettingsPage() {
         <SectionCard
           id="integrations"
           icon={<Cable size={16} />}
-          title="외부 연동"
-          description="실연동 준비 상태와 이 기관의 운영 선호 설정을 함께 관리합니다."
+          title="연결"
+          description="실연동 준비 상태와 이 기관의 운영 선호 설정을 함께 관리합니다. 스킬 화면에서는 필요 여부만 보여주고, 실제 연결은 여기서 관리합니다."
         >
           <div className="space-y-3">
             {integrations.map((integration: any) => {
@@ -973,7 +985,7 @@ export function SettingsPage() {
               return (
                 <div
                   key={integration.key}
-                  className="rounded-2xl border p-4"
+                  className="rounded-[18px] border p-4"
                   style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
                 >
                   <div className="flex items-start justify-between gap-4">
@@ -1125,9 +1137,9 @@ export function SettingsPage() {
             ].map((channel) => (
               <div
                 key={channel.key}
-                className="rounded-2xl border px-4 py-4"
-                style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
-              >
+              className="rounded-[18px] border px-4 py-4"
+              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+            >
                 <div className="flex items-center justify-between gap-2">
                   <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                     {channel.label}
@@ -1209,7 +1221,7 @@ export function SettingsPage() {
             </Select>
           </Field>
 
-          <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+          <div className="rounded-[18px] border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
             <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
               <Cpu size={14} style={{ color: "var(--color-teal-500)" }} />
               현재 로드된 모듈
@@ -1248,7 +1260,7 @@ export function SettingsPage() {
 
         {/* Danger Zone */}
         <div
-          className="rounded-2xl border overflow-hidden"
+          className="rounded-[20px] border overflow-hidden"
           style={{ borderColor: "rgba(239,68,68,0.3)" }}
         >
           <div

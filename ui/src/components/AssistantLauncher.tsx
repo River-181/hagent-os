@@ -1,10 +1,9 @@
 import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom"
-import { Bot, ExternalLink, Loader2, MessageSquarePlus, Sparkles } from "lucide-react"
+import { Link, useNavigate, useParams } from "react-router-dom"
+import { Bot, ExternalLink, Loader2, MessageSquarePlus } from "lucide-react"
 import { useOrganization } from "@/context/OrganizationContext"
-import { usePanel } from "@/context/PanelContext"
-import { useSidebar } from "@/context/SidebarContext"
+import { useAssistant } from "@/context/AssistantContext"
 import { useToast } from "@/components/ToastContext"
 import { casesApi } from "@/api/cases"
 import { queryKeys } from "@/lib/queryKeys"
@@ -32,14 +31,11 @@ function getSessionMeta(caseItem: any) {
 
 export function AssistantLauncher() {
   const navigate = useNavigate()
-  const location = useLocation()
   const queryClient = useQueryClient()
   const toast = useToast()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const { organizations, selectedOrgId } = useOrganization()
-  const { panelVisible } = usePanel()
-  const { isMobile } = useSidebar()
-  const [open, setOpen] = useState(false)
+  const { open, setOpen } = useAssistant()
   const [question, setQuestion] = useState("")
 
   const activeOrg = useMemo(() => {
@@ -53,7 +49,6 @@ export function AssistantLauncher() {
 
   const activeOrgId = activeOrg?.id ?? null
   const assistantHref = orgPrefix ? `/${orgPrefix}/assistant` : null
-  const onAssistantPage = Boolean(orgPrefix && location.pathname === `/${orgPrefix}/assistant`)
 
   const { data: cases = [] } = useQuery({
     queryKey: queryKeys.cases.list(activeOrgId ?? ""),
@@ -107,25 +102,7 @@ export function AssistantLauncher() {
   if (!assistantHref) return null
 
   return (
-    <>
-      {!onAssistantPage && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="fixed z-40 flex h-14 w-14 items-center justify-center rounded-2xl shadow-lg transition-transform hover:scale-[1.03]"
-          style={{
-            right: panelVisible && !isMobile ? 344 : 24,
-            bottom: isMobile ? 76 : 24,
-            backgroundColor: "var(--color-teal-500)",
-            color: "#fff",
-          }}
-          aria-label="Assistant 열기"
-        >
-          <Sparkles size={20} />
-        </button>
-      )}
-
-      <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side="right"
           className="w-full border-l p-0 sm:max-w-lg"
@@ -233,8 +210,7 @@ export function AssistantLauncher() {
               </div>
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
-    </>
+      </SheetContent>
+    </Sheet>
   )
 }

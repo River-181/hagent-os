@@ -2,7 +2,7 @@ import { useContext, useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
-import { useOrganization } from "@/context/OrganizationContext"
+import { useActiveOrgId } from "@/context/OrganizationContext"
 import { casesApi } from "@/api/cases"
 import { ApiError } from "@/api/client"
 import { queryKeys } from "@/lib/queryKeys"
@@ -247,10 +247,10 @@ function StatusGroup({
 export function CasesPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
-  const { selectedOrgId } = useOrganization()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
+  const activeOrgId = useActiveOrgId(orgPrefix)
 
   const [viewMode, setViewMode] = useState<"list" | "board">("list")
   const [search, setSearch] = useState("")
@@ -267,18 +267,18 @@ export function CasesPage() {
   }, [setBreadcrumbs])
 
   const { data: cases = [], isLoading, isError } = useQuery({
-    queryKey: queryKeys.cases.list(selectedOrgId ?? ""),
-    queryFn: () => casesApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.cases.list(activeOrgId ?? ""),
+    queryFn: () => casesApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
 
   const deleteCaseMutation = useMutation({
     mutationFn: (caseId: string) => casesApi.delete(caseId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(selectedOrgId ?? "") })
-      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") })
-      queryClient.invalidateQueries({ queryKey: queryKeys.documents.list(selectedOrgId ?? "") })
-      queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(selectedOrgId ?? "") })
+      queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(activeOrgId ?? "") })
+      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(activeOrgId ?? "") })
+      queryClient.invalidateQueries({ queryKey: queryKeys.documents.list(activeOrgId ?? "") })
+      queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(activeOrgId ?? "") })
       toast?.success("케이스를 숨겼습니다.")
     },
     onError: (error) => {

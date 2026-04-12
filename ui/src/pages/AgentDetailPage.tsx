@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Identity } from "@/components/Identity"
 import { StatusBadge } from "@/components/StatusBadge"
+import { CapabilityWorkspacePanel } from "@/components/capabilities/CapabilityWorkspacePanel"
 import {
   Bot,
   Loader2,
@@ -80,6 +81,51 @@ function statusLabel(status: string): string {
     paused: "일시정지",
   }
   return map[status] ?? status
+}
+
+function recommendAgentCapabilities(agent: any) {
+  const suggestions: Array<{ slug: string; kind?: "skill" | "pack" | "system"; label?: string; reason?: string }> = []
+  const agentType = String(agent?.agentType ?? "")
+
+  if (agentType === "complaint") {
+    suggestions.push(
+      { slug: "kakao-complaint-pack", kind: "pack", reason: "민원/상담 응답과 승인-발송 흐름의 기본 묶음입니다." },
+      { slug: "complaint-classifier", kind: "skill", reason: "민원 분류와 초안 생성의 핵심 스킬입니다." },
+      { slug: "approval-flow-designer", kind: "system", reason: "승인 단계와 후속 작업 흐름을 설계합니다." },
+    )
+  } else if (agentType === "scheduler") {
+    suggestions.push(
+      { slug: "schedule-operations-pack", kind: "pack", reason: "보강과 일정 조정 업무의 기본 묶음입니다." },
+      { slug: "schedule-manager", kind: "skill", reason: "일정 CRUD와 변경 반영에 사용합니다." },
+      { slug: "google-calendar-mcp", kind: "skill", reason: "외부 calendar 연결 readiness를 함께 확인합니다." },
+    )
+  } else if (agentType === "compliance" || agentType === "finance") {
+    suggestions.push(
+      { slug: "compliance-refund-pack", kind: "pack", reason: "환불과 법령 검토를 함께 다룹니다." },
+      { slug: "k-education-law-lookup", kind: "skill", reason: "교육 법령 근거 조회에 사용합니다." },
+      { slug: "refund-calculator", kind: "skill", reason: "환불 산식과 기준 검토에 사용합니다." },
+    )
+  } else {
+    suggestions.push(
+      { slug: "academy-bootstrap-pack", kind: "system", reason: "기관 운영 기본 역량 세팅을 점검합니다." },
+      { slug: "agent-runtime-checker", kind: "system", reason: "현재 에이전트의 runtime readiness를 점검합니다." },
+      { slug: "k-skill-registry", kind: "system", reason: "외부 curated skill source를 수입할 때 사용합니다." },
+    )
+  }
+
+  const mounted = Array.isArray(agent?.skills) ? agent.skills : []
+  for (const item of mounted) {
+    const slug =
+      typeof item === "string"
+        ? item
+        : item && typeof item === "object" && typeof (item as { slug?: unknown }).slug === "string"
+          ? (item as { slug: string }).slug
+          : null
+    if (!slug || suggestions.some((entry) => entry.slug === slug)) continue
+    suggestions.unshift({ slug, kind: "skill", reason: "현재 에이전트에 이미 장착된 스킬입니다." })
+  }
+
+  return suggestions
 }
 
 // ─── chat bubble ─────────────────────────────────────────────────────────────
@@ -1980,12 +2026,24 @@ export function AgentDetailPage() {
             </div>
           </div>
         </div>
+
+        <CapabilityWorkspacePanel
+          title="스킬 관리"
+          description="이 에이전트에 맞는 스킬과 스킬 묶음을 같은 패널에서 장착하거나 제거합니다."
+          orgId={selectedOrgId}
+          orgPrefix={orgPrefix}
+          availableAgents={agentId ? [{ id: agentId, name: agentName, agentType: agent?.agentType }] : []}
+          lockedAgentId={agentId}
+          suggestions={recommendAgentCapabilities(agent)}
+        />
       </div>,
     )
 
     return () => setPanelContent(null)
   }, [
     agentAdapterType,
+    agent?.agentType,
+    agent?.skills,
     agentId,
     agentName,
     agentRole,
@@ -1994,7 +2052,9 @@ export function AgentDetailPage() {
     budgetUsed,
     connectedSkillCount,
     lastRunStartedAt,
+    orgPrefix,
     relatedCaseCount,
+    selectedOrgId,
     setPanelContent,
   ])
 

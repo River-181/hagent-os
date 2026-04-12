@@ -30,7 +30,7 @@ export function Layout() {
       style={{
         height: "100dvh",
         overflow: "hidden",
-        backgroundColor: "var(--bg-base)",
+        backgroundColor: "var(--bg-canvas)",
       }}
     >
       {/* Zone 0: Organization Rail */}
@@ -61,7 +61,7 @@ export function Layout() {
         <main
           className="flex-1 overflow-y-auto"
           style={{
-            backgroundColor: "var(--bg-secondary)",
+            backgroundColor: "var(--bg-canvas)",
             paddingBottom: isMobile ? 60 : 0,
           }}
         >

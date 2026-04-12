@@ -11,7 +11,7 @@ export function PropertiesPanel() {
       className="flex flex-col h-full overflow-y-auto"
       style={{
         width: 320,
-        backgroundColor: "var(--bg-base)",
+        backgroundColor: "var(--bg-page)",
         borderLeft: "1px solid var(--border-default)",
         flexShrink: 0,
       }}
@@ -25,7 +25,7 @@ export function PropertiesPanel() {
           className="text-sm font-semibold"
           style={{ color: "var(--text-primary)" }}
         >
-          Properties
+          속성
         </span>
         <button
           type="button"
@@ -39,9 +39,12 @@ export function PropertiesPanel() {
       </div>
 
       {/* Panel content */}
-      <div className="flex-1 p-4">
+      <div className="flex-1 p-4" style={{ backgroundColor: "var(--bg-canvas)" }}>
         {panelContent ?? (
-          <div className="space-y-3">
+          <div
+            className="space-y-3 rounded-2xl border p-4"
+            style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-page)" }}
+          >
             <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
               아직 선택된 항목이 없습니다.
             </p>
