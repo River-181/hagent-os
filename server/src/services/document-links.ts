@@ -19,6 +19,7 @@ interface ParsedDocumentTags {
 }
 
 export interface EnrichedDocument extends DocumentRecord {
+  content: string
   rawTags: string[]
   documentScope: DocumentScope
   documentScopeLabel: string
@@ -123,6 +124,7 @@ export function enrichDocuments(
 
     return {
       ...document,
+      content: document.body,
       ...role,
       rawTags: parsed.rawTags,
       linkedCase: linkedCaseRecord

@@ -169,6 +169,41 @@ export function documentRoutes(db: Db): Router {
     }
   })
 
+  // Get single document by organization and document ID
+  router.get("/organizations/:orgId/documents/:docId", async (req, res) => {
+    try {
+      const [doc] = await db.select().from(schema.documents)
+        .where(eq(schema.documents.id, req.params.docId))
+      if (!doc) { res.status(404).json({ error: "Not found" }); return }
+      if (doc.organizationId !== req.params.orgId) { res.status(404).json({ error: "Not found" }); return }
+      const docTags = Array.isArray(doc.tags) ? doc.tags : []
+      const [linkedCase, linkedProject] = await Promise.all([
+        docTags.length > 0
+          ? (async () => {
+              const caseTag = docTags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("case:"))
+              return caseTag
+                ? (await db.select().from(schema.cases).where(eq(schema.cases.id, caseTag.slice(5))))[0] ?? null
+                : null
+            })()
+          : Promise.resolve(null),
+        docTags.length > 0
+          ? (async () => {
+              const projectTag = docTags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("project:"))
+              return projectTag
+                ? (await db.select().from(schema.opsGroups).where(eq(schema.opsGroups.id, projectTag.slice(8))))[0] ?? null
+                : null
+            })()
+          : Promise.resolve(null),
+      ])
+      res.json(enrichDocuments([doc], {
+        cases: linkedCase ? [linkedCase] : [],
+        projects: linkedProject ? [linkedProject] : [],
+      })[0])
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch document" })
+    }
+  })
+
   // Create document
   router.post("/organizations/:orgId/documents", async (req, res) => {
     try {

@@ -302,6 +302,10 @@ export function approvalRoutes(db: Db): Router {
           .update(schema.cases)
           .set({ status: "done", updatedAt: new Date() })
           .where(eq(schema.cases.id, existing.caseId))
+
+        // 오케스트레이터 메모리 실시간 갱신 (best-effort)
+        const { updateOrchestratorMemoryOnCaseDone } = await import("../services/agent-memory-update.js")
+        void updateOrchestratorMemoryOnCaseDone(db, existing.caseId)
       }
     }
 

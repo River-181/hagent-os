@@ -1,15 +1,17 @@
-import fs from "node:fs"
-import { execFile as execFileCallback } from "node:child_process"
-import { promisify } from "node:util"
-import { fileURLToPath } from "node:url"
-import path from "node:path"
+// Korean national law API integration (국가법령정보센터 Open API)
+// Docs: https://open.law.go.kr/LSO/openApi/guide.do
 
-const execFile = promisify(execFileCallback)
+const LAW_SEARCH_BASE = "http://www.law.go.kr/DRF/lawSearch.do"
+const LAW_SERVICE_BASE = "http://www.law.go.kr/DRF/lawService.do"
+const REQUEST_TIMEOUT_MS = 5_000
+const CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes
 
-const integrationRoot = fileURLToPath(
-  new URL("../../../../integrations/korean-law-mcp", import.meta.url),
-)
-const cliPath = path.join(integrationRoot, "build/cli.js")
+// In-memory result cache keyed by `${oc}:${query}`
+interface CacheEntry {
+  result: KoreanLawLookupResult
+  expiresAt: number
+}
+const cache = new Map<string, CacheEntry>()
 
 export interface KoreanLawLookupResult {
   source: "korean-law-mcp"
@@ -28,13 +30,17 @@ function truncate(text: string, max = 700) {
   return text.length > max ? `${text.slice(0, max).trim()}...` : text
 }
 
+function getOC(): string {
+  return process.env.LAW_GO_KR_OC || process.env.LAW_OC || ""
+}
+
 export function getKoreanLawEnvStatus() {
-  const apiKey = process.env.LAW_OC || process.env.KOREAN_LAW_API_KEY || ""
+  const oc = getOC()
   return {
-    installed: fs.existsSync(cliPath),
-    connected: Boolean(apiKey),
-    apiKey,
-    missingEnv: apiKey ? [] : ["LAW_OC"],
+    installed: true, // HTTP-based, always "installed"
+    connected: Boolean(oc),
+    apiKey: oc,
+    missingEnv: oc ? [] : ["LAW_GO_KR_OC"],
   }
 }
 
@@ -54,73 +60,158 @@ export function buildComplaintLawQuery(title: string, description: string) {
   return null
 }
 
-export async function lookupKoreanLaw(query: string): Promise<KoreanLawLookupResult> {
-  const env = getKoreanLawEnvStatus()
+async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    const response = await fetch(url, { signal: controller.signal })
+    return response
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
-  if (!env.installed) {
-    return {
-      source: "korean-law-mcp",
-      query,
-      installed: false,
-      connected: env.connected,
-      degraded: true,
-      missingEnv: env.missingEnv,
-      error: "korean-law-mcp is not built",
+interface LawSearchItem {
+  법령ID?: string
+  법령명한글?: string
+  법령구분명?: string
+  시행일자?: string
+  [key: string]: unknown
+}
+
+interface LawSearchResponse {
+  LawSearch?: {
+    law?: LawSearchItem | LawSearchItem[]
+    totalCnt?: string | number
+  }
+}
+
+interface LawArticle {
+  조문내용?: string
+  조문제목?: string
+  [key: string]: unknown
+}
+
+interface LawServiceResponse {
+  법령?: {
+    기본정보?: {
+      법령명한글?: string
+      시행일자?: string
+    }
+    조문?: {
+      조문단위?: LawArticle | LawArticle[]
     }
   }
+}
 
-  if (!env.connected) {
+async function searchLaw(oc: string, query: string): Promise<LawSearchItem | null> {
+  const url = `${LAW_SEARCH_BASE}?OC=${encodeURIComponent(oc)}&target=law&type=JSON&query=${encodeURIComponent(query)}`
+  const response = await fetchWithTimeout(url, REQUEST_TIMEOUT_MS)
+  if (!response.ok) {
+    throw new Error(`law search HTTP ${response.status}`)
+  }
+  const data = (await response.json()) as LawSearchResponse
+  const lawList = data?.LawSearch?.law
+  if (!lawList) return null
+  const items = Array.isArray(lawList) ? lawList : [lawList]
+  return items[0] ?? null
+}
+
+async function fetchLawDetail(oc: string, lawId: string): Promise<string | null> {
+  const url = `${LAW_SERVICE_BASE}?OC=${encodeURIComponent(oc)}&target=law&type=JSON&ID=${encodeURIComponent(lawId)}`
+  const response = await fetchWithTimeout(url, REQUEST_TIMEOUT_MS)
+  if (!response.ok) {
+    throw new Error(`law detail HTTP ${response.status}`)
+  }
+  const data = (await response.json()) as LawServiceResponse
+  const lawName = data?.법령?.기본정보?.법령명한글 ?? ""
+  const articles = data?.법령?.조문?.조문단위
+  if (!articles) return lawName || null
+
+  const articleList = Array.isArray(articles) ? articles : [articles]
+  const lines: string[] = []
+  if (lawName) lines.push(`[${lawName}]`)
+
+  for (const article of articleList.slice(0, 5)) {
+    const title = article.조문제목 ?? ""
+    const content = article.조문내용 ?? ""
+    if (title) lines.push(title)
+    if (content) lines.push(content)
+    if (lines.length >= 6) break
+  }
+
+  return lines.slice(0, 6).join("\n").trim() || lawName || null
+}
+
+export async function lookupKoreanLaw(query: string): Promise<KoreanLawLookupResult> {
+  const oc = getOC()
+
+  if (!oc) {
     return {
       source: "korean-law-mcp",
       query,
       installed: true,
       connected: false,
       degraded: true,
-      missingEnv: env.missingEnv,
-      error: "LAW_OC is not configured",
+      missingEnv: ["LAW_GO_KR_OC"],
+      error: "LAW_GO_KR_OC is not configured",
     }
   }
 
-  try {
-    const { stdout } = await execFile(
-      "node",
-      [cliPath, "query", query, "--json"],
-      {
-        cwd: integrationRoot,
-        env: {
-          ...process.env,
-          LAW_OC: env.apiKey,
-        },
-        timeout: 20_000,
-        maxBuffer: 2_000_000,
-      },
-    )
+  const cacheKey = `${oc}:${query}`
+  const cached = cache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.result
+  }
 
-    const parsed = JSON.parse(stdout) as {
-      route?: { tool?: string; reason?: string }
-      result?: string
-      pipelineResult?: string
-      error?: string
+  try {
+    const firstResult = await searchLaw(oc, query)
+    if (!firstResult) {
+      const result: KoreanLawLookupResult = {
+        source: "korean-law-mcp",
+        query,
+        installed: true,
+        connected: true,
+        degraded: false,
+        missingEnv: [],
+        summary: "검색 결과 없음",
+        detail: null,
+        error: null,
+      }
+      cache.set(cacheKey, { result, expiresAt: Date.now() + CACHE_TTL_MS })
+      return result
     }
 
-    const detail = parsed.pipelineResult || parsed.result || parsed.error || ""
-    const summary = parsed.route?.reason
-      ? `${parsed.route.reason}${detail ? `\n${truncate(detail, 420)}` : ""}`
-      : truncate(detail, 420)
+    const lawName = firstResult.법령명한글 ?? ""
+    const lawId = firstResult.법령ID ?? ""
 
-    return {
+    let detail: string | null = null
+    if (lawId) {
+      detail = await fetchLawDetail(oc, lawId)
+    }
+
+    const summary = detail
+      ? truncate(detail, 420)
+      : lawName
+        ? `[${lawName}] 검색 완료`
+        : "법령 검색 완료"
+
+    const result: KoreanLawLookupResult = {
       source: "korean-law-mcp",
       query,
       installed: true,
       connected: true,
       degraded: false,
       missingEnv: [],
-      routeTool: parsed.route?.tool ?? null,
-      summary: summary || null,
+      routeTool: null,
+      summary,
       detail: detail ? truncate(detail, 1_200) : null,
-      error: parsed.error ?? null,
+      error: null,
     }
+    cache.set(cacheKey, { result, expiresAt: Date.now() + CACHE_TTL_MS })
+    return result
   } catch (error) {
+    const errorMsg = error instanceof Error ? error.message : "법령 API 호출 실패"
     return {
       source: "korean-law-mcp",
       query,
@@ -128,7 +219,7 @@ export async function lookupKoreanLaw(query: string): Promise<KoreanLawLookupRes
       connected: true,
       degraded: true,
       missingEnv: [],
-      error: error instanceof Error ? error.message : "Failed to execute korean-law-mcp",
+      error: errorMsg,
     }
   }
 }

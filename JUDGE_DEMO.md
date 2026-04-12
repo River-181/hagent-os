@@ -6,7 +6,7 @@
 
 ## 1. 라이브 데모 접속
 
-> **라이브 URL**: https://divine-simplicity-production.up.railway.app
+> **라이브 URL**: https://hagent-os.up.railway.app
 
 라이브 URL 접속 시 별도 로그인 없이 **탄자니아 영어학원 데모 7** 조직이 사전 로드됩니다.
 
@@ -82,13 +82,12 @@ cd ui && npx vite preview --port 5173
 
 ## 4. 텔레그램 봇
 
-> 봇 링크: **심사 전 업데이트 예정**
+> 봇 링크: [@TANZANIA_ENGLISH_ACADEMY_bot](https://t.me/TANZANIA_ENGLISH_ACADEMY_bot)
 
 **추천 메시지 예시:**
-- `이수아 학생 상담 예약 잡아줘`
-- `이번 달 환불 요청 현황 정리해줘`
-- `다음 주 보강 일정 잡아야 할 학생 있어?`
-- `수강료 미납 학생 명단 줘`
+- `환불 규정 알려줘`
+- `이번 주 보강 가능한 시간 있어?`
+- `수강료 연체 안내 문자는 언제 보내지?`
 
 ---
 
@@ -135,11 +134,12 @@ cd ui && npx vite preview --port 5173
 
 ---
 
-## 9. Known Limits
+## 9. Known Limits (솔직한 한계)
 
-- Google Calendar 실시간 동기화: 미구현 (내부 일정 관리로 대체)
-- 카카오 아웃바운드: 실전 webhook URL 설정 필요
-- 다중 사용자 동시 접속: 단일 세션 기준으로 최적화
+- k-skill 레지스트리는 로드되지만 일부 스킬은 런타임 연결 확인 필요 (예: google-calendar-mcp)
+- 텔레그램 봇 자동응답은 기본 OFF (승인 게이트 통과 후 발송) — Settings > 채널 운영에서 켤 수 있음
+- 에이전트 메모리 실시간 갱신은 케이스 `done` 전환 시 동작 (최근 구현)
+- 국가법령정보센터 MCP는 OC 기반 연동, 쿼리당 API 응답 시간 2-5초 가능
 
 ---
 

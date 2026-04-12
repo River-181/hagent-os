@@ -180,6 +180,12 @@ export async function processKakaoApprovalDelivery(
     })
     .where(eq(schema.cases.id, caseRecord.id))
 
+  // 실시간 오케스트레이터 메모리 갱신 (best-effort)
+  if (nextCaseStatus === "done") {
+    const { updateOrchestratorMemoryOnCaseDone } = await import("./agent-memory-update.js")
+    void updateOrchestratorMemoryOnCaseDone(db, caseRecord.id)
+  }
+
   const [latest] = await db.select().from(schema.approvals).where(eq(schema.approvals.id, approval.id))
   return latest
 }

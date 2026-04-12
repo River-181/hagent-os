@@ -12,6 +12,8 @@ export interface Config {
   embeddedPostgresDataDir: string
   /** DEMO_MODE=true → API 키 없이도 mock 응답으로 전체 플로우 동작 */
   demoMode: boolean
+  /** 국가법령정보센터 Open API OC (Organization Code) */
+  lawGoKrOc: string | null
 }
 
 export function loadConfig(): Config {
@@ -25,5 +27,6 @@ export function loadConfig(): Config {
     embeddedPostgresDataDir:
       process.env.HAGENT_DATA_DIR || "./hagent-data",
     demoMode: process.env.DEMO_MODE === "true",
+    lawGoKrOc: process.env.LAW_GO_KR_OC || null,
   }
 }
