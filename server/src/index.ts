@@ -63,30 +63,30 @@ async function main() {
   const db = createDb(connectionString)
   logger.info("Database connection established")
 
-  const stopTelegramPolling = startTelegramInboundPolling(db)
-
-  // Push schema to DB (create tables if they don't exist)
-  try {
-    const { default: postgres } = await import("postgres")
-    const sql = postgres(connectionString)
-    // Use raw SQL to create tables via drizzle-kit push would be ideal,
-    // but for dev we'll create tables on first run via seed script.
-    // Just verify connection works.
-    await sql`SELECT 1`
-    await sql.end()
-    logger.info("Database connection verified")
-  } catch (e) {
-    logger.error(e, "Database connection verification failed")
-  }
-
   const app = createApp(db, config)
 
+  // 서버 먼저 시작 (헬스체크 통과) → DB 연결 백그라운드 검증
   const server = app.listen(config.port, () => {
     logger.info(
       { port: config.port, deploymentMode: config.deploymentMode },
       "HagentOS server listening",
     )
   })
+
+  // DB 연결 비동기 검증 (서버 시작 블로킹 안 함)
+  void (async () => {
+    try {
+      const { default: postgres } = await import("postgres")
+      const sql = postgres(connectionString, { connect_timeout: 15 })
+      await sql`SELECT 1`
+      await sql.end()
+      logger.info("Database connection verified")
+    } catch (e) {
+      logger.warn(e, "Database connection verification failed (non-fatal)")
+    }
+  })()
+
+  const stopTelegramPolling = startTelegramInboundPolling(db)
 
   const shutdown = () => {
     logger.info("Shutting down server...")
