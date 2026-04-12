@@ -58,6 +58,13 @@ function ChartTile({
   )
 }
 
+function compactAgentLabel(value: unknown) {
+  const label = String(value ?? "?").trim()
+  if (!label) return "?"
+  const firstToken = label.split(/\s+/)[0] ?? label
+  return firstToken.length > 8 ? firstToken.slice(0, 8) : firstToken
+}
+
 function HBar({
   label,
   value,
@@ -124,8 +131,8 @@ function RunActivityChart({ activity }: { activity: any[] }) {
   return (
     <ChartTile
       title="실행 활동 밀도"
-      description="최근 7일 동안 오케스트레이터와 에이전트 실행이 얼마나 몰렸는지 봅니다."
-      meta={{ value: `${total}`, label: peak.count > 0 ? `최대 ${peak.label}` : "최근 7일" }}
+      description="최근 7일 실행량."
+      meta={{ value: `${total}`, label: peak.count > 0 ? `피크 ${peak.label}` : "합계" }}
     >
       <div className="flex items-end gap-1.5" style={{ height: 84 }}>
         {days.map((day) => {
@@ -177,8 +184,8 @@ function PriorityChart({ cases }: { cases: any[] }) {
   return (
     <ChartTile
       title="긴급도 분포"
-      description="케이스를 처리 우선순위 관점에서 빠르게 훑을 수 있게 정리한 보기입니다."
-      meta={{ value: dominantLabelMap[dominantEntry[0]] ?? "없음", label: "가장 많은 우선순위" }}
+      description="우선순위 쏠림."
+      meta={{ value: dominantLabelMap[dominantEntry[0]] ?? "없음", label: "최다 구간" }}
     >
       <div className="space-y-2.5">
         <HBar label="긴급" value={counts.critical} max={max} color="var(--color-danger)" />
@@ -220,8 +227,8 @@ function StatusChart({ cases }: { cases: any[] }) {
   return (
     <ChartTile
       title="처리 흐름 상태"
-      description="백로그부터 완료까지 현재 케이스가 어느 구간에 몰려 있는지 보여줍니다."
-      meta={{ value: `${active}`, label: "활성 흐름" }}
+      description="현재 병목 구간."
+      meta={{ value: `${active}`, label: "활성" }}
     >
       <div className="space-y-2.5">
         {rows.map((row) => (
@@ -254,9 +261,8 @@ function SuccessRateChart({ agents }: { agents: any[] }) {
       const runs: any[] = Array.isArray(agent.runs) ? agent.runs : []
       const done = runs.filter((run: any) => run.status === "completed").length
       const count = runs.length
-      const label = String(agent.name ?? agent.slug ?? "?").trim()
       return {
-        label: label.length > 6 ? label.slice(0, 6) : label,
+        label: compactAgentLabel(agent.name ?? agent.slug ?? "?"),
         rate: count > 0 ? Math.round((done / count) * 100) : 0,
       }
     })
@@ -272,16 +278,13 @@ function SuccessRateChart({ agents }: { agents: any[] }) {
   return (
     <ChartTile
       title="완료 안정성"
-      description="최근 실행이 실제 완료까지 이어지는 비율을 기준으로 운영 안정도를 봅니다."
+      description="최근 완료율."
       meta={{ value: `${completed}/${total}`, label: "완료 / 전체" }}
     >
       <div className="flex items-end justify-between gap-4">
         <div>
           <div className="text-[32px] font-bold leading-none tabular-nums" style={{ color: rateColor }}>
             {rate}%
-          </div>
-          <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-            runs 기준 완료율
           </div>
         </div>
         <div className="flex min-w-0 flex-1 items-end gap-1.5" style={{ height: 64 }}>

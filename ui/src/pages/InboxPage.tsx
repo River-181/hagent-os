@@ -22,11 +22,9 @@ import {
   Bell,
   Bot,
   CheckCircle2,
-  Clock,
   FileText,
   MessageSquare,
   Loader2,
-  Megaphone,
   MoveRight,
   Send,
   Sparkles,
@@ -159,37 +157,6 @@ const FILTERS: { key: FeedFilter; label: string }[] = [
   { key: "inquiry", label: "질문 작업" },
   { key: "agent_completed", label: "에이전트 완료" },
 ]
-
-const JUDGING_SCENARIOS = [
-  {
-    key: "kakao",
-    eyebrow: "Scenario 1",
-    title: "카카오 민원 접수",
-    summary: "보호자 민원을 케이스로 만들고 승인 후 운영자 발송 브리지까지 이어갑니다.",
-    icon: MessageSquare,
-  },
-  {
-    key: "telegram",
-    eyebrow: "Scenario 2",
-    title: "보강·결석 문의",
-    summary: "텔레그램 문의를 일정 제안과 학부모 안내 초안으로 연결합니다.",
-    icon: Send,
-  },
-  {
-    key: "project",
-    eyebrow: "Scenario 3",
-    title: "상반기 프로모션",
-    summary: "프로젝트 생성, 하위 케이스 분해, 산출물 묶음을 한 번에 보여줍니다.",
-    icon: Megaphone,
-  },
-  {
-    key: "law",
-    eyebrow: "Scenario 4",
-    title: "운영 정책·법률 질문",
-    summary: "Assistant 질문을 inquiry 케이스와 브리프로 남깁니다.",
-    icon: FileText,
-  },
-] as const
 
 function getNotificationCategory(item: NotificationItem): FeedItem["category"] | null {
   if (item.type === "agent_completed" || item.entityType === "agent_run") {
@@ -741,7 +708,7 @@ export function InboxPage() {
   return (
     <div className="h-full min-h-0">
       <ScrollArea className="h-full">
-        <div className="p-6 md:p-8 space-y-6 max-w-5xl mx-auto">
+        <div className="mx-auto max-w-6xl space-y-5 p-6 md:p-8">
           <WorkspaceHeader
             title="알림함"
             description="승인 요청과 운영 알림을 한 곳에서 확인합니다."
@@ -753,7 +720,7 @@ export function InboxPage() {
           />
 
           <WorkspacePanel className="overflow-hidden">
-            <div className="flex flex-wrap gap-2 border-b p-4" style={{ borderColor: "var(--border-default)" }}>
+            <div className="flex flex-wrap gap-2 border-b px-4 py-3" style={{ borderColor: "var(--border-default)" }}>
               {FILTERS.map((filter) => {
                 const count =
                   filter.key === "all"
@@ -764,7 +731,7 @@ export function InboxPage() {
                   <button
                     key={filter.key}
                     onClick={() => setActiveFilter(filter.key)}
-                    className="rounded-full px-3 py-1.5 text-sm font-medium transition-colors"
+                    className="rounded-full px-2.5 py-1.5 text-xs font-medium transition-colors"
                     style={{
                       backgroundColor:
                         activeFilter === filter.key ? "var(--color-primary)" : "var(--bg-muted)",
@@ -777,7 +744,7 @@ export function InboxPage() {
               })}
             </div>
 
-            <div className="flex items-center justify-between gap-3 p-4">
+            <div className="flex items-center justify-between gap-3 px-4 py-3">
               <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
                 {unreadCount > 0 ? `선택한 탭에 읽지 않은 항목 ${unreadCount}개` : "읽지 않은 항목이 없습니다"}
               </p>
@@ -790,79 +757,94 @@ export function InboxPage() {
             </div>
           </WorkspacePanel>
 
-          <div
-            className="rounded-xl border p-4"
-            style={{
-              borderColor: "var(--border-default)",
-              backgroundColor: "var(--bg-elevated)",
-              boxShadow: "var(--shadow-sm)",
-            }}
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="font-medium" style={{ color: "var(--text-primary)" }}>심사 리허설 4개</div>
-                <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-                  채널 인입, 운영 질문, 프로젝트 산출물, 운영자 발송 브리지를 한 화면에서 시작합니다.
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
+            <div className="space-y-4">
+              <div
+                className="rounded-xl border p-4"
+                style={{
+                  borderColor: "var(--border-default)",
+                  backgroundColor: "var(--bg-elevated)",
+                  boxShadow: "var(--shadow-sm)",
+                }}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="font-medium" style={{ color: "var(--text-primary)" }}>심사 리허설</div>
+                    <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+                      인입, 질문, 프로젝트, 발송 브리지를 여기서 바로 시작합니다.
+                    </div>
+                  </div>
+                  <Badge className="border-0" style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}>
+                    심사 시작점
+                  </Badge>
+                </div>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <Button size="sm" variant="outline" className="justify-start gap-1.5 min-w-0" disabled={!activeOrgId || replayInboundMutation.isPending} onClick={() => replayInboundMutation.mutate("kakao")}>
+                    {replayInboundMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                    Replay Kakao 민원
+                  </Button>
+                  <Button size="sm" variant="outline" className="justify-start gap-1.5 min-w-0" disabled={!activeOrgId || replayInboundMutation.isPending} onClick={() => replayInboundMutation.mutate("telegram")}>
+                    {replayInboundMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                    Replay Telegram 상담
+                  </Button>
+                  <Button size="sm" className="justify-start gap-1.5 min-w-0" style={{ backgroundColor: "var(--color-primary)", color: "var(--text-on-primary)" }} disabled={!activeOrgId || sampleProjectMutation.isPending} onClick={() => sampleProjectMutation.mutate("project")}>
+                    {sampleProjectMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                    상반기 프로모션 생성
+                  </Button>
+                  <Button size="sm" variant="outline" className="justify-start gap-1.5 min-w-0" disabled={!activeOrgId || sampleProjectMutation.isPending} onClick={() => sampleProjectMutation.mutate("policy")}>
+                    {sampleProjectMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
+                    운영 정책 프로젝트
+                  </Button>
+                  <Button size="sm" variant="outline" className="justify-start gap-1.5 min-w-0 sm:col-span-2" disabled={!activeOrgId || legalQuestionMutation.isPending} onClick={() => legalQuestionMutation.mutate()}>
+                    {legalQuestionMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
+                    운영/법령 질문 예시
+                  </Button>
                 </div>
               </div>
-              <Badge className="border-0" style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}>
-                심사 시작점
-              </Badge>
             </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" className="gap-2" disabled={!activeOrgId || replayInboundMutation.isPending} onClick={() => replayInboundMutation.mutate("kakao")}>
-                {replayInboundMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                Replay Kakao 민원
-              </Button>
-              <Button size="sm" variant="outline" className="gap-2" disabled={!activeOrgId || replayInboundMutation.isPending} onClick={() => replayInboundMutation.mutate("telegram")}>
-                {replayInboundMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                Replay Telegram 상담
-              </Button>
-              <Button size="sm" className="gap-2" style={{ backgroundColor: "var(--color-primary)", color: "var(--text-on-primary)" }} disabled={!activeOrgId || sampleProjectMutation.isPending} onClick={() => sampleProjectMutation.mutate("project")}>
-                {sampleProjectMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                상반기 프로모션 생성
-              </Button>
-              <Button size="sm" variant="outline" className="gap-2" disabled={!activeOrgId || sampleProjectMutation.isPending} onClick={() => sampleProjectMutation.mutate("policy")}>
-                {sampleProjectMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
-                운영 정책 프로젝트
-              </Button>
-              <Button size="sm" variant="outline" className="gap-2" disabled={!activeOrgId || legalQuestionMutation.isPending} onClick={() => legalQuestionMutation.mutate()}>
-                {legalQuestionMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
-                운영/법령 질문 예시
-              </Button>
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-              {JUDGING_SCENARIOS.map((scenario) => {
-                const Icon = scenario.icon
-                return (
-                  <div key={scenario.key} className="rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
-                    <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: "var(--text-tertiary)" }}>
-                      {scenario.eyebrow}
-                    </div>
-                    <div className="mt-1 flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                      <Icon size={14} />
-                      {scenario.title}
-                    </div>
-                    <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
-                      {scenario.summary}
-                    </p>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
+              {replayHistory.length > 0 && (
+                <div className="rounded-lg border p-3 min-w-0" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                  <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                    최근 생성 결과
                   </div>
-                )
-              })}
-            </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                  <div className="mt-3 space-y-2">
+                    {replayHistory.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => navigate(item.href)}
+                        className="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left transition-colors"
+                        style={{ backgroundColor: "var(--bg-elevated)" }}
+                      >
+                        <div className="min-w-0">
+                          <div className="truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                            {item.title}
+                          </div>
+                          <div className="truncate text-xs" style={{ color: "var(--text-secondary)" }}>
+                            {item.summary} · {timeAgo(item.createdAt)}
+                          </div>
+                        </div>
+                        <MoveRight size={14} className="shrink-0" style={{ color: "var(--text-tertiary)" }} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-lg border p-3 min-w-0" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
                 <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                   채널 상태
                 </div>
                 <div className="mt-3 space-y-2">
                   {channelHealth.map((channel) => (
-                    <div key={channel.key} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2" style={{ backgroundColor: "var(--bg-elevated)" }}>
-                      <div>
+                    <div key={channel.key} className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 min-w-0" style={{ backgroundColor: "var(--bg-elevated)" }}>
+                      <div className="min-w-0">
                         <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{channel.label}</div>
-                        <div className="text-xs" style={{ color: "var(--text-secondary)" }}>{channel.detail}</div>
+                        <div className="truncate text-xs" style={{ color: "var(--text-secondary)" }}>{channel.detail}</div>
                       </div>
-                      <Badge className="border-0" style={{ backgroundColor: channel.enabled ? "var(--color-primary-soft)" : "var(--bg-muted)", color: channel.enabled ? "var(--color-primary)" : "var(--text-secondary)" }}>
+                      <Badge className="border-0 shrink-0" style={{ backgroundColor: channel.enabled ? "var(--color-primary-soft)" : "var(--bg-muted)", color: channel.enabled ? "var(--color-primary)" : "var(--text-secondary)" }}>
                         {channel.readiness}
                       </Badge>
                     </div>
@@ -870,7 +852,7 @@ export function InboxPage() {
                 </div>
               </div>
 
-              <div className="rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+              <div className="rounded-lg border p-3 min-w-0" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                     마지막 생성 항목
@@ -883,7 +865,7 @@ export function InboxPage() {
                 </div>
                 {lastReplayTarget ? (
                   <div className="mt-3 rounded-lg px-3 py-3" style={{ backgroundColor: "var(--bg-elevated)" }}>
-                    <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{lastReplayTarget.title}</div>
+                    <div className="truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>{lastReplayTarget.title}</div>
                     <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
                       {lastReplayTarget.summary} · {timeAgo(lastReplayTarget.createdAt)}
                     </div>
@@ -894,179 +876,153 @@ export function InboxPage() {
                   </div>
                 )}
               </div>
-            </div>
-            {replayHistory.length > 0 && (
-              <div className="mt-4 rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+
+              <div className="rounded-lg border p-3 min-w-0" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
                 <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                  최근 생성 결과
+                  Live inbound queue
                 </div>
-                <div className="mt-3 space-y-2">
-                  {replayHistory.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => navigate(item.href)}
-                      className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition-colors"
-                      style={{ backgroundColor: "var(--bg-elevated)" }}
-                    >
-                      <div>
-                        <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                          {item.title}
-                        </div>
-                        <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                          {item.summary} · {timeAgo(item.createdAt)}
-                        </div>
-                      </div>
-                      <MoveRight size={14} style={{ color: "var(--text-tertiary)" }} />
-                    </button>
-                  ))}
-                </div>
+                {recentInbound.length === 0 ? (
+                  <div className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+                    최근 채널 유입이 없습니다.
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {recentInbound.map((event) => {
+                      const metadata = event.metadata ?? {}
+                      const channelKey = metadata.channelKey === "telegram" ? "Telegram" : "Kakao"
+                      const senderName = typeof metadata.senderName === "string" ? metadata.senderName : "외부 발신자"
+                      return (
+                        <button
+                          key={event.id}
+                          type="button"
+                          onClick={() => event.entityId && orgPrefix && navigate(`/${orgPrefix}/cases/${event.entityId}`)}
+                          className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition-colors"
+                          style={{ backgroundColor: "var(--bg-elevated)" }}
+                        >
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                              {channelKey} · {senderName}
+                            </div>
+                            <div className="truncate text-xs" style={{ color: "var(--text-secondary)" }}>
+                              {event.entityTitle ?? event.action} · {timeAgo(event.createdAt)}
+                            </div>
+                          </div>
+                          <MoveRight size={14} style={{ color: "var(--text-tertiary)" }} />
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
-            )}
-            <div className="mt-4 rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
-              <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                Live inbound queue
-              </div>
-              {recentInbound.length === 0 ? (
-                <div className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
-                  최근 채널 유입이 없습니다.
+
+              <div className="rounded-lg border p-3 min-w-0 md:col-span-2 xl:col-span-2" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                      운영자 발송 브리지
+                    </div>
+                    <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                      승인 후 실제 회신 직전 상태입니다.
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => navigate(`/${orgPrefix}/approvals`)}>
+                    승인 큐 열기
+                  </Button>
                 </div>
-              ) : (
-                <div className="mt-3 space-y-2">
-                  {recentInbound.map((event) => {
-                    const metadata = event.metadata ?? {}
-                    const channelKey = metadata.channelKey === "telegram" ? "Telegram" : "Kakao"
-                    const senderName = typeof metadata.senderName === "string" ? metadata.senderName : "외부 발신자"
-                    return (
-                      <button
-                        key={event.id}
-                        type="button"
-                        onClick={() => event.entityId && orgPrefix && navigate(`/${orgPrefix}/cases/${event.entityId}`)}
-                        className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left transition-colors"
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border px-3 py-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+                    <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>발송 준비</div>
+                    <div className="mt-1 text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{pendingReadyCount}건</div>
+                  </div>
+                  <div className="rounded-lg border px-3 py-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+                    <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>자동 발송 실패</div>
+                    <div className="mt-1 text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{pendingFailedCount}건</div>
+                  </div>
+                  <div className="rounded-lg border px-3 py-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
+                    <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>운영 조치</div>
+                    <div className="mt-1 flex items-center gap-1 text-sm font-medium" style={{ color: "var(--color-warning)" }}>
+                      <AlertTriangle size={13} />
+                      문안 복사 후 전송
+                    </div>
+                  </div>
+                </div>
+                {pendingOutbound.length === 0 ? (
+                  <div className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+                    발송 대기 중인 카카오 회신이 없습니다.
+                  </div>
+                ) : (
+                  <div className="mt-3 space-y-2">
+                    {pendingOutbound.map((item) => (
+                      <div
+                        key={item.approvalId}
+                        className="rounded-lg px-3 py-3"
                         style={{ backgroundColor: "var(--bg-elevated)" }}
                       >
-                        <div>
-                          <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                            {channelKey} · {senderName}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                              {item.caseTitle}
+                            </div>
+                            <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                              {item.status === "failed" ? "자동 발송 실패" : "운영자 발송 대기"} · {timeAgo(item.createdAt)}
+                            </div>
                           </div>
-                          <div className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                            {event.entityTitle ?? event.action} · {timeAgo(event.createdAt)}
-                          </div>
+                          <Badge
+                            className="border-0 shrink-0"
+                            style={{
+                              backgroundColor: item.status === "failed" ? "var(--status-danger-soft)" : "var(--status-warning-soft)",
+                              color: item.status === "failed" ? "var(--color-danger)" : "var(--color-warning)",
+                            }}
+                          >
+                            {item.status === "failed" ? "실패" : "발송 준비"}
+                          </Badge>
                         </div>
-                        <MoveRight size={14} style={{ color: "var(--text-tertiary)" }} />
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
-            </div>
-            <div className="mt-4 rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                    운영자 발송 브리지
-                  </div>
-                  <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
-                    승인 후 실제 회신 직전 상태입니다. 문안 확인과 채널 전송이 여기서 마감됩니다.
-                  </div>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => navigate(`/${orgPrefix}/approvals`)}>
-                  승인 큐 열기
-                </Button>
-              </div>
-              <div className="mt-3 grid gap-3 md:grid-cols-3">
-                <div className="rounded-lg border px-3 py-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
-                  <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>발송 준비</div>
-                  <div className="mt-1 text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{pendingReadyCount}건</div>
-                </div>
-                <div className="rounded-lg border px-3 py-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
-                  <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>자동 발송 실패</div>
-                  <div className="mt-1 text-lg font-semibold" style={{ color: "var(--text-primary)" }}>{pendingFailedCount}건</div>
-                </div>
-                <div className="rounded-lg border px-3 py-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}>
-                  <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>운영 조치</div>
-                  <div className="mt-1 flex items-center gap-1 text-sm font-medium" style={{ color: "var(--color-warning)" }}>
-                    <AlertTriangle size={13} />
-                    문안 복사 후 전송
-                  </div>
-                </div>
-              </div>
-              {pendingOutbound.length === 0 ? (
-                <div className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
-                  발송 대기 중인 카카오 회신이 없습니다.
-                </div>
-              ) : (
-                <div className="mt-3 space-y-2">
-                  {pendingOutbound.map((item) => (
-                    <div
-                      key={item.approvalId}
-                      className="rounded-lg px-3 py-3"
-                      style={{ backgroundColor: "var(--bg-elevated)" }}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                            {item.caseTitle}
+                        {item.draft ? (
+                          <div className="mt-2 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                            {item.draft.length > 120 ? `${item.draft.slice(0, 120)}...` : item.draft}
                           </div>
-                          <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
-                            {item.status === "failed" ? "자동 발송 실패" : "운영자 발송 대기"} · {timeAgo(item.createdAt)}
-                          </div>
-                        </div>
-                        <Badge
-                          className="border-0"
-                          style={{
-                            backgroundColor: item.status === "failed" ? "var(--status-danger-soft)" : "var(--status-warning-soft)",
-                            color: item.status === "failed" ? "var(--color-danger)" : "var(--color-warning)",
-                          }}
-                        >
-                          {item.status === "failed" ? "실패" : "발송 준비"}
-                        </Badge>
-                      </div>
-                      {item.draft ? (
-                        <div className="mt-2 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                          {item.draft.length > 120 ? `${item.draft.slice(0, 120)}...` : item.draft}
-                        </div>
-                      ) : null}
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {item.caseId && orgPrefix ? (
-                          <Button size="sm" variant="outline" onClick={() => navigate(`/${orgPrefix}/cases/${item.caseId}`)}>
-                            케이스 열기
-                          </Button>
                         ) : null}
-                        <Button size="sm" variant="outline" onClick={() => navigate(`/${orgPrefix}/approvals`)}>
-                          승인 큐
-                        </Button>
-                        {item.chatUrl ? (
-                          <Button size="sm" variant="outline" onClick={() => window.open(item.chatUrl, "_blank", "noopener,noreferrer")}>
-                            채널 열기
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {item.caseId && orgPrefix ? (
+                            <Button size="sm" variant="outline" onClick={() => navigate(`/${orgPrefix}/cases/${item.caseId}`)}>
+                              케이스 열기
+                            </Button>
+                          ) : null}
+                          <Button size="sm" variant="outline" onClick={() => navigate(`/${orgPrefix}/approvals`)}>
+                            승인 큐
                           </Button>
-                        ) : null}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={outboundMutation.isPending}
-                          onClick={() => outboundMutation.mutate({ id: item.approvalId, mode: "auto" })}
-                        >
-                          {outboundMutation.isPending && outboundMutation.variables?.id === item.approvalId && outboundMutation.variables?.mode === "auto"
-                            ? <Loader2 size={13} className="animate-spin" />
-                            : "자동 발송"}
-                        </Button>
-                        <Button
-                          size="sm"
-                          className="text-white"
-                          style={{ backgroundColor: "var(--color-primary)", color: "var(--text-on-primary)" }}
-                          disabled={outboundMutation.isPending}
-                          onClick={() => outboundMutation.mutate({ id: item.approvalId, mode: "confirm_bridge" })}
-                        >
-                          {outboundMutation.isPending && outboundMutation.variables?.id === item.approvalId && outboundMutation.variables?.mode === "confirm_bridge"
-                            ? <Loader2 size={13} className="animate-spin" />
-                            : "전송 완료 처리"}
-                        </Button>
+                          {item.chatUrl ? (
+                            <Button size="sm" variant="outline" onClick={() => window.open(item.chatUrl, "_blank", "noopener,noreferrer")}>
+                              채널 열기
+                            </Button>
+                          ) : null}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={outboundMutation.isPending}
+                            onClick={() => outboundMutation.mutate({ id: item.approvalId, mode: "auto" })}
+                          >
+                            {outboundMutation.isPending && outboundMutation.variables?.id === item.approvalId && outboundMutation.variables?.mode === "auto"
+                              ? <Loader2 size={13} className="animate-spin" />
+                              : "자동 발송"}
+                          </Button>
+                          <Button
+                            size="sm"
+                            className="text-white"
+                            style={{ backgroundColor: "var(--color-primary)", color: "var(--text-on-primary)" }}
+                            disabled={outboundMutation.isPending}
+                            onClick={() => outboundMutation.mutate({ id: item.approvalId, mode: "confirm_bridge" })}
+                          >
+                            {outboundMutation.isPending && outboundMutation.variables?.id === item.approvalId && outboundMutation.variables?.mode === "confirm_bridge"
+                              ? <Loader2 size={13} className="animate-spin" />
+                              : "전송 완료 처리"}
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

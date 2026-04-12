@@ -1262,6 +1262,62 @@ export function SettingsPage() {
               </span>
             ) : null}
           </div>
+
+          {/* 자동 응답 설정 — 승인 게이트 우회 (경고 표시) */}
+          {channels.telegram?.enabled ? (
+            <div className="mt-4 space-y-3">
+              <div
+                className="rounded-lg border px-4 py-4"
+                style={{
+                  borderColor: channels.telegram?.autoReply ? "var(--status-warning-border, #f59e0b)" : "var(--border-default)",
+                  backgroundColor: channels.telegram?.autoReply ? "var(--status-warning-soft, #fef3c7)" : "var(--bg-subtle)",
+                }}
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                        텔레그램 자동 응답
+                      </div>
+                      {channels.telegram?.autoReply ? (
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+                          style={{ background: "var(--color-warning, #f59e0b)", color: "#fff" }}
+                        >
+                          ⚠ 켜짐
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                      <b>꺼짐(권장)</b>: 메시지 접수 → AI 초안 → 승인 대기 → 원장 승인 후 발송.<br />
+                      <b>켜짐</b>: 메시지 접수 → AI 초안 → <b style={{ color: "var(--color-warning, #d97706)" }}>즉시 자동 발송</b> (승인 생략).
+                    </div>
+                    {channels.telegram?.autoReply ? (
+                      <div className="mt-2 rounded-md px-3 py-2 text-xs" style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
+                        ⚠ 자동 응답 중: AI 초안이 사람 확인 없이 발송됩니다. 민감 케이스(환불·법적 이슈)에서 주의하세요.
+                      </div>
+                    ) : null}
+                  </div>
+                  <NativeSwitch
+                    checked={Boolean(channels.telegram?.autoReply)}
+                    onCheckedChange={async (checked) => {
+                      if (!selectedOrgId) return
+                      try {
+                        await organizationsApi.updateChannel(selectedOrgId, "telegram", {
+                          ...(channels.telegram ?? {}),
+                          autoReply: checked,
+                        })
+                        await queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all })
+                        success(checked ? "자동 응답 켜짐 — 승인 없이 즉시 발송됩니다" : "자동 응답 꺼짐 — 승인 후 발송")
+                      } catch (err) {
+                        toastError(err instanceof Error ? err.message : "자동 응답 설정 저장 실패")
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          ) : null}
         </SectionCard>
 
         <SectionCard

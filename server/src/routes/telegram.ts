@@ -99,8 +99,15 @@ export function telegramRoutes(db: Db): Router {
         organization,
       })
 
-      // AI 응답을 텔레그램으로 발송 (비동기 — 웹훅 응답 지연 방지)
-      if (result.caseId) {
+      // 자동 응답 정책 확인 (기본 OFF — 승인 게이트 통과 후 발송)
+      // 조직 설정에서 telegram.autoReply=true 인 경우에만 즉시 발송 (경고 표시 옵션)
+      const orgConfig = getOrganizationConfig(organization)
+      const integrations = isPlainObject(orgConfig.integrations) ? orgConfig.integrations : {}
+      const channels = isPlainObject(integrations.channels) ? integrations.channels : {}
+      const telegramConfig = isPlainObject(channels.telegram) ? channels.telegram : {}
+      const autoReplyEnabled = telegramConfig.autoReply === true
+
+      if (autoReplyEnabled && result.caseId) {
         void (async () => {
           try {
             const [updatedCase] = await db
@@ -122,6 +129,7 @@ export function telegramRoutes(db: Db): Router {
           }
         })()
       }
+      // autoReply === false 면 승인 대기 — approvals.ts 에서 decision="approved" 될 때 발송됨
 
       res.json({ ok: true, result })
     } catch (error) {

@@ -509,3 +509,52 @@ curl 'http://127.0.0.1:3210/api/adapters?orgId=be70ebc8-3b55-4ff3-827a-264f06c4d
 - 기존 `3200` 프로세스는 이 새 코드 이전에 떠 있던 프로세스라서,
   같은 시점 `GET /`는 여전히 `Cannot GET /`를 반환했다.
 - 따라서 이번 런타임 판정은 **임시 검증 서버 `3210` 기준 통과**로 기록한다.
+
+## 12. Live restart / UI follow-up
+
+수정:
+- 파일: `package.json`
+- 파일: `server/src/config.ts`
+- 파일: `server/src/routes/adapters.ts`
+- 파일: `ui/src/hooks/useSSE.ts`
+- 파일: `ui/src/pages/SettingsPage.tsx`
+- 파일: `ui/src/components/DashboardCharts.tsx`
+- 파일: `ui/src/pages/DashboardPage.tsx`
+- 파일: `ui/src/pages/InboxPage.tsx`
+- 변경:
+  - root `pnpm dev`가 `server + ui`를 같이 띄우도록 정리
+  - server 기본 포트를 `3200`으로 맞춤
+  - `SSE` reconnect timer의 stale 재시도를 막고 `online/visibilitychange` 재연결 가드를 보강
+  - `Settings`에서 integration 상태 출처를 `조직 설정 기반 / process env 기반`으로 직접 표시
+  - `DashboardCharts` 설명/메타를 더 짧게 줄여 KPI row와의 중복을 낮춤
+  - `Inbox` 상단 보조 패널을 2열로 재배치하고 필터/리허설 블록을 더 조용하게 압축
+
+재검증:
+
+```bash
+corepack pnpm --filter @hagent/server exec tsc --noEmit --pretty false --tsBuildInfoFile /tmp/hagent-server-fastfollow.tsbuildinfo -p tsconfig.json
+corepack pnpm --filter @hagent/ui exec tsc --noEmit --pretty false --tsBuildInfoFile /tmp/hagent-ui-fastfollow.tsbuildinfo -p tsconfig.json
+corepack pnpm --filter @hagent/ui exec vite build
+curl http://127.0.0.1:3200/
+curl http://127.0.0.1:3200/api/health
+curl 'http://127.0.0.1:3200/api/adapters?orgId=be70ebc8-3b55-4ff3-827a-264f06c4d2ee'
+curl -I 'http://127.0.0.1:5174/%ED%83%84%EC%9E%90%EB%8B%88%EC%95%84-%EC%98%81%EC%96%B4%ED%95%99%EC%9B%90-%EB%8D%B0%EB%AA%A8-7/dashboard'
+curl -I 'http://127.0.0.1:5174/%ED%83%84%EC%9E%90%EB%8B%88%EC%95%84-%EC%98%81%EC%96%B4%ED%95%99%EC%9B%90-%EB%8D%B0%EB%AA%A8-7/inbox'
+```
+
+결과:
+- `server typecheck` 통과
+- `ui typecheck` 통과
+- `vite build` 통과
+- live `3200` 재기동 후 `GET /`와 `GET /api/health` 모두 health JSON 반환
+- live `3200`에서 `GET /api/adapters?orgId=be70...` → `telegram-outbound.connected = true`, `statusSource = "org-configured"`
+- `dashboard` route `200 OK`
+- `inbox` route `200 OK`
+
+추가 확인:
+- 브라우저 수준 `SSE`는 offline/online 전환 후 console error `0`까지는 확인
+- 다만 `disconnect -> reconnect -> query invalidate`가 실제 데이터 refresh로 이어지는지는 아직 미검증
+
+미검증:
+- Telegram/Kakao 실제 외부 outbound receipt 증적은 이번 라운드에서도 확보하지 못함
+- `Dashboard`, `Inbox`는 route/타입/빌드 기준 통과했지만 Playwright screenshot 기반 visual QA는 미실행

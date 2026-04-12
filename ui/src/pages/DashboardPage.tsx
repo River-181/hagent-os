@@ -333,15 +333,15 @@ export function DashboardPage() {
 
       <WorkspacePanel className="p-5 space-y-4">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              운영 지시
-            </div>
-            <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-              한 줄 지시를 넣고, 실행 결과와 후속 상태를 바로 확인합니다.
-            </p>
+        <div>
+          <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+            운영 지시
           </div>
+          <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+              한 줄로 바로 실행합니다.
+          </p>
         </div>
+      </div>
         <InstructionBar
           agents={agentMentions}
           value={instruction}
@@ -366,7 +366,7 @@ export function DashboardPage() {
               </p>
               <div className="mt-1 flex items-center gap-3">
                 <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                  {lastDispatchResult.runs.length}개 에이전트 실행 시작됨
+                  에이전트 {lastDispatchResult.runs.length}개 실행
                 </p>
                 {lastDispatchResult.caseId && (
                   <Link
