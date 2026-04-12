@@ -13,9 +13,7 @@ import { queryKeys } from "@/lib/queryKeys"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
-import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
   WorkspaceHeader,
@@ -144,7 +142,7 @@ function Field({
   children: ReactNode
 }) {
   return (
-    <label className="block space-y-2">
+    <div className="space-y-2">
       <div className="space-y-1">
         <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
           {label}
@@ -156,6 +154,59 @@ function Field({
         ) : null}
       </div>
       {children}
+    </div>
+  )
+}
+
+function NativeSelect({
+  value,
+  onChange,
+  children,
+}: {
+  value: string
+  onChange: (value: string) => void
+  children: ReactNode
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="flex h-9 w-full rounded-md border px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+      style={{
+        borderColor: "var(--border-default)",
+        backgroundColor: "var(--bg-elevated)",
+        color: "var(--text-primary)",
+      }}
+    >
+      {children}
+    </select>
+  )
+}
+
+function NativeSwitch({
+  checked,
+  onCheckedChange,
+}: {
+  checked: boolean
+  onCheckedChange: (checked: boolean) => void
+}) {
+  return (
+    <label className="inline-flex cursor-pointer items-center">
+      <input
+        type="checkbox"
+        className="sr-only"
+        checked={checked}
+        onChange={(event) => onCheckedChange(event.target.checked)}
+      />
+      <span
+        className="relative inline-flex h-5 w-9 shrink-0 rounded-full transition-colors"
+        style={{ backgroundColor: checked ? "var(--color-primary)" : "var(--bg-muted)" }}
+      >
+        <span
+          className="absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform"
+          style={{ left: "2px", transform: checked ? "translateX(16px)" : "translateX(0)" }}
+        />
+      </span>
     </label>
   )
 }
@@ -184,7 +235,7 @@ function ToggleRow({
           {description}
         </div>
       </div>
-      <Switch checked={checked} onCheckedChange={onCheckedChange} />
+      <NativeSwitch checked={checked} onCheckedChange={onCheckedChange} />
     </div>
   )
 }
@@ -686,46 +737,31 @@ export function SettingsPage() {
         >
           <div className="grid gap-4 lg:grid-cols-2">
             <Field label="기본 실행 어댑터">
-              <Select value={primaryAdapterType} onValueChange={setPrimaryAdapterType}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
+              <NativeSelect value={primaryAdapterType} onChange={setPrimaryAdapterType}>
                   {adapters.map((adapter: any) => (
-                    <SelectItem key={adapter.key} value={adapter.key}>
+                    <option key={adapter.key} value={adapter.key}>
                       {adapter.label}
-                    </SelectItem>
+                    </option>
                   ))}
-                </SelectContent>
-              </Select>
+              </NativeSelect>
             </Field>
             <Field label="기본 모델">
-              <Select value={primaryModel} onValueChange={setPrimaryModel}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
+              <NativeSelect value={primaryModel} onChange={setPrimaryModel}>
                   {(selectedAdapter?.availableModels ?? ["gpt-5-codex"]).map((model: string) => (
-                    <SelectItem key={model} value={model}>
+                    <option key={model} value={model}>
                       {model}
-                    </SelectItem>
+                    </option>
                   ))}
-                </SelectContent>
-              </Select>
+              </NativeSelect>
             </Field>
             <Field label="보조 어댑터">
-              <Select value={fallbackAdapterType} onValueChange={setFallbackAdapterType}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
+              <NativeSelect value={fallbackAdapterType} onChange={setFallbackAdapterType}>
                   {adapters.map((adapter: any) => (
-                    <SelectItem key={adapter.key} value={adapter.key}>
+                    <option key={adapter.key} value={adapter.key}>
                       {adapter.label}
-                    </SelectItem>
+                    </option>
                   ))}
-                </SelectContent>
-              </Select>
+              </NativeSelect>
             </Field>
             <Field
               label="현재 실행 상태"
@@ -1023,7 +1059,7 @@ export function SettingsPage() {
                         {integration.description}
                       </div>
                     </div>
-                    <Switch
+                    <NativeSwitch
                       checked={preference.enabled}
                       onCheckedChange={(checked) =>
                         setIntegrationPrefs((prev) => ({
@@ -1230,16 +1266,11 @@ export function SettingsPage() {
           />
 
           <Field label="AI 피드백 공유" hint="평가/피드백 공유 기본 정책을 저장합니다.">
-            <Select value={feedbackSharing} onValueChange={setFeedbackSharing}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="prompt">처음 사용할 때 묻기</SelectItem>
-                <SelectItem value="allow">항상 허용</SelectItem>
-                <SelectItem value="deny">공유 안 함</SelectItem>
-              </SelectContent>
-            </Select>
+            <NativeSelect value={feedbackSharing} onChange={setFeedbackSharing}>
+              <option value="prompt">처음 사용할 때 묻기</option>
+              <option value="allow">항상 허용</option>
+              <option value="deny">공유 안 함</option>
+            </NativeSelect>
           </Field>
 
           <div className="rounded-lg border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>

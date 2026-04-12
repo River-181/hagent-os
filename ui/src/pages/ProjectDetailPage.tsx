@@ -131,6 +131,22 @@ export function ProjectDetailPage() {
     },
   })
 
+  const deleteMutation = useMutation({
+    mutationFn: () => projectsApi.delete(id!),
+    onSuccess: () => {
+      toast?.success("프로젝트를 삭제했습니다.")
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id ?? "") })
+      navigate(`/${orgPrefix}/projects`)
+    },
+    onError: (error: any) => {
+      const message = typeof error?.body?.error === "string"
+        ? error.body.error
+        : "프로젝트 삭제에 실패했습니다."
+      toast?.error(message)
+    },
+  })
+
   useEffect(() => {
     if (project) {
       setBreadcrumbs([
@@ -149,6 +165,7 @@ export function ProjectDetailPage() {
   const goals: any[] = project?.goals ?? []
   const activeCases = cases.filter((c) => c.status !== "done")
   const doneCases = cases.filter((c) => c.status === "done")
+  const canDeleteProject = cases.length === 0 && documents.length === 0 && goals.length === 0
   useEffect(() => {
     setPanelContent(
       <WorkspacePanel className="space-y-4 p-5">
@@ -610,26 +627,48 @@ export function ProjectDetailPage() {
             </div>
           </WorkspacePanel>
 
-          <WorkspacePanel className="p-5" style={{ backgroundColor: "rgba(239,68,68,0.06)", borderColor: "rgba(239,68,68,0.24)" }}>
-            <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: "#dc2626" }}>
-              Danger Zone
+          <WorkspacePanel className="p-5" style={{ backgroundColor: "var(--status-danger-soft)", borderColor: "rgba(240,68,82,0.24)" }}>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-danger)" }}>
+              위험 작업
             </p>
             <p className="text-sm mb-4" style={{ color: "var(--text-secondary)" }}>
-              프로젝트를 숨기면 사이드바와 프로젝트 목록에서 제외됩니다.
+              프로젝트를 숨기면 목록에서 제외되고, 삭제는 연결된 데이터가 없을 때만 가능합니다.
             </p>
-            <button
-              type="button"
-              onClick={() => {
-                if (!window.confirm("프로젝트를 숨기시겠습니까? 복구는 DB에서만 가능합니다.")) return
-                archiveMutation.mutate()
-              }}
-              disabled={archiveMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-opacity disabled:opacity-60"
-              style={{ backgroundColor: "#dc2626", color: "white" }}
-            >
-              <Archive size={14} />
-              {archiveMutation.isPending ? "숨기는 중..." : "Archive project"}
-            </button>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!window.confirm("프로젝트를 숨기시겠습니까? 목록에서 제외되며 상세 링크로만 접근 가능합니다.")) return
+                  archiveMutation.mutate()
+                }}
+                disabled={archiveMutation.isPending || deleteMutation.isPending}
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-opacity disabled:opacity-60"
+                style={{ backgroundColor: "var(--color-danger)", color: "white" }}
+              >
+                <Archive size={14} />
+                {archiveMutation.isPending ? "숨기는 중..." : "프로젝트 숨기기"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!window.confirm("프로젝트를 완전히 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) return
+                  deleteMutation.mutate()
+                }}
+                disabled={!canDeleteProject || archiveMutation.isPending || deleteMutation.isPending}
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-opacity disabled:opacity-60"
+                style={{
+                  backgroundColor: canDeleteProject ? "var(--bg-elevated)" : "var(--bg-muted)",
+                  color: canDeleteProject ? "var(--color-danger)" : "var(--text-tertiary)",
+                  border: "1px solid rgba(240,68,82,0.24)",
+                }}
+              >
+                <Archive size={14} />
+                {deleteMutation.isPending ? "삭제 중..." : "프로젝트 삭제"}
+              </button>
+            </div>
+            <p className="mt-3 text-xs leading-5" style={{ color: "var(--text-tertiary)" }}>
+              삭제 가능 조건: 케이스 {cases.length}건, 목표 {goals.length}개, 문서 {documents.length}건이 모두 0이어야 합니다.
+            </p>
           </WorkspacePanel>
         </div>
       )}

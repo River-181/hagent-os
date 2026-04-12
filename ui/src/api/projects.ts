@@ -7,4 +7,5 @@ export const projectsApi = {
   create: (orgId: string, data: any) => api.post<any>(`/organizations/${orgId}/projects`, data),
   createFromInstruction: (data: any) => api.post<any>(`/projects/from-instruction`, data),
   archive: (id: string) => api.post<void>(`/projects/${id}/archive`, {}),
+  delete: (id: string) => api.delete<void>(`/projects/${id}`),
 }

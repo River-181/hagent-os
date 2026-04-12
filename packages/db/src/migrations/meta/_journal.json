@@ -57,6 +57,13 @@
       "when": 1776000000000,
       "tag": "0007_archive_fields",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1776034819601,
+      "tag": "0008_sync_drift",
+      "breakpoints": true
     }
   ]
 }

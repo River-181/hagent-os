@@ -986,8 +986,8 @@ export function DocumentsPage() {
         onChange={handleImportFile}
       />
 
-      <div className="grid flex-1 min-h-0 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <WorkspacePanel className="flex min-h-0 flex-col overflow-hidden">
+      <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[minmax(340px,380px)_minmax(0,1fr)]">
+        <WorkspacePanel className="flex min-h-0 min-w-0 flex-col overflow-hidden lg:min-w-[340px]">
           <div className="space-y-4 border-b p-4" style={{ borderColor: "var(--border-default)" }}>
             <div className="relative">
               <Search size={14} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2" style={{ color: "var(--text-tertiary)" }} />
@@ -1140,7 +1140,7 @@ export function DocumentsPage() {
           </ScrollArea>
         </WorkspacePanel>
 
-        <WorkspacePanel className="flex min-h-0 flex-col overflow-hidden">
+        <WorkspacePanel className="flex min-h-0 min-w-0 flex-col overflow-hidden">
           {displayDoc ? (
             <>
               <div className="border-b p-6 md:p-8" style={{ borderColor: "var(--border-default)" }}>

@@ -332,5 +332,69 @@ export function projectRoutes(db: Db): Router {
     }
   })
 
+  router.delete("/projects/:id", async (req, res) => {
+    try {
+      const [project] = await db
+        .select()
+        .from(schema.opsGroups)
+        .where(eq(schema.opsGroups.id, req.params.id))
+
+      if (!project) {
+        res.status(404).json({ error: "Project not found" })
+        return
+      }
+
+      const cases = await db
+        .select({ id: schema.cases.id })
+        .from(schema.cases)
+        .where(and(
+          eq(schema.cases.opsGroupId, project.id),
+          isNull(schema.cases.archivedAt),
+        ))
+
+      const goals = await db
+        .select({ id: schema.opsGoals.id })
+        .from(schema.opsGoals)
+        .where(eq(schema.opsGoals.opsGroupId, project.id))
+
+      const taggedDocuments = (await db
+        .select({ id: schema.documents.id, tags: schema.documents.tags })
+        .from(schema.documents)
+        .where(eq(schema.documents.organizationId, project.organizationId)))
+        .filter((document) => Array.isArray(document.tags) && document.tags.includes(`project:${project.id}`))
+
+      if (cases.length > 0 || goals.length > 0 || taggedDocuments.length > 0) {
+        res.status(409).json({
+          error: "프로젝트에 연결된 케이스, 목표, 문서가 있어 삭제할 수 없습니다. 먼저 숨기거나 연결을 정리하세요.",
+          linked: {
+            cases: cases.length,
+            goals: goals.length,
+            documents: taggedDocuments.length,
+          },
+        })
+        return
+      }
+
+      await db.insert(schema.activityEvents).values({
+        organizationId: project.organizationId,
+        actorType: "user",
+        actorId: "projects",
+        action: "project.deleted",
+        entityType: "project",
+        entityId: project.id,
+        entityTitle: project.name,
+        metadata: {} as Record<string, unknown>,
+      })
+
+      await db
+        .delete(schema.opsGroups)
+        .where(eq(schema.opsGroups.id, project.id))
+
+      res.status(204).end()
+    } catch {
+      res.status(500).json({ error: "Failed to delete project" })
+    }
+  })
+
   return router
 }

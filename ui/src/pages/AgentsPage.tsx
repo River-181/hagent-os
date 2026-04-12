@@ -137,7 +137,7 @@ export function AgentsPage() {
             </div>
           </div>
         ) : (
-          <div className="grid gap-4 p-4 md:p-6" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
+          <div className="grid gap-4 p-4 md:p-6" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 280px), 1fr))" }}>
             {agents.map((agent: any) => {
             const s = statusLabel[agent.status] ?? statusLabel.idle
             const isRunning = agent.status === "running"
@@ -152,7 +152,7 @@ export function AgentsPage() {
               <Link
                 key={agent.id}
                 to={`/${orgPrefix}/agents/${agent.id}`}
-                className="flex flex-col gap-4 rounded-lg border p-5 transition-colors"
+                className="flex min-w-0 flex-col gap-4 rounded-lg border p-5 transition-colors"
                 style={{
                   backgroundColor: "var(--bg-elevated)",
                   borderColor: isRunning ? "var(--color-primary)" : "var(--border-default)",
@@ -191,9 +191,9 @@ export function AgentsPage() {
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                     <span
-                      className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs"
+                      className="inline-flex max-w-full items-center gap-1 rounded-full px-1.5 py-0.5 text-xs whitespace-nowrap"
                       style={{ backgroundColor: s.bg, color: s.color }}
                     >
                       {isRunning ? <Loader2 size={10} className="animate-spin" /> : null}
@@ -228,11 +228,11 @@ export function AgentsPage() {
                   )}
                 </div>
 
-                <div className="grid gap-2">
+                <div className="grid min-w-0 gap-2">
                   {recentRuns.length > 0 ? recentRuns.map((run: any) => (
                     <div
                       key={run.id}
-                      className="border-t pt-3"
+                      className="min-w-0 border-t pt-3"
                       style={{ borderColor: "var(--border-default)" }}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -244,9 +244,9 @@ export function AgentsPage() {
                             {timeAgo(run.completedAt ?? run.startedAt ?? run.createdAt)}
                           </p>
                         </div>
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
                           <span
-                            className="rounded-full px-2 py-0.5 text-[11px]"
+                            className="rounded-full px-2 py-0.5 text-[11px] whitespace-nowrap"
                             style={{
                               backgroundColor:
                                 run.status === "completed" || run.status === "pending_approval"
@@ -293,7 +293,7 @@ export function AgentsPage() {
                   )}
                 </div>
 
-                <div className="mt-auto flex items-center gap-3 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
                   <span className="inline-flex items-center gap-1">
                     <Clock3 size={12} />
                     {lastRunAt}
@@ -303,7 +303,7 @@ export function AgentsPage() {
                     {recentRuns.length}개 run
                   </span>
                   {tokensUsed > 0 ? (
-                    <span className="ml-auto inline-flex items-center gap-1">
+                    <span className="inline-flex items-center gap-1 sm:ml-auto">
                       <FileText size={12} />
                       {tokensUsed >= 1000 ? `${(tokensUsed / 1000).toFixed(1)}k` : tokensUsed} 토큰
                     </span>

@@ -1,5 +1,6 @@
 import fs from "fs"
 import path from "path"
+import { spawn } from "node:child_process"
 import { createDb } from "@hagent/db"
 import detectPort from "detect-port"
 import pino from "pino"
@@ -8,6 +9,58 @@ import { createApp } from "./app.js"
 import { startTelegramInboundPolling } from "./services/telegram-inbound-sync.js"
 
 const logger = pino({ level: "info" })
+
+/**
+ * 외부 DATABASE_URL(Neon 등) 사용 시, 서버 부팅 직전에 drizzle-kit push --force 를 실행해
+ * 스키마 drift 를 자동 보정한다.
+ * - 실패해도 서버는 계속 기동 (non-fatal)
+ * - 로컬 embedded-postgres 모드에서는 스킵
+ * - SKIP_SCHEMA_SYNC=true 면 스킵
+ */
+async function syncSchemaIfNeeded(databaseUrl: string | null | undefined): Promise<void> {
+  if (!databaseUrl) return
+  if (process.env.SKIP_SCHEMA_SYNC === "true") {
+    logger.info("Schema sync skipped (SKIP_SCHEMA_SYNC=true)")
+    return
+  }
+
+  // 컨테이너/모노레포 두 경로 모두 시도
+  const candidates = [
+    path.resolve(process.cwd(), "packages/db"),
+    path.resolve(process.cwd(), "../packages/db"),
+  ]
+  const dbPkgDir = candidates.find((p) => fs.existsSync(path.join(p, "drizzle.config.ts")))
+  if (!dbPkgDir) {
+    logger.warn({ cwd: process.cwd() }, "Schema sync skipped: packages/db not found")
+    return
+  }
+
+  const bin = path.join(dbPkgDir, "node_modules", ".bin", "drizzle-kit")
+  if (!fs.existsSync(bin)) {
+    logger.warn({ bin }, "Schema sync skipped: drizzle-kit binary not found")
+    return
+  }
+
+  logger.info({ dbPkgDir }, "Running drizzle-kit push --force")
+  await new Promise<void>((resolve) => {
+    const child = spawn(bin, ["push", "--force"], {
+      cwd: dbPkgDir,
+      env: { ...process.env, DATABASE_URL: databaseUrl },
+      stdio: ["ignore", "pipe", "pipe"],
+    })
+    child.stdout?.on("data", (chunk) => logger.info({ phase: "schema-sync" }, chunk.toString().trim()))
+    child.stderr?.on("data", (chunk) => logger.warn({ phase: "schema-sync" }, chunk.toString().trim()))
+    child.on("close", (code) => {
+      if (code === 0) logger.info("Schema sync complete")
+      else logger.warn({ code }, "Schema sync exited non-zero (continuing)")
+      resolve()
+    })
+    child.on("error", (err) => {
+      logger.warn(err, "Schema sync spawn failed (continuing)")
+      resolve()
+    })
+  })
+}
 
 async function main() {
   const config = loadConfig()
@@ -59,6 +112,9 @@ async function main() {
       logger.warn(e, "Database creation check failed (may already exist)")
     }
   }
+
+  // 스키마 drift 자동 보정 (외부 DATABASE_URL 한정)
+  await syncSchemaIfNeeded(config.databaseUrl)
 
   const db = createDb(connectionString)
   logger.info("Database connection established")
