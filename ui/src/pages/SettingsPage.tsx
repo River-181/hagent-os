@@ -529,10 +529,10 @@ export function SettingsPage() {
   }
 
   return (
-    <div ref={pageRef} className="p-6 md:p-8">
-      <div className="mx-auto flex w-full max-w-7xl gap-6">
+    <div ref={pageRef} className="overflow-x-hidden p-6 md:p-8">
+      <div className="mx-auto flex w-full max-w-6xl min-w-0 gap-6">
       <aside
-        className="sticky top-20 hidden h-fit w-72 shrink-0 rounded-lg border p-4 xl:block"
+        className="sticky top-20 hidden h-fit w-64 shrink-0 rounded-lg border p-4 2xl:block"
         style={{
           backgroundColor: "var(--bg-elevated)",
           borderColor: "var(--border-default)",
@@ -594,7 +594,7 @@ export function SettingsPage() {
           </div>
         ) : null}
 
-        <div className="grid gap-3 xl:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-4">
           {[
             {
               label: "기본 실행",

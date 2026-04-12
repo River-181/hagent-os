@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url"
 import { existsSync } from "node:fs"
 import type { Db } from "@hagent/db"
 import type { Config } from "./config.js"
-import { getHealthPayload, healthRoutes } from "./routes/health.js"
+import { healthRoutes } from "./routes/health.js"
 import { organizationRoutes } from "./routes/organizations.js"
 import { caseRoutes } from "./routes/cases.js"
 import { agentRoutes } from "./routes/agents.js"
@@ -55,9 +55,6 @@ export function createApp(db: Db, config: Config): Express {
   app.use(pinoHttp())
   app.use(express.json({ limit: "10mb" }))
 
-  app.get("/", (_req, res) => {
-    res.json(getHealthPayload())
-  })
   app.use("/api/health", healthRoutes(db))
   app.use("/api/organizations", organizationRoutes(db))
   app.use("/api", caseRoutes(db))
