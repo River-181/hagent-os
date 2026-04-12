@@ -10,7 +10,7 @@ import {
   updateOrganizationSkillConfig,
 } from "../services/skills.js"
 import { bootstrapOrganization as runBootstrap } from "../services/bootstrap.js"
-import { RICH_CASES, CEO_MEMORY } from "../data/rich-demo-seed.js"
+import { RICH_CASES, CEO_MEMORY, DEMO_DOCUMENTS } from "../data/rich-demo-seed.js"
 import { createCaseWithRetry } from "../lib/case-create.js"
 
 const organizationPatchSchema = z.object({
@@ -552,7 +552,22 @@ export function organizationRoutes(db: Db): Router {
           .catch(() => null)
       }
 
-      res.json({ ok: true, seeded, agents: agents.length })
+      // 문서 12개 시딩 (기존 시드 문서 제외하고 추가)
+      let docSeeded = 0
+      for (const doc of DEMO_DOCUMENTS) {
+        try {
+          await db.insert(schema.documents).values({
+            organizationId: orgId,
+            title: doc.title,
+            body: doc.body,
+            category: doc.category,
+            tags: doc.tags,
+          })
+          docSeeded++
+        } catch { /* skip individual failures */ }
+      }
+
+      res.json({ ok: true, seeded, docs: docSeeded, agents: agents.length })
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "Seed failed" })
     }

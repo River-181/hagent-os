@@ -9,7 +9,7 @@ import { installSkillForOrganization, updateAgentSkillMounts } from "./skills.js
 import { createCaseWithRetry } from "../lib/case-create.js"
 import { inferInstructorRoleFromSubject } from "../lib/instructor-roles.js"
 import { TANZANIA_PRESET } from "../data/tanzania-preset.js"
-import { RICH_CASES, CEO_MEMORY } from "../data/rich-demo-seed.js"
+import { RICH_CASES, CEO_MEMORY, DEMO_DOCUMENTS } from "../data/rich-demo-seed.js"
 
 const AGENT_DATA_DIR = path.join(import.meta.dirname, "../../data/agents")
 
@@ -709,11 +709,147 @@ function slugify(input: string) {
 }
 
 function buildInstructionFile(name: string, agentType: string, topGoal: string) {
+  const heartbeats: Record<string, string> = {
+    orchestrator: `# HEARTBEAT — ${name}
+
+## 일일 루틴
+- **07:00** 전일 케이스 요약 + 오늘 처리 필요 사항 정리 → 원장 브리핑
+- **09:00** 대기 중인 승인 요청 확인 및 원장에게 알림
+- **12:00** 오전 수업 출결 이상 여부 확인
+- **17:00** 오후 수업 시작 전 강사 출근 확인
+- **21:00** 당일 처리된 케이스 요약 기록
+
+## 주간 루틴 (월요일)
+- 이번 주 예정된 법정 신고 기한 확인
+- 이번 주 이탈 위험 학생 현황 → retention 에이전트에 전달
+- 강사 연차/부재 일정 확인 및 대체 계획 수립
+
+## 월간 루틴 (매월 1일)
+- 전월 케이스 통계 분석 (유형별, 에이전트별)
+- 이탈 학생 수 vs 신규 입학 수 비교 보고
+- 수강료 미납 현황 요약 → notification 에이전트 지시`,
+
+    complaint: `# HEARTBEAT — ${name}
+
+## 일일 루틴
+- **08:30** 전날 접수된 미처리 민원 확인
+- **09:30** 48시간 내 응답 필요한 케이스 점검
+- **14:00** 당일 상담 예약 학부모 사전 자료 준비
+- **18:00** 당일 처리된 상담 결과 기록 및 마무리
+
+## 주간 루틴 (금요일)
+- 이번 주 민원 유형 분석 (환불/강사/시설/커리큘럼)
+- 반복 민원 패턴 → orchestrator에게 구조적 문제 보고
+- 다음 주 상담 예약 일정 확인
+
+## 긴급 대응
+민원 접수 즉시:
+1. 케이스 생성 + 접수 확인 메시지 발송
+2. 관련 학생/강사 기록 조회
+3. 48시간 내 응답 계획 수립`,
+
+    scheduler: `# HEARTBEAT — ${name}
+
+## 일일 루틴
+- **07:30** 오늘 수업 일정 점검 + 결석 예고 확인
+- **08:00** 강사 출근 확인 (문자/카카오 체크인)
+- **16:00** 오전 수업 결석 학생 집계 → 학부모 알림 발송
+- **18:30** 오후 수업 시작 전 출결 현황 확인
+- **21:30** 당일 결석·지각 최종 기록
+
+## 주간 루틴 (일요일)
+- 다음 주 수업 일정 최종 확인
+- 강사 연차/외부 일정 충돌 점검
+- 차량 운행 일정 확인
+
+## 월간 루틴 (말일)
+- 전월 출결 통계 정리 (학생별 결석률)
+- 보강 미완료 학생 목록 → 원장 보고
+- 다음 달 법정 신고 기한 캘린더 업데이트`,
+
+    retention: `# HEARTBEAT — ${name}
+
+## 일일 루틴
+- **10:00** scheduler로부터 전날 결석 데이터 수신
+- **10:30** riskScore 임계값 초과 학생 리스트 업데이트
+- **14:00** 당일 개입 필요 학생 접촉 (카카오 메시지)
+- **19:00** 당일 학부모 응답 확인 및 케이스 업데이트
+
+## 주간 루틴 (수요일)
+- 이번 주 이탈 위험 학생 현황 리포트 작성
+- 접촉 후 응답 없는 학생 → 원장 에스컬레이션 목록 작성
+- 최근 재등록 성공 사례 분석 → 성공 패턴 기록
+
+## 월간 루틴 (매월 25일)
+- 다음 달 등록 예정 vs 이탈 예상 학생 수 예측
+- 재등록 유도 캠페인 제안서 → orchestrator에게 전달
+- 전월 이탈 방지 성공률 분석`,
+
+    notification: `# HEARTBEAT — ${name}
+
+## 일일 루틴
+- **08:00** 오늘 발송 예정 알림 목록 확인
+- **09:00** 전날 미납 학생 수강료 알림 상태 확인
+- **15:00** 당일 결석 학생 학부모 알림 발송 (scheduler 연동)
+- **20:00** 당일 발송 완료 내역 기록
+
+## 주간 루틴 (월요일)
+- 이번 주 발송 예정 주요 공지 확인
+- 미확인 메시지 재발송 검토
+
+## 월간 루틴 (매월 25일)
+- 다음 달 수강료 납부 안내 발송 준비
+- 전월 발송 성공률·응답률 분석`,
+  }
+
+  const defaultHeartbeat = `# HEARTBEAT — ${name}
+- 매일 오전 07:00 기본 브리핑
+- 대기 케이스와 승인 요청을 먼저 확인
+- 48시간 이상 미처리 케이스는 원장에게 보고`
+
+  const tools: Record<string, string> = {
+    orchestrator: `# TOOLS — ${name}
+- **케이스 관리**: 케이스 생성, 분류, 에이전트 배정, 상태 변경
+- **승인 요청**: 원장 승인이 필요한 사안 승인 요청서 제출
+- **에이전트 지시**: complaint / scheduler / retention / notification에게 작업 위임
+- **메모리 조회/갱신**: 학원 운영 현황, 학생 인사이트 기록
+- **문서 생성**: 정책 문서, 운영 보고서 작성`,
+    complaint: `# TOOLS — ${name}
+- **케이스 코멘트**: 상담 내용, 합의 사항, 후속 조치 기록
+- **카카오 메시지**: 학부모에게 상담 결과·안내 메시지 발송
+- **학생/학부모 조회**: 출결 이력, 결제 현황, 이전 민원 이력 조회
+- **승인 요청**: 환불, 강사 교체, 특별 처리 원장 승인 요청
+- **문서 생성**: 상담 결과 기록, 합의서 초안 작성`,
+    scheduler: `# TOOLS — ${name}
+- **출결 기록**: 결석, 지각, 조퇴 기록 및 조회
+- **일정 생성/수정**: 보강, 대체 수업, 상담 일정 등록
+- **강사 조회**: 강사 가용 시간, 담당 수업 조회
+- **카카오 알림**: 학부모·강사에게 일정 변경 알림 발송
+- **retention 신호 전달**: 결석 누적 학생 이탈 위험 신호 전달`,
+    retention: `# TOOLS — ${name}
+- **riskScore 조회/갱신**: 학생별 이탈 위험 점수 확인 및 업데이트
+- **출결 이력 분석**: 결석 패턴, 지각 빈도, 추이 분석
+- **카카오 메시지**: 학부모 맞춤 안부 및 유도 메시지 발송
+- **승인 요청**: 할인 쿠폰, 수강료 조정 원장 승인 요청
+- **케이스 생성**: 이탈 위험 학생별 개입 케이스 생성`,
+    notification: `# TOOLS — ${name}
+- **카카오 발송**: 개인 메시지, 채널 공지 발송
+- **발송 내역 조회**: 수신 확인, 발송 실패 이력 조회
+- **수강료 조회**: 미납 학생 목록, 납부 기한 조회
+- **템플릿 관리**: 자주 쓰는 메시지 템플릿 저장·활용
+- **케이스 코멘트**: 모든 발송 내역을 케이스에 기록`,
+  }
+
+  const defaultTools = `# TOOLS — ${name}
+- mounted skills
+- organization data
+- case/activity/approval context`
+
   return {
-    soul: `# ${name}\n\n${topGoal}를 중심으로 학원 운영을 조율하는 ${agentType} 에이전트입니다.\n`,
-    agents: `# AGENTS\n\n- 역할: ${agentType}\n- 최우선 목표: ${topGoal}\n- 학생/학부모/강사 맥락을 함께 본다.\n`,
-    heartbeat: `# HEARTBEAT\n\n- 매일 오전 07:00 기본 브리핑\n- 대기 케이스와 승인 요청을 먼저 확인\n`,
-    tools: `# TOOLS\n\n- mounted skills\n- organization data\n- case/activity/approval context\n`,
+    soul: `# ${name}\n\n${topGoal}를 달성하기 위해 학원 운영을 지원하는 ${agentType} 에이전트입니다.\n\n## 최우선 목표\n${topGoal}\n`,
+    agents: `# AGENTS — ${name}\n\n- 역할: ${agentType}\n- 최우선 목표: ${topGoal}\n- 학생/학부모/강사 맥락을 함께 본다.\n- 불확실한 사안은 원장에게 에스컬레이션한다.\n`,
+    heartbeat: heartbeats[agentType] ?? defaultHeartbeat,
+    tools: tools[agentType] ?? defaultTools,
   }
 }
 
@@ -1354,5 +1490,16 @@ async function seedRichDemoData(
       .set({ memory: CEO_MEMORY as unknown as Record<string, unknown> })
       .where(eq(schema.agents.id, ceoAgent.id))
       .catch(() => null)
+  }
+
+  // 문서 12개 시딩
+  for (const doc of DEMO_DOCUMENTS) {
+    await db.insert(schema.documents).values({
+      organizationId,
+      title: doc.title,
+      body: doc.body,
+      category: doc.category,
+      tags: doc.tags,
+    }).catch(() => null)
   }
 }
