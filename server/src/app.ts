@@ -1,9 +1,12 @@
 import express, { type Express } from "express"
 import cors from "cors"
 import pinoHttp from "pino-http"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+import { existsSync } from "node:fs"
 import type { Db } from "@hagent/db"
 import type { Config } from "./config.js"
-import { healthRoutes } from "./routes/health.js"
+import { getHealthPayload, healthRoutes } from "./routes/health.js"
 import { organizationRoutes } from "./routes/organizations.js"
 import { caseRoutes } from "./routes/cases.js"
 import { agentRoutes } from "./routes/agents.js"
@@ -44,6 +47,9 @@ export function createApp(db: Db, config: Config): Express {
   app.use(pinoHttp())
   app.use(express.json({ limit: "10mb" }))
 
+  app.get("/", (_req, res) => {
+    res.json(getHealthPayload())
+  })
   app.use("/api/health", healthRoutes(db))
   app.use("/api/organizations", organizationRoutes(db))
   app.use("/api", caseRoutes(db))
@@ -73,6 +79,22 @@ export function createApp(db: Db, config: Config): Express {
   app.use("/api/webhook", webhookRoutes(db))
   app.use("/api/channels", webhookRoutes(db))
   app.use("/api", agentHireRoutes(db))
+
+  // UI static 서빙 (프로덕션 배포 시 ui/dist 마운트)
+  const __dirname = path.dirname(fileURLToPath(import.meta.url))
+  const uiDistCandidates = [
+    path.resolve(__dirname, "../../ui/dist"),
+    path.resolve(__dirname, "../../../ui/dist"),
+    path.resolve(process.cwd(), "ui/dist"),
+  ]
+  const uiDist = uiDistCandidates.find((p) => existsSync(p))
+  if (uiDist) {
+    app.use(express.static(uiDist))
+    // SPA catch-all: API 아닌 모든 경로 → index.html
+    app.get(/^\/(?!api).*/, (_req, res) => {
+      res.sendFile(path.join(uiDist, "index.html"))
+    })
+  }
 
   return app
 }

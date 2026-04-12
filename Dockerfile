@@ -10,17 +10,20 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 COPY packages/db/package.json ./packages/db/
 COPY packages/shared/package.json ./packages/shared/
 COPY server/package.json ./server/
+COPY ui/package.json ./ui/
 
 RUN pnpm install --frozen-lockfile
 
 # 소스 전체 복사
 COPY packages/ ./packages/
 COPY server/ ./server/
+COPY ui/ ./ui/
 
 # 빌드 (의존 순서 보장)
 RUN pnpm --filter @hagent/shared build
 RUN pnpm --filter @hagent/db build
 RUN pnpm --filter @hagent/server build
+RUN pnpm --filter @hagent/ui build
 
 EXPOSE 3200
 
