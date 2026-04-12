@@ -15,13 +15,18 @@ export interface RuntimeOptions {
   adapterType?: string
   model?: string
   maxTokens?: number
+  /** 조직별 BYO API 키 — env var보다 우선. 판사가 자기 키로 테스트할 때 사용 */
+  apiKey?: string
 }
 
 let anthropicClient: Anthropic | null = null
 const repoRoot = fileURLToPath(new URL("../../../", import.meta.url))
 const CODEX_CLI_TIMEOUT_MS = 45_000
 
-function getAnthropicClient() {
+function getAnthropicClient(apiKey?: string) {
+  if (apiKey) {
+    return new Anthropic({ apiKey })
+  }
   if (!anthropicClient) {
     anthropicClient = new Anthropic()
   }
@@ -420,7 +425,8 @@ function getMockResponse(systemPrompt: string, userMessage: string): RuntimeResp
 }
 
 async function callClaude(systemPrompt: string, userMessage: string, options: RuntimeOptions): Promise<RuntimeResponse> {
-  if (process.env.DEMO_MODE === "true" || !process.env.ANTHROPIC_API_KEY) {
+  const resolvedKey = options.apiKey ?? process.env.ANTHROPIC_API_KEY
+  if (process.env.DEMO_MODE === "true" || !resolvedKey) {
     return {
       ...getMockResponse(systemPrompt, userMessage),
       adapterType: options.adapterType ?? "claude_local",
@@ -430,7 +436,7 @@ async function callClaude(systemPrompt: string, userMessage: string, options: Ru
     }
   }
 
-  const response = await getAnthropicClient().messages.create({
+  const response = await getAnthropicClient(options.apiKey).messages.create({
     model: options.model ?? "claude-sonnet-4-6-20250514",
     max_tokens: options.maxTokens ?? 2048,
     system: systemPrompt,
@@ -448,7 +454,8 @@ async function callClaude(systemPrompt: string, userMessage: string, options: Ru
 }
 
 async function callCodex(systemPrompt: string, userMessage: string, options: RuntimeOptions): Promise<RuntimeResponse> {
-  if (!process.env.OPENAI_API_KEY) {
+  const resolvedKey = options.apiKey ?? process.env.OPENAI_API_KEY
+  if (!resolvedKey) {
     if (hasCodexQauthSessionSync()) {
       return callCodexCli(systemPrompt, userMessage, {
         ...options,
@@ -467,7 +474,7 @@ async function callCodex(systemPrompt: string, userMessage: string, options: Run
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      Authorization: `Bearer ${resolvedKey}`,
     },
     body: JSON.stringify({
       model: options.model ?? "gpt-5-codex",

@@ -59,15 +59,20 @@ export function adapterRoutes(db: Db): Router {
   router.post("/test", async (req, res) => {
     try {
       const key = String(req.body?.key ?? "")
+      const byoApiKey = typeof req.body?.apiKey === "string" && req.body.apiKey.trim().length > 0
+        ? req.body.apiKey.trim()
+        : undefined
       const testedAt = new Date().toISOString()
 
-      if (key === "codex_local" || key === "codex_qauth") {
+      if (key === "codex_local" || key === "codex_qauth" || key === "claude_local") {
+        const defaultModel = key === "claude_local" ? "claude-sonnet-4-6" : "gpt-5-codex"
         const result = await runWithAdapter(
           "당신은 학원 운영 보조 AI입니다. 한 문장으로만 답하세요.",
           "환불 문의를 받았을 때 운영자가 먼저 확인해야 할 항목 1가지만 말해줘.",
           {
             adapterType: key,
-            model: "gpt-5-codex",
+            model: typeof req.body?.model === "string" ? req.body.model : defaultModel,
+            apiKey: byoApiKey,
             maxTokens: 120,
           },
         )

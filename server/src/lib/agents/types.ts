@@ -7,6 +7,8 @@ export interface AgentRef {
 export interface RuntimeBinding {
   adapterType?: string | null
   model?: string | null
+  /** 조직별 BYO API 키 — env var 보다 우선 */
+  apiKey?: string | null
   skillContext?: string
   runtimeSkills?: Array<{
     slug: string

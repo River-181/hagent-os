@@ -78,6 +78,7 @@ ${input.skillContext ? `\n실행 스킬 번들:\n${input.skillContext}\n` : ""}
   const response = await runWithAdapter(SYSTEM_PROMPT, userMessage, {
     adapterType: input.adapterType ?? undefined,
     model: input.model ?? undefined,
+    apiKey: input.apiKey ?? undefined,
     maxTokens: 1024,
   })
 

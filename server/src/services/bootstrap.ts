@@ -400,6 +400,7 @@ const bootstrapSchema = z.object({
   initialInstruction: z.string().min(2).default("오늘 민원 처리하고 이번 주 이탈 위험 학생 알려줘"),
   selectedAdapterType: z.enum(["codex_qauth", "codex_local", "claude_local", "mock_local"]).default("codex_qauth"),
   selectedModel: z.string().min(2).default("gpt-5-codex"),
+  byoApiKey: z.string().optional(),
   mode: z.enum(["scratch", "demo"]).default("scratch"),
   setupProjectName: z.string().min(2).default("Academy Setup"),
   channels: z
@@ -940,6 +941,10 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
             fallbackAdapterType: "claude_local",
             autoRun: true,
             allowDegradedMode: true,
+            // BYO API 키 (판사/사용자가 온보딩 시 자기 키 입력) — env var 보다 우선
+            ...(input.byoApiKey && input.byoApiKey.trim().length > 0
+              ? { apiKey: input.byoApiKey.trim() }
+              : {}),
           },
           integrations: resolveChannelConfig(input),
           instance: {

@@ -10,6 +10,10 @@ import {
   Rocket,
   Loader2,
   CheckCircle2,
+  X,
+  Sparkles,
+  KeyRound,
+  PlayCircle,
 } from "lucide-react"
 import { organizationsApi } from "@/api/organizations"
 import { useOrganization } from "@/context/OrganizationContext"
@@ -191,6 +195,26 @@ export function OnboardingPage() {
   const [setupProjectName, setSetupProjectName] = useState("Academy Setup")
   const [initialInstruction, setInitialInstruction] = useState("오늘 들어온 민원과 상담 요청, 이번 주 일정 이슈를 우선순위대로 정리해줘.")
   const [selectedAdapterType, setSelectedAdapterType] = useState<(typeof MODEL_OPTIONS)[number]["value"]>("codex_qauth")
+  const [byoApiKey, setByoApiKey] = useState("")
+  const [testingAdapter, setTestingAdapter] = useState(false)
+  const [testResult, setTestResult] = useState<{
+    ok: boolean
+    preview?: string
+    error?: string
+    degraded?: boolean
+  } | null>(null)
+
+  // 초보자·심사위원용 가이드 오버레이 — localStorage 로 1회성
+  const [showGuide, setShowGuide] = useState(() => {
+    if (typeof window === "undefined") return false
+    return window.localStorage.getItem("hagent.onboarding.guide.seen") !== "true"
+  })
+  function dismissGuide() {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("hagent.onboarding.guide.seen", "true")
+    }
+    setShowGuide(false)
+  }
 
   const [kakaoEnabled, setKakaoEnabled] = useState(true)
   const [kakaoChannelId, setKakaoChannelId] = useState("tanzania-channel")
@@ -297,6 +321,7 @@ export function OnboardingPage() {
         initialInstruction,
         selectedAdapterType,
         selectedModel,
+        byoApiKey: byoApiKey.trim() || undefined,
         mode,
         channels: {
           kakao: {
@@ -374,6 +399,7 @@ export function OnboardingPage() {
 
   return (
     <div style={{ height: "100dvh", overflow: "auto", backgroundColor: "var(--bg-secondary)" }}>
+    {showGuide ? <WelcomeGuide onClose={dismissGuide} onApplyDemo={() => { applyDemoPreset(); dismissGuide() }} /> : null}
     <div className="mx-auto grid w-full max-w-7xl gap-6 px-6 py-8 lg:grid-cols-[280px_minmax(0,1fr)_360px]">
       <aside className="rounded-3xl border p-4" style={{ borderColor: "var(--border-default)", background: "var(--bg-elevated)" }}>
         <div className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--text-tertiary)" }}>
@@ -584,6 +610,85 @@ export function OnboardingPage() {
                 </button>
               ))}
             </div>
+
+            {/* BYO API Key — 판사·사용자 자기 키로 테스트 */}
+            <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border-default)", background: "var(--bg-base)" }}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-medium" style={{ color: "var(--text-primary)" }}>내 API 키로 연결 (선택)</div>
+                  <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+                    비워두면 서버의 기본 키를 사용합니다. {selectedAdapterType === "claude_local" ? "Anthropic (sk-ant-...)" : "OpenAI (sk-proj-...)"} 키를 넣어 연결 테스트하세요.
+                  </div>
+                </div>
+              </div>
+              <input
+                type="password"
+                value={byoApiKey}
+                onChange={(e) => {
+                  setByoApiKey(e.target.value)
+                  setTestResult(null)
+                }}
+                placeholder={selectedAdapterType === "claude_local" ? "sk-ant-..." : "sk-proj-..."}
+                autoComplete="off"
+                className="mt-3 w-full rounded-2xl border px-4 py-3 font-mono text-sm"
+                style={{ borderColor: "var(--border-default)", background: "var(--bg-elevated)", color: "var(--text-primary)" }}
+              />
+              <div className="mt-3 flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={testingAdapter}
+                  onClick={async () => {
+                    setTestingAdapter(true)
+                    setTestResult(null)
+                    try {
+                      const resp = await fetch("/api/adapters/test", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          key: selectedAdapterType,
+                          model: selectedModel,
+                          apiKey: byoApiKey.trim() || undefined,
+                        }),
+                      })
+                      const data = await resp.json()
+                      if (!resp.ok) {
+                        setTestResult({ ok: false, error: data.error ?? "테스트 실패" })
+                      } else {
+                        setTestResult({
+                          ok: true,
+                          preview: data.preview,
+                          degraded: data.degraded,
+                        })
+                      }
+                    } catch (err) {
+                      setTestResult({ ok: false, error: (err as Error).message })
+                    } finally {
+                      setTestingAdapter(false)
+                    }
+                  }}
+                  className="rounded-full px-4 py-2 text-sm font-semibold"
+                  style={{
+                    background: testingAdapter ? "var(--bg-tertiary)" : "var(--color-teal-500)",
+                    color: testingAdapter ? "var(--text-secondary)" : "#fff",
+                    opacity: testingAdapter ? 0.7 : 1,
+                  }}
+                >
+                  {testingAdapter ? "테스트 중..." : "연결 테스트"}
+                </button>
+                {testResult ? (
+                  testResult.ok ? (
+                    <div className="text-sm" style={{ color: testResult.degraded ? "var(--text-secondary)" : "var(--color-teal-500)" }}>
+                      {testResult.degraded ? "⚠ degraded (mock 응답)" : "✓ 연결 성공"} — {testResult.preview}
+                    </div>
+                  ) : (
+                    <div className="text-sm" style={{ color: "var(--color-red-500, #ef4444)" }}>
+                      ✗ {testResult.error}
+                    </div>
+                  )
+                ) : null}
+              </div>
+            </div>
+
             <label className="block">
               <span className="mb-2 block text-sm font-medium" style={{ color: "var(--text-primary)" }}>Starter Team Preset</span>
               <select value={starterTeamPreset} onChange={(e) => setStarterTeamPreset(e.target.value)} className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border-default)", background: "var(--bg-base)", color: "var(--text-primary)" }}>
@@ -774,6 +879,110 @@ export function OnboardingPage() {
         </div>
       </aside>
     </div>
+    </div>
+  )
+}
+
+/**
+ * 첫 방문 / 심사위원용 웰컴 가이드.
+ * 핵심 3가지: (1) 이 툴이 뭘 하는 서비스인지 (2) 데모 모드로 바로 체험 (3) 자기 API 키 연결 방법.
+ */
+function WelcomeGuide({ onClose, onApplyDemo }: { onClose: () => void; onApplyDemo: () => void }) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-3xl rounded-3xl border p-8 shadow-2xl"
+        style={{ borderColor: "var(--border-default)", background: "var(--bg-elevated)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div
+              className="flex h-12 w-12 items-center justify-center rounded-2xl"
+              style={{ background: "var(--color-primary-bg)", color: "var(--color-teal-500)" }}
+            >
+              <Sparkles size={22} />
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
+                HagentOS 에 오신 걸 환영합니다
+              </h2>
+              <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+                학원 민원·이탈·일정을 AI 에이전트 팀으로 처리하는 운영 OS
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-2"
+            style={{ background: "var(--bg-base)", color: "var(--text-tertiary)" }}
+            aria-label="가이드 닫기"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-4 md:grid-cols-3">
+          <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border-default)", background: "var(--bg-base)" }}>
+            <PlayCircle size={20} style={{ color: "var(--color-teal-500)" }} />
+            <div className="mt-2 font-medium" style={{ color: "var(--text-primary)" }}>1. 데모 바로 체험</div>
+            <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+              탄자니아 영어학원 프리셋으로 25건의 실제 민원·이탈 케이스, 5명 에이전트, 12개 문서가 세팅됩니다. API 키 없이도 mock 응답으로 동작.
+            </p>
+          </div>
+          <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border-default)", background: "var(--bg-base)" }}>
+            <KeyRound size={20} style={{ color: "var(--color-teal-500)" }} />
+            <div className="mt-2 font-medium" style={{ color: "var(--text-primary)" }}>2. 내 AI 키로 실제 답변</div>
+            <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+              Team 단계에서 OpenAI(sk-proj-...) 또는 Anthropic(sk-ant-...) 키를 붙여 <b>연결 테스트</b>하세요. 없으면 서버 기본 키가 쓰입니다.
+            </p>
+          </div>
+          <div className="rounded-2xl border p-4" style={{ borderColor: "var(--border-default)", background: "var(--bg-base)" }}>
+            <Rocket size={20} style={{ color: "var(--color-teal-500)" }} />
+            <div className="mt-2 font-medium" style={{ color: "var(--text-primary)" }}>3. 6단계 세팅</div>
+            <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+              Academy → Channels → Data → Team → Setup → Launch. 각 단계는 건너뛸 수 있고, 마지막에 원샷 부트스트랩.
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-2xl border p-4" style={{ borderColor: "var(--border-default)", background: "var(--bg-base)" }}>
+          <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+            🔑 API 키를 처음 받으시나요?
+          </div>
+          <ul className="mt-2 space-y-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+            <li>• <b>OpenAI</b>: <code style={{ background: "var(--bg-elevated)", padding: "1px 6px", borderRadius: 4 }}>platform.openai.com/api-keys</code> → Create new secret key → <code>sk-proj-...</code></li>
+            <li>• <b>Anthropic</b>: <code style={{ background: "var(--bg-elevated)", padding: "1px 6px", borderRadius: 4 }}>console.anthropic.com/settings/keys</code> → Create key → <code>sk-ant-...</code></li>
+            <li>• 키는 이 조직(학원) 한정으로만 저장되고 AI 호출에 사용됩니다.</li>
+          </ul>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl border px-5 py-3 text-sm font-medium"
+            style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)", background: "var(--bg-base)" }}
+          >
+            직접 채우기
+          </button>
+          <button
+            type="button"
+            onClick={onApplyDemo}
+            className="flex items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-semibold"
+            style={{ background: "var(--color-teal-500)", color: "#fff" }}
+          >
+            <Sparkles size={16} /> 탄자니아 데모로 시작
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

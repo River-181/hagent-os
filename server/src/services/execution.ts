@@ -183,9 +183,19 @@ export async function executeAgentRun(
     let outputTokens = 0
     let reasoning: string | null = null
     const selectedModel = (agent.adapterConfig as { model?: string } | null)?.model ?? null
+    // 조직이 온보딩/Settings 에서 등록한 BYO API 키 우선 사용 (없으면 env var fallback)
+    const orgAiPolicy =
+      org?.agentTeamConfig && typeof org.agentTeamConfig === "object" && !Array.isArray(org.agentTeamConfig)
+        ? ((org.agentTeamConfig as Record<string, unknown>).aiPolicy as Record<string, unknown> | undefined)
+        : undefined
+    const orgApiKey =
+      typeof orgAiPolicy?.apiKey === "string" && orgAiPolicy.apiKey.trim().length > 0
+        ? (orgAiPolicy.apiKey as string)
+        : null
     const runtimeBinding = {
       adapterType: agent.adapterType,
       model: selectedModel,
+      apiKey: orgApiKey,
     }
 
     if (agentType === "orchestrator") {
@@ -303,6 +313,7 @@ export async function executeAgentRun(
         allowedEntityScopes,
         adapterType: runtimeBinding.adapterType ?? undefined,
         model: runtimeBinding.model ?? undefined,
+        apiKey: runtimeBinding.apiKey ?? undefined,
       })
       agentOutput = result.plan as unknown as Record<string, unknown>
       tokensUsed = result.tokensUsed

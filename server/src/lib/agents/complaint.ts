@@ -124,6 +124,7 @@ ${legalContextBlock}
   const response = await runWithAdapter(isInquiry ? LEGAL_INQUIRY_SYSTEM_PROMPT : SYSTEM_PROMPT, userMessage, {
     adapterType: input.adapterType ?? undefined,
     model: input.model ?? undefined,
+    apiKey: input.apiKey ?? undefined,
     maxTokens: 2048,
   })
 

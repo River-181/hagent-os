@@ -65,6 +65,7 @@ ${attendanceSummary || "  데이터 없음"}
   const response = await runWithAdapter(SYSTEM_PROMPT, userMessage, {
     adapterType: input.adapterType ?? undefined,
     model: input.model ?? undefined,
+    apiKey: input.apiKey ?? undefined,
     maxTokens: 1024,
   })
 

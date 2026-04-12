@@ -90,6 +90,7 @@ ${scheduleContext || "- 없음"}
     {
       adapterType: input.adapterType ?? "mock_local",
       model: input.model ?? undefined,
+      apiKey: input.apiKey ?? undefined,
       maxTokens: 1024,
     },
   )
