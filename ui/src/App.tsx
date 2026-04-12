@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom"
 import { useOrganization } from "@/context/OrganizationContext"
 import { Layout } from "@/components/Layout"
 import { DashboardPage } from "@/pages/DashboardPage"
+import { AssistantPage } from "@/pages/AssistantPage"
 import { InboxPage } from "@/pages/InboxPage"
 import { CasesPage } from "@/pages/CasesPage"
 import { CaseNewPage } from "@/pages/CaseNewPage"
@@ -23,6 +24,7 @@ import { DocumentsPage } from "@/pages/DocumentsPage"
 import { NewAgentPage } from "@/pages/NewAgentPage"
 import { RoutinesPage } from "@/pages/RoutinesPage"
 import { GoalsPage } from "@/pages/GoalsPage"
+import { GoalDetailPage } from "@/pages/GoalDetailPage"
 import { CostsPage } from "@/pages/CostsPage"
 import { ProjectsPage } from "@/pages/ProjectsPage"
 import { ProjectDetailPage } from "@/pages/ProjectDetailPage"
@@ -51,6 +53,7 @@ export function App() {
       <Route path="/:orgPrefix" element={<Layout />}>
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="assistant" element={<AssistantPage />} />
         <Route path="inbox" element={<InboxPage />} />
         <Route path="cases" element={<CasesPage />} />
         <Route path="cases/new" element={<CaseNewPage />} />
@@ -72,6 +75,7 @@ export function App() {
         <Route path="documents/:id" element={<DocumentsPage />} />
         <Route path="routines" element={<RoutinesPage />} />
         <Route path="goals" element={<GoalsPage />} />
+        <Route path="goals/:id" element={<GoalDetailPage />} />
         <Route path="costs" element={<CostsPage />} />
         <Route path="projects" element={<ProjectsPage />} />
         <Route path="projects/:id" element={<ProjectDetailPage />} />

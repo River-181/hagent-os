@@ -3,6 +3,8 @@ import { api } from "./client"
 
 export const goalsApi = {
   list: (orgId: string) => api.get<any[]>(`/organizations/${orgId}/goals`),
+  get: (id: string) => api.get<any>(`/goals/${id}`),
   create: (orgId: string, data: any) => api.post<any>(`/organizations/${orgId}/goals`, data),
   update: (id: string, data: any) => api.patch<any>(`/goals/${id}`, data),
+  delete: (id: string) => api.delete<void>(`/goals/${id}`),
 }

@@ -34,6 +34,17 @@ export function goalRoutes(db: Db): Router {
     }
   })
 
+  router.get("/goals/:id", async (req, res) => {
+    try {
+      const [goal] = await db.select().from(schema.opsGoals)
+        .where(eq(schema.opsGoals.id, req.params.id))
+      if (!goal) { res.status(404).json({ error: "Not found" }); return }
+      res.json(goal)
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch goal" })
+    }
+  })
+
   router.patch("/goals/:id", async (req, res) => {
     try {
       const updates: Record<string, unknown> = {}
@@ -48,6 +59,15 @@ export function goalRoutes(db: Db): Router {
       res.json(updated)
     } catch (err) {
       res.status(500).json({ error: "Failed to update goal" })
+    }
+  })
+
+  router.delete("/goals/:id", async (req, res) => {
+    try {
+      await db.delete(schema.opsGoals).where(eq(schema.opsGoals.id, req.params.id))
+      res.status(204).send()
+    } catch (err) {
+      res.status(500).json({ error: "Failed to delete goal" })
     }
   })
 
