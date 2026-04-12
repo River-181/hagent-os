@@ -135,7 +135,8 @@ export function ApprovalDetailPage() {
   const isRejectPending = decideMutation.isPending && decideMutation.variables?.decision === "rejected"
 
   return (
-    <div className="p-6 max-w-3xl mx-auto space-y-5">
+    <div className="h-full overflow-y-auto">
+    <div className="p-6 max-w-3xl mx-auto space-y-5 pb-10">
       {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
@@ -323,6 +324,7 @@ export function ApprovalDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
     </div>
   )
 }

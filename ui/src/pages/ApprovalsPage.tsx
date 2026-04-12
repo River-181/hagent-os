@@ -8,7 +8,6 @@ import { casesApi } from "@/api/cases"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -275,7 +274,7 @@ export function ApprovalsPage() {
           <Tabs
             value={activeTab}
             onValueChange={(value) => setActiveTab(value as ApprovalStatusTab)}
-            className="flex flex-col flex-1 overflow-hidden"
+            className="flex flex-col flex-1 min-h-0 overflow-hidden"
           >
             <div className="px-6 pt-3" style={{ borderBottom: "1px solid var(--border-default)" }}>
               <TabsList className="h-9 bg-transparent p-0 gap-1">
@@ -305,7 +304,7 @@ export function ApprovalsPage() {
               </TabsList>
             </div>
 
-            <ScrollArea className="flex-1">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               <div className="p-6 max-w-3xl mx-auto space-y-3">
                 {filteredApprovals.length === 0 ? (
                   <EmptyState
@@ -377,7 +376,7 @@ export function ApprovalsPage() {
                   })
                 )}
               </div>
-            </ScrollArea>
+            </div>
           </Tabs>
 
           <Dialog

@@ -1,5 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react"
+import { useEffect, useState, useRef, type ReactNode } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useNavigate } from "react-router-dom"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { useToast } from "@/components/ToastContext"
@@ -16,17 +17,51 @@ import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
   Bot,
   Building2,
   Cable,
   CheckCircle2,
   Copy,
   Cpu,
+  Download,
   Loader2,
   ShieldCheck,
   SlidersHorizontal,
+  Trash2,
   TriangleAlert,
 } from "lucide-react"
+
+const SETTINGS_ENV_PATH = "/Users/river/workspace/active/hagent-os/.env"
+
+const institutionTypeLabelMap: Record<string, string> = {
+  academy: "학원",
+  english_academy: "영어학원",
+  math_academy: "수학학원",
+}
+
+const institutionSizeLabelMap: Record<string, string> = {
+  small: "소형",
+  mid: "중형",
+  medium: "중형",
+  large: "대형",
+}
+
+function humanizeInstitutionType(value: string | undefined) {
+  if (!value) return ""
+  return institutionTypeLabelMap[value] ?? value
+}
+
+function humanizeInstitutionSize(value: string | undefined) {
+  if (!value) return ""
+  return institutionSizeLabelMap[value] ?? value
+}
 
 function SectionCard({
   id,
@@ -162,6 +197,11 @@ export function SettingsPage() {
   const { selectedOrgId, organizations } = useOrganization()
   const { success, error: toastError } = useToast()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
+
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteConfirmText, setDeleteConfirmText] = useState("")
+  const downloadLinkRef = useRef<HTMLAnchorElement>(null)
 
   const [companyName, setCompanyName] = useState("")
   const [description, setDescription] = useState("")
@@ -181,6 +221,7 @@ export function SettingsPage() {
   const [censorLogs, setCensorLogs] = useState(false)
   const [keyboardShortcuts, setKeyboardShortcuts] = useState(true)
   const [feedbackSharing, setFeedbackSharing] = useState("prompt")
+  const [adapterTestResult, setAdapterTestResult] = useState<Record<string, any>>({})
 
   useEffect(() => {
     setBreadcrumbs([{ label: "설정" }])
@@ -218,8 +259,16 @@ export function SettingsPage() {
 
     setCompanyName(selectedOrg.name ?? "")
     setDescription(selectedOrg.description ?? "")
-    setInstitutionType((general.institutionType as string | undefined) ?? (bootstrap.institutionType as string | undefined) ?? "")
-    setInstitutionSize((general.institutionSize as string | undefined) ?? (bootstrap.institutionSize as string | undefined) ?? "")
+    setInstitutionType(
+      humanizeInstitutionType(
+        (general.institutionType as string | undefined) ?? (bootstrap.institutionType as string | undefined),
+      ),
+    )
+    setInstitutionSize(
+      humanizeInstitutionSize(
+        (general.institutionSize as string | undefined) ?? (bootstrap.institutionSize as string | undefined),
+      ),
+    )
     setTopGoal((general.topGoal as string | undefined) ?? (bootstrap.topGoal as string | undefined) ?? "")
     setPrincipalName((general.principalName as string | undefined) ?? "원장")
 
@@ -275,10 +324,47 @@ export function SettingsPage() {
     },
   })
 
+  const adapterTestMutation = useMutation({
+    mutationFn: (key: string) => adaptersApi.test(key),
+    onSuccess: (result, key) => {
+      setAdapterTestResult((prev) => ({ ...prev, [key]: result }))
+      success(result.connected ? "연결 테스트가 성공했습니다." : "연결 테스트는 응답했지만 실연동은 아닙니다.")
+    },
+    onError: (err) => {
+      toastError(err instanceof Error ? err.message : "연결 테스트에 실패했습니다.")
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedOrgId) throw new Error("선택된 기관이 없습니다.")
+      return organizationsApi.delete(selectedOrgId)
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all })
+      setDeleteDialogOpen(false)
+      setDeleteConfirmText("")
+      navigate("/")
+    },
+    onError: (err) => {
+      toastError(err instanceof Error ? err.message : "기관 삭제에 실패했습니다.")
+    },
+  })
+
+  function handleExport() {
+    if (!selectedOrgId) return
+    const url = organizationsApi.exportData(selectedOrgId)
+    const a = downloadLinkRef.current
+    if (a) {
+      a.href = url
+      a.click()
+    }
+  }
+
   const handleCopy = async (value: string) => {
     try {
       await navigator.clipboard.writeText(value)
-      success(`${value} copied`)
+      success(`${value} 복사됨`)
     } catch {
       toastError("클립보드 복사에 실패했습니다.")
     }
@@ -296,18 +382,18 @@ export function SettingsPage() {
       >
         <div className="mb-4">
           <div className="text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
-            Settings
+            운영 설정
           </div>
           <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-            paperclip식 운영 설정 구조를 기준으로, 기관 정책과 AI 런타임을 바로 수정합니다.
+            학원 기본 정보, AI 실행 정책, 외부 연동 상태를 한 화면에서 관리합니다.
           </div>
         </div>
         <div className="space-y-2">
           {[
-            { href: "#company-settings", label: "Company Settings", icon: <Building2 size={15} /> },
-            { href: "#ai-policy", label: "AI Policy", icon: <Bot size={15} /> },
-            { href: "#integrations", label: "Integrations", icon: <Cable size={15} /> },
-            { href: "#instance", label: "Instance", icon: <SlidersHorizontal size={15} /> },
+            { href: "#company-settings", label: "기관 기본 정보", icon: <Building2 size={15} /> },
+            { href: "#ai-policy", label: "AI 운영 정책", icon: <Bot size={15} /> },
+            { href: "#integrations", label: "외부 연동", icon: <Cable size={15} /> },
+            { href: "#instance", label: "앱 환경", icon: <SlidersHorizontal size={15} /> },
           ].map((item) => (
             <a
               key={item.href}
@@ -331,7 +417,7 @@ export function SettingsPage() {
             </StatusPill>
           </div>
           <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-            connected integrations {connectedIntegrations.length} / {integrations.length}
+            연결된 연동 {connectedIntegrations.length} / {integrations.length}
           </div>
         </div>
       </aside>
@@ -343,7 +429,7 @@ export function SettingsPage() {
               설정
             </h1>
             <p className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
-              기관 정보, Codex-first 정책, 외부 연동 선호도와 운영 기본값을 한 화면에서 관리합니다.
+              기관 정보, Codex 실행 상태, 외부 연동 준비 여부와 운영 기본값을 여기서 조정합니다.
             </p>
           </div>
           {saveMutation.isPending ? (
@@ -357,8 +443,8 @@ export function SettingsPage() {
         <SectionCard
           id="company-settings"
           icon={<Building2 size={16} />}
-          title="Company Settings"
-          description="기관명과 운영 목표를 저장하고, 현재 bootstrap 상태를 확인합니다."
+          title="기관 기본 정보"
+          description="학원 이름, 규모, 운영 목표와 현재 세팅 상태를 관리합니다."
         >
           <div className="grid gap-4 lg:grid-cols-2">
             <Field label="기관명">
@@ -371,7 +457,7 @@ export function SettingsPage() {
               <Input value={institutionType} onChange={(e) => setInstitutionType(e.target.value)} placeholder="영어학원, 수학학원" />
             </Field>
             <Field label="기관 규모">
-              <Input value={institutionSize} onChange={(e) => setInstitutionSize(e.target.value)} placeholder="원생 120명, 강사 8명" />
+              <Input value={institutionSize} onChange={(e) => setInstitutionSize(e.target.value)} placeholder="원생 120명, 직원 8명" />
             </Field>
           </div>
           <Field label="핵심 목표">
@@ -384,35 +470,35 @@ export function SettingsPage() {
           <div className="grid gap-3 lg:grid-cols-3">
             <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
               <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
-                Skills
+                스킬
               </div>
               <div className="mt-2 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
                 {installedSkills.length}
               </div>
               <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-                installed starter skills
+                설치된 기본 스킬
               </div>
             </div>
             <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
               <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
-                Integrations
+                연동
               </div>
               <div className="mt-2 text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
                 {connectedIntegrations.length}
               </div>
               <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-                connected integrations
+                연결된 외부 연동
               </div>
             </div>
             <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
               <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
-                Action Required
+                조치 필요
               </div>
               <div className="mt-2 text-xl font-semibold" style={{ color: actionRequiredSkills.length ? "#d97706" : "var(--text-primary)" }}>
                 {actionRequiredSkills.length}
               </div>
               <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-                runtime setup needed
+                실행 환경 점검 필요
               </div>
             </div>
           </div>
@@ -446,11 +532,11 @@ export function SettingsPage() {
         <SectionCard
           id="ai-policy"
           icon={<Bot size={16} />}
-          title="AI Policy"
-          description="Codex-first 기본 모델과 fallback 전략을 저장하고, 기존 에이전트에 즉시 반영할 수 있습니다."
+          title="AI 운영 정책"
+          description="Codex 우선 모델, fallback 전략, 자동 실행 정책을 저장합니다."
         >
           <div className="grid gap-4 lg:grid-cols-2">
-            <Field label="Primary Adapter">
+            <Field label="기본 실행 어댑터">
               <Select value={primaryAdapterType} onValueChange={setPrimaryAdapterType}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -464,7 +550,7 @@ export function SettingsPage() {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Primary Model">
+            <Field label="기본 모델">
               <Select value={primaryModel} onValueChange={setPrimaryModel}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -478,7 +564,7 @@ export function SettingsPage() {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="Fallback Adapter">
+            <Field label="보조 어댑터">
               <Select value={fallbackAdapterType} onValueChange={setFallbackAdapterType}>
                 <SelectTrigger className="w-full">
                   <SelectValue />
@@ -493,46 +579,135 @@ export function SettingsPage() {
               </Select>
             </Field>
             <Field
-              label="Current Runtime"
-              hint="현재 연결 상태는 env 기준이며, 저장은 조직 정책 기준입니다."
+              label="현재 실행 상태"
+              hint="연결 여부는 서버 env 기준이고, 저장값은 이 기관의 기본 정책입니다."
             >
               <div className="flex h-10 items-center gap-2 rounded-2xl border px-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
                 {selectedAdapter?.connected ? <CheckCircle2 size={15} style={{ color: "var(--color-success)" }} /> : <TriangleAlert size={15} style={{ color: "#d97706" }} />}
                 <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-                  {selectedAdapter?.connected ? "live adapter connected" : "degraded path will be used"}
+                  {selectedAdapter?.connected ? "실연동 가능" : "degraded mode 예정"}
                 </span>
               </div>
             </Field>
           </div>
 
           <ToggleRow
-            title="Auto-run by default"
-            description="새로 생성되는 starter agent와 기존 에이전트의 기본 실행 모드를 자동 실행으로 둡니다."
+            title="기본 자동 실행"
+            description="새로 생성되는 에이전트와 기존 에이전트의 기본 실행 모드를 자동 실행으로 둡니다."
             checked={autoRun}
             onCheckedChange={setAutoRun}
           />
           <ToggleRow
-            title="Allow degraded mode"
-            description="실연동 키가 없어도 mock fallback으로 orchestration과 approval surface를 유지합니다."
+            title="degraded mode 허용"
+            description="실연동 키가 없어도 mock fallback으로 기본 흐름을 유지합니다."
             checked={allowDegradedMode}
             onCheckedChange={setAllowDegradedMode}
           />
           <ToggleRow
-            title="Apply to existing agents"
-            description="저장 시 현재 기관의 에이전트 adapter/model 설정도 함께 갱신합니다."
+            title="기존 에이전트에도 반영"
+            description="저장 시 현재 기관 에이전트의 adapter/model 설정도 함께 갱신합니다."
             checked={applyToExistingAgents}
             onCheckedChange={setApplyToExistingAgents}
           />
 
-          <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
-            <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-              <ShieldCheck size={14} style={{ color: "var(--color-teal-500)" }} />
-              Codex-first Runtime
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+              <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                <ShieldCheck size={14} style={{ color: "var(--color-teal-500)" }} />
+                Codex 연결 상태
+              </div>
+              <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                `OPENAI_API_KEY`가 있어야 실제 케이스를 Codex로 처리합니다. 없으면 `mock_local` fallback이 사용됩니다.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
+                연결 방법: `{SETTINGS_ENV_PATH}`에 `OPENAI_API_KEY=...`를 넣고 서버를 다시 시작하면 됩니다.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <StatusPill tone={selectedAdapter?.connected ? "good" : "warn"}>
+                  {selectedAdapter?.connected ? "Codex 연결됨" : "OPENAI_API_KEY 필요"}
+                </StatusPill>
+                {selectedAdapter?.missingEnv?.map((item: string) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs"
+                    style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+                    onClick={() => handleCopy(item)}
+                  >
+                    <Copy size={12} />
+                    {item}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center gap-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={adapterTestMutation.isPending}
+                  onClick={() => adapterTestMutation.mutate("codex_local")}
+                >
+                  {adapterTestMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+                  Codex 연결 테스트
+                </Button>
+                {adapterTestResult.codex_local ? (
+                  <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                    {adapterTestResult.codex_local.connected
+                      ? `실연동 응답: ${adapterTestResult.codex_local.preview ?? "-"}`
+                      : `degraded 응답: ${adapterTestResult.codex_local.preview ?? "-"}`
+                    }
+                  </span>
+                ) : null}
+              </div>
             </div>
-            <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-              현재 실사용 기본 경로는 `codex_local`입니다. `OPENAI_API_KEY`가 없으면 degraded mode 정책에 따라
-              `mock_local`로 내려가고, fallback adapter는 별도로 기록됩니다.
-            </p>
+
+            <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+              <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                <ShieldCheck size={14} style={{ color: "var(--color-teal-500)" }} />
+                법령 조회 상태
+              </div>
+              <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                환불, 근로, 학원법 이슈는 `LAW_OC`가 있어야 실제 법령 근거를 붙일 수 있습니다.
+              </p>
+              <p className="mt-2 text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
+                연결 방법: `{SETTINGS_ENV_PATH}`에 `LAW_OC=...`를 넣고 서버를 다시 시작하면 됩니다.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <StatusPill tone={integrations.find((item: any) => item.key === "korean-law-mcp")?.connected ? "good" : "warn"}>
+                  {integrations.find((item: any) => item.key === "korean-law-mcp")?.connected ? "법령 조회 가능" : "LAW_OC 필요"}
+                </StatusPill>
+                {integrations.find((item: any) => item.key === "korean-law-mcp")?.missingEnv?.map((item: string) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs"
+                    style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
+                    onClick={() => handleCopy(item)}
+                  >
+                    <Copy size={12} />
+                    {item}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 flex items-center gap-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={adapterTestMutation.isPending}
+                  onClick={() => adapterTestMutation.mutate("korean-law-mcp")}
+                >
+                  {adapterTestMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+                  법령 조회 테스트
+                </Button>
+                {adapterTestResult["korean-law-mcp"] ? (
+                  <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
+                    {adapterTestResult["korean-law-mcp"].connected
+                      ? `조회 가능: ${adapterTestResult["korean-law-mcp"].preview ?? "-"}`
+                      : `degraded: ${adapterTestResult["korean-law-mcp"].preview ?? "-"}`
+                    }
+                  </span>
+                ) : null}
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end">
@@ -564,8 +739,8 @@ export function SettingsPage() {
         <SectionCard
           id="integrations"
           icon={<Cable size={16} />}
-          title="Integrations"
-          description="연동 readiness와 조직의 운영 선호 설정을 함께 저장합니다."
+          title="외부 연동"
+          description="실연동 준비 상태와 이 기관의 운영 선호 설정을 함께 관리합니다."
         >
           <div className="space-y-3">
             {integrations.map((integration: any) => {
@@ -583,7 +758,7 @@ export function SettingsPage() {
                           {integration.label}
                         </div>
                         <StatusPill tone={integration.connected ? "good" : "warn"}>
-                          {integration.connected ? "connected" : "missing env"}
+                          {integration.connected ? "연결됨" : "환경변수 필요"}
                         </StatusPill>
                       </div>
                       <div className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
@@ -605,7 +780,7 @@ export function SettingsPage() {
                   </div>
 
                   <div className="mt-4 grid gap-3 lg:grid-cols-[0.9fr_1.1fr]">
-                    <Field label="Preferred Channel" hint="메시징 계열이면 default channel, 아니면 운영 메모로 사용합니다.">
+                    <Field label="우선 채널" hint="메시징 연동은 기본 채널명, 나머지는 운영 메모처럼 사용합니다.">
                       <Input
                         value={preference.preferredChannel ?? ""}
                         onChange={(e) =>
@@ -620,7 +795,7 @@ export function SettingsPage() {
                         placeholder={integration.category === "messaging" ? "kakao, sms" : "default"}
                       />
                     </Field>
-                    <Field label="Ops Notes">
+                    <Field label="운영 메모">
                       <Input
                         value={preference.notes ?? ""}
                         onChange={(e) =>
@@ -680,31 +855,31 @@ export function SettingsPage() {
         <SectionCard
           id="instance"
           icon={<Cpu size={16} />}
-          title="Instance"
-          description="운영자가 보는 control plane 기본 동작을 저장합니다."
+          title="앱 환경"
+          description="운영 화면에서 쓰는 기본 동작과 표시 정책을 저장합니다."
         >
           <ToggleRow
-            title="Censor username in logs"
-            description="운영 로그와 transcript에서 홈 디렉터리 사용자명을 감추는 정책을 저장합니다."
+            title="로그 사용자명 가리기"
+            description="운영 로그와 transcript에서 홈 디렉터리 사용자명을 가립니다."
             checked={censorLogs}
             onCheckedChange={setCensorLogs}
           />
           <ToggleRow
-            title="Enable keyboard shortcuts"
-            description="operator 화면에서 keyboard shortcut을 기본 활성화 상태로 둡니다."
+            title="키보드 단축키 사용"
+            description="운영 화면에서 keyboard shortcut을 기본 활성화 상태로 둡니다."
             checked={keyboardShortcuts}
             onCheckedChange={setKeyboardShortcuts}
           />
 
-          <Field label="AI Feedback Sharing" hint="paperclip 캡처처럼 기본 투표 공유 정책을 저장합니다.">
+          <Field label="AI 피드백 공유" hint="평가/피드백 공유 기본 정책을 저장합니다.">
             <Select value={feedbackSharing} onValueChange={setFeedbackSharing}>
               <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="prompt">Prompt on first use</SelectItem>
-                <SelectItem value="allow">Always allow</SelectItem>
-                <SelectItem value="deny">Don't allow</SelectItem>
+                <SelectItem value="prompt">처음 사용할 때 묻기</SelectItem>
+                <SelectItem value="allow">항상 허용</SelectItem>
+                <SelectItem value="deny">공유 안 함</SelectItem>
               </SelectContent>
             </Select>
           </Field>
@@ -712,7 +887,7 @@ export function SettingsPage() {
           <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
             <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
               <Cpu size={14} style={{ color: "var(--color-teal-500)" }} />
-              Loaded Control Plane Modules
+              현재 로드된 모듈
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {plugins.map((plugin: any) => (
@@ -745,7 +920,106 @@ export function SettingsPage() {
             </Button>
           </div>
         </SectionCard>
+
+        {/* Danger Zone */}
+        <div
+          className="rounded-2xl border overflow-hidden"
+          style={{ borderColor: "rgba(239,68,68,0.3)" }}
+        >
+          <div
+            className="flex items-center gap-2 px-5 py-4"
+            style={{ borderBottom: "1px solid rgba(239,68,68,0.2)", backgroundColor: "rgba(239,68,68,0.04)" }}
+          >
+            <TriangleAlert size={15} style={{ color: "#dc2626" }} />
+            <span className="text-sm font-semibold" style={{ color: "#dc2626" }}>위험 구역</span>
+          </div>
+
+          <div className="px-5 py-4 space-y-4">
+            {/* Export */}
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>데이터 내보내기</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                  학원 전체 데이터(에이전트, 케이스, 학생, 강사, 일정 등)를 JSON 파일로 다운로드합니다.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5"
+                disabled={!selectedOrgId}
+                onClick={handleExport}
+              >
+                <Download size={14} />
+                내보내기
+              </Button>
+            </div>
+
+            <Separator style={{ backgroundColor: "rgba(239,68,68,0.15)" }} />
+
+            {/* Delete */}
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>기관 삭제</p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                  이 학원과 모든 하위 데이터(에이전트, 케이스, 학생 등)를 영구 삭제합니다. 되돌릴 수 없습니다.
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 gap-1.5"
+                style={{ color: "#dc2626", borderColor: "rgba(239,68,68,0.4)" }}
+                disabled={!selectedOrgId}
+                onClick={() => setDeleteDialogOpen(true)}
+              >
+                <Trash2 size={14} />
+                기관 삭제
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Hidden download anchor */}
+      <a ref={downloadLinkRef} download className="hidden" />
+
+      {/* Delete confirm dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={(open) => { if (!open) { setDeleteDialogOpen(false); setDeleteConfirmText("") } }}>
+        <DialogContent style={{ backgroundColor: "var(--bg-base)", border: "1px solid var(--border-default)" }}>
+          <DialogHeader>
+            <DialogTitle style={{ color: "#dc2626" }}>기관 삭제 확인</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              이 작업은 <strong style={{ color: "var(--text-primary)" }}>되돌릴 수 없습니다.</strong> 이 학원의 모든 에이전트, 케이스, 승인, 학생, 강사, 일정 데이터가 영구 삭제됩니다.
+            </p>
+            <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+              계속하려면 아래에 <strong style={{ color: "var(--text-primary)" }}>삭제</strong>를 입력하세요.
+            </p>
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="삭제"
+              style={{ borderColor: deleteConfirmText === "삭제" ? "rgba(239,68,68,0.5)" : undefined }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setDeleteDialogOpen(false); setDeleteConfirmText("") }}>
+              취소
+            </Button>
+            <Button
+              className="gap-1.5"
+              style={{ backgroundColor: "#dc2626", color: "#fff" }}
+              disabled={deleteConfirmText !== "삭제" || deleteMutation.isPending}
+              onClick={() => deleteMutation.mutate()}
+            >
+              {deleteMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              영구 삭제
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

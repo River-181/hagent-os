@@ -64,6 +64,19 @@ function mergeJsonConfig(
   return next
 }
 
+function getOrganizationConfig(organization: typeof schema.organizations.$inferSelect) {
+  return isPlainObject(organization.agentTeamConfig) ? organization.agentTeamConfig : {}
+}
+
+function getChannelsFromConfig(config: Record<string, unknown>) {
+  const integrations = isPlainObject(config.integrations) ? config.integrations : {}
+  const integrationChannels = isPlainObject(integrations.channels) ? integrations.channels : {}
+  if (Object.keys(integrationChannels).length > 0) {
+    return integrationChannels
+  }
+  return isPlainObject(config.channels) ? config.channels : {}
+}
+
 export function organizationRoutes(db: Db): Router {
   const router = Router()
 
@@ -263,6 +276,83 @@ export function organizationRoutes(db: Db): Router {
     }
   })
 
+  router.get("/:id/channels", async (req, res) => {
+    try {
+      const [organization] = await db
+        .select()
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, req.params.id))
+
+      if (!organization) {
+        res.status(404).json({ error: "Organization not found" })
+        return
+      }
+
+      const config = getOrganizationConfig(organization)
+      const channels = getChannelsFromConfig(config)
+      res.json(channels)
+    } catch {
+      res.status(500).json({ error: "Failed to fetch channels" })
+    }
+  })
+
+  router.put("/:id/channels/:channelKey", async (req, res) => {
+    try {
+      const channelKey = req.params.channelKey
+      if (!["kakao", "telegram", "sms", "naver"].includes(channelKey)) {
+        res.status(400).json({ error: "Unsupported channelKey" })
+        return
+      }
+
+      const [organization] = await db
+        .select()
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, req.params.id))
+
+      if (!organization) {
+        res.status(404).json({ error: "Organization not found" })
+        return
+      }
+
+      const config = getOrganizationConfig(organization)
+      const nextConfig = mergeJsonConfig(config, {
+        integrations: {
+          channels: {
+            [channelKey]: req.body ?? {},
+          },
+        },
+      })
+
+      const [updated] = await db
+        .update(schema.organizations)
+        .set({
+          agentTeamConfig: nextConfig,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.organizations.id, organization.id))
+        .returning()
+
+      await db.insert(schema.activityEvents).values({
+        organizationId: organization.id,
+        actorType: "user",
+        actorId: "settings",
+        action: "integration.checked",
+        entityType: "organization",
+        entityId: organization.id,
+        entityTitle: updated.name,
+        metadata: {
+          channelKey,
+          mode: "channel_binding_updated",
+        } as Record<string, unknown>,
+      })
+
+      const updatedConfig = getOrganizationConfig(updated)
+      res.json(getChannelsFromConfig(updatedConfig) as Record<string, unknown>)
+    } catch {
+      res.status(400).json({ error: "Failed to update channel binding" })
+    }
+  })
+
   // DELETE /:id — 기관(학원) 삭제 (모든 하위 데이터 cascade)
   router.delete("/:id", async (req, res) => {
     try {
@@ -299,6 +389,59 @@ export function organizationRoutes(db: Db): Router {
       res.status(204).send()
     } catch (err) {
       res.status(500).json({ error: "Failed to delete organization" })
+    }
+  })
+
+  // GET /:id/export — 기관 전체 데이터 JSON 내보내기
+  router.get("/:id/export", async (req, res) => {
+    try {
+      const oid = req.params.id
+      const [org] = await db.select().from(schema.organizations).where(eq(schema.organizations.id, oid))
+      if (!org) { res.status(404).json({ error: "Organization not found" }); return }
+
+      const [agents, cases, approvals, students, instructors, schedules, routines, opsGoals, documents, agentRuns] =
+        await Promise.all([
+          db.select().from(schema.agents).where(eq(schema.agents.organizationId, oid)),
+          db.select().from(schema.cases).where(eq(schema.cases.organizationId, oid)),
+          db.select().from(schema.approvals).where(eq(schema.approvals.organizationId, oid)),
+          db.select().from(schema.students).where(eq(schema.students.organizationId, oid)),
+          db.select().from(schema.instructors).where(eq(schema.instructors.organizationId, oid)),
+          db.select().from(schema.schedules).where(eq(schema.schedules.organizationId, oid)),
+          db.select().from(schema.routines).where(eq(schema.routines.organizationId, oid)),
+          db.select().from(schema.opsGoals).where(eq(schema.opsGoals.organizationId, oid)),
+          db.select().from(schema.documents).where(eq(schema.documents.organizationId, oid)),
+          db.select().from(schema.agentRuns).where(eq(schema.agentRuns.organizationId, oid)),
+        ])
+
+      const caseIds = cases.map((c) => c.id)
+      const caseComments = caseIds.length > 0
+        ? (await Promise.all(caseIds.map((cid) => db.select().from(schema.caseComments).where(eq(schema.caseComments.caseId, cid))))).flat()
+        : []
+
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        version: "1.0",
+        organization: org,
+        agents,
+        cases,
+        caseComments,
+        approvals,
+        students,
+        instructors,
+        schedules,
+        routines,
+        opsGoals,
+        documents,
+        agentRuns,
+      }
+
+      const safeName = (org.name ?? oid).replace(/[^a-zA-Z0-9가-힣_-]/g, "_")
+      const filename = `hagent-export-${safeName}-${new Date().toISOString().slice(0, 10)}.json`
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`)
+      res.setHeader("Content-Type", "application/json")
+      res.json(payload)
+    } catch (err) {
+      res.status(500).json({ error: "Failed to export organization data" })
     }
   })
 
