@@ -142,7 +142,10 @@ export function organizationRoutes(db: Db): Router {
       const result = await runBootstrap(db, req.body)
       res.status(201).json(result)
     } catch (err) {
-      res.status(400).json({ error: err instanceof Error ? err.message : "Failed to bootstrap organization" })
+      const message = err instanceof Error ? err.message : "Failed to bootstrap organization"
+      const stack = err instanceof Error ? err.stack : undefined
+      req.log?.error({ err: { message, stack } }, "bootstrap organization failed")
+      res.status(400).json({ error: message, detail: stack?.split("\n").slice(0, 6).join("\n") })
     }
   })
 
@@ -505,7 +508,7 @@ export function organizationRoutes(db: Db): Router {
         .from(schema.agents)
         .where(eq(schema.agents.organizationId, orgId))
 
-      const ceoAgent = agents.find((a) => a.slug === "ceo" || a.agentType === "ceo" || a.slug === "orchestrator")
+      const ceoAgent = agents.find((a) => a.slug === "ceo" || a.slug === "orchestrator")
       const complaintAgent = agents.find((a) => a.slug === "complaint" || a.slug === "counseling")
       const schedulerAgent = agents.find((a) => a.slug === "scheduler")
 

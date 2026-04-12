@@ -10,13 +10,49 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
 
+function resolveOrgScopedIntegrationStatuses(
+  integrations: ReturnType<typeof getIntegrationStatuses>,
+  config: unknown,
+) {
+  if (!isPlainObject(config)) return integrations
+
+  const nestedIntegrations = isPlainObject(config.integrations) ? config.integrations : {}
+  const channels = isPlainObject(nestedIntegrations.channels) ? nestedIntegrations.channels : {}
+  const telegram = isPlainObject(channels.telegram) ? channels.telegram : {}
+  const telegramBotToken = typeof telegram.botToken === "string" ? telegram.botToken.trim() : ""
+
+  if (!telegramBotToken) return integrations
+
+  return integrations.map((integration) =>
+    integration.key === "telegram-outbound"
+      ? {
+          ...integration,
+          connected: true,
+          inactive: false,
+          missingEnv: [],
+        }
+      : integration,
+  )
+}
+
 export function adapterRoutes(db: Db): Router {
   const router = Router()
 
-  router.get("/", (_req, res) => {
+  router.get("/", async (req, res) => {
+    const orgId = typeof req.query.orgId === "string" ? req.query.orgId : ""
+    let integrations = getIntegrationStatuses()
+
+    if (orgId) {
+      const [organization] = await db
+        .select({ agentTeamConfig: schema.organizations.agentTeamConfig })
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, orgId))
+      integrations = resolveOrgScopedIntegrationStatuses(integrations, organization?.agentTeamConfig)
+    }
+
     res.json({
       adapters: getAdapterStatuses(),
-      integrations: getIntegrationStatuses(),
+      integrations,
     })
   })
 

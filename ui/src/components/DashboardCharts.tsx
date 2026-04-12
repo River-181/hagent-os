@@ -1,33 +1,57 @@
+import type { ReactNode } from "react"
+
 interface DashboardChartsProps {
   cases: any[]
   agents: any[]
   activity: any[]
 }
 
+type ChartMeta = {
+  value: string
+  label: string
+}
+
 function ChartTile({
   title,
   description,
+  meta,
   children,
 }: {
   title: string
   description: string
-  children: React.ReactNode
+  meta?: ChartMeta
+  children: ReactNode
 }) {
   return (
     <section
-      className="rounded-lg border p-4"
+      className="rounded-lg border px-4 py-4"
       style={{
         backgroundColor: "var(--bg-subtle)",
         borderColor: "var(--border-default)",
       }}
     >
-      <div className="space-y-1">
-        <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-          {title}
-        </h3>
-        <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-          {description}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            {title}
+          </h3>
+          <p className="text-xs leading-5" style={{ color: "var(--text-tertiary)" }}>
+            {description}
+          </p>
+        </div>
+        {meta ? (
+          <div className="shrink-0 text-right">
+            <div
+              className="text-base font-semibold tabular-nums"
+              style={{ color: "var(--text-primary)" }}
+            >
+              {meta.value}
+            </div>
+            <div className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+              {meta.label}
+            </div>
+          </div>
+        ) : null}
       </div>
       <div className="mt-4">{children}</div>
     </section>
@@ -48,28 +72,27 @@ function HBar({
   const pct = max > 0 ? Math.round((value / max) * 100) : 0
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="grid grid-cols-[60px_minmax(0,1fr)_28px] items-center gap-2">
       <span
         className="shrink-0 text-xs"
         style={{
           color: "var(--text-secondary)",
-          width: 52,
           textAlign: "right",
         }}
       >
         {label}
       </span>
       <div
-        className="flex-1 overflow-hidden rounded-full"
-        style={{ height: 6, backgroundColor: "var(--bg-muted)" }}
+        className="overflow-hidden rounded-full"
+        style={{ height: 8, backgroundColor: "var(--bg-muted)" }}
       >
         <div
-          className="h-full rounded-full"
+          className="h-full rounded-full transition-[width] duration-300"
           style={{ width: `${pct}%`, backgroundColor: color }}
         />
       </div>
       <span
-        className="min-w-[20px] text-right text-xs tabular-nums"
+        className="text-right text-xs tabular-nums"
         style={{ color: "var(--text-tertiary)" }}
       >
         {value}
@@ -89,44 +112,43 @@ function RunActivityChart({ activity }: { activity: any[] }) {
     const label = `${day.getMonth() + 1}/${day.getDate()}`
     const count = activity.filter((ev: any) => {
       const ts = ev.createdAt ?? ev.created_at ?? ev.timestamp ?? ""
-      return ts.startsWith(key)
+      return typeof ts === "string" && ts.startsWith(key)
     }).length
     days.push({ label, count })
   }
 
+  const total = days.reduce((sum, day) => sum + day.count, 0)
+  const peak = days.reduce((best, day) => (day.count > best.count ? day : best), days[0] ?? { label: "-", count: 0 })
   const maxCount = Math.max(...days.map((day) => day.count), 1)
 
   return (
-    <ChartTile title="실행 활동" description="최근 7일 실행량">
-      <div className="flex items-end gap-1" style={{ height: 56 }}>
+    <ChartTile
+      title="실행 활동 밀도"
+      description="최근 7일 동안 오케스트레이터와 에이전트 실행이 얼마나 몰렸는지 봅니다."
+      meta={{ value: `${total}`, label: peak.count > 0 ? `최대 ${peak.label}` : "최근 7일" }}
+    >
+      <div className="flex items-end gap-1.5" style={{ height: 84 }}>
         {days.map((day) => {
-          const heightPct = Math.max((day.count / maxCount) * 100, 4)
+          const heightPct = Math.max((day.count / maxCount) * 100, day.count === 0 ? 10 : 18)
           return (
-            <div key={day.label} className="flex flex-1 flex-col items-center gap-1">
+            <div key={day.label} className="flex flex-1 flex-col items-center gap-2">
               <div
-                className="w-full rounded-sm"
+                className="w-full rounded-[4px]"
                 style={{
                   height: `${heightPct}%`,
-                  minHeight: 3,
-                  maxHeight: 48,
-                  backgroundColor: "var(--color-primary)",
-                  opacity: day.count === 0 ? 0.25 : 1,
+                  minHeight: 6,
+                  maxHeight: 72,
+                  backgroundColor: day.count === peak.count && day.count > 0 ? "var(--accent-primary)" : "var(--accent-primary-soft)",
+                  border: day.count === peak.count && day.count > 0 ? "1px solid var(--accent-primary)" : "1px solid transparent",
+                  opacity: day.count === 0 ? 0.5 : 1,
                 }}
               />
+              <div className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                {day.label}
+              </div>
             </div>
           )
         })}
-      </div>
-      <div className="mt-1 flex gap-1">
-        {days.map((day) => (
-          <div
-            key={day.label}
-            className="flex-1 text-center text-xs"
-            style={{ color: "var(--text-tertiary)" }}
-          >
-            {day.label}
-          </div>
-        ))}
       </div>
     </ChartTile>
   )
@@ -143,11 +165,22 @@ function PriorityChart({ cases }: { cases: any[] }) {
     else counts.low++
   }
 
+  const dominantEntry = Object.entries(counts).sort((left, right) => right[1] - left[1])[0] ?? ["low", 0]
+  const dominantLabelMap: Record<string, string> = {
+    critical: "긴급",
+    high: "높음",
+    medium: "보통",
+    low: "낮음",
+  }
   const max = Math.max(...Object.values(counts), 1)
 
   return (
-    <ChartTile title="우선순위별 케이스" description="Priority breakdown">
-      <div className="space-y-2">
+    <ChartTile
+      title="긴급도 분포"
+      description="케이스를 처리 우선순위 관점에서 빠르게 훑을 수 있게 정리한 보기입니다."
+      meta={{ value: dominantLabelMap[dominantEntry[0]] ?? "없음", label: "가장 많은 우선순위" }}
+    >
+      <div className="space-y-2.5">
         <HBar label="긴급" value={counts.critical} max={max} color="var(--color-danger)" />
         <HBar label="높음" value={counts.high} max={max} color="var(--color-warning)" />
         <HBar label="보통" value={counts.medium} max={max} color="var(--color-info)" />
@@ -172,6 +205,7 @@ function StatusChart({ cases }: { cases: any[] }) {
     if (status in counts) counts[status]++
   }
 
+  const active = counts.todo + counts.in_progress + counts.in_review
   const max = Math.max(...Object.values(counts), 1)
 
   const rows: { label: string; key: string; color: string }[] = [
@@ -184,8 +218,12 @@ function StatusChart({ cases }: { cases: any[] }) {
   ]
 
   return (
-    <ChartTile title="상태별 케이스" description="Status breakdown">
-      <div className="space-y-2">
+    <ChartTile
+      title="처리 흐름 상태"
+      description="백로그부터 완료까지 현재 케이스가 어느 구간에 몰려 있는지 보여줍니다."
+      meta={{ value: `${active}`, label: "활성 흐름" }}
+    >
+      <div className="space-y-2.5">
         {rows.map((row) => (
           <HBar
             key={row.key}
@@ -205,18 +243,24 @@ function SuccessRateChart({ agents }: { agents: any[] }) {
   let completed = 0
 
   for (const agent of agents) {
-    const runs: any[] = agent.runs ?? []
+    const runs: any[] = Array.isArray(agent.runs) ? agent.runs : []
     total += runs.length
     completed += runs.filter((run: any) => run.status === "completed").length
   }
 
   const rate = total > 0 ? Math.round((completed / total) * 100) : 0
-  const agentBars = agents.slice(0, 7).map((agent: any) => {
-    const runs: any[] = agent.runs ?? []
-    const done = runs.filter((run: any) => run.status === "completed").length
-    const count = runs.length
-    return { name: agent.name?.slice(0, 4) ?? "?", rate: count > 0 ? (done / count) * 100 : 0 }
-  })
+  const agentBars = agents
+    .map((agent: any) => {
+      const runs: any[] = Array.isArray(agent.runs) ? agent.runs : []
+      const done = runs.filter((run: any) => run.status === "completed").length
+      const count = runs.length
+      const label = String(agent.name ?? agent.slug ?? "?").trim()
+      return {
+        label: label.length > 6 ? label.slice(0, 6) : label,
+        rate: count > 0 ? Math.round((done / count) * 100) : 0,
+      }
+    })
+    .slice(0, 5)
 
   const rateColor =
     rate >= 80
@@ -226,39 +270,53 @@ function SuccessRateChart({ agents }: { agents: any[] }) {
         : "var(--color-danger)"
 
   return (
-    <ChartTile title="성공률" description="에이전트 완료율">
-      <div className="text-2xl font-semibold tabular-nums" style={{ color: rateColor }}>
-        {rate}%
-      </div>
-      <div className="mt-3">
-        {agentBars.length > 0 ? (
-          <div className="flex items-end gap-1" style={{ height: 40 }}>
-            {agentBars.map((bar) => (
-              <div key={bar.name} className="flex flex-1 flex-col items-center gap-0.5">
+    <ChartTile
+      title="완료 안정성"
+      description="최근 실행이 실제 완료까지 이어지는 비율을 기준으로 운영 안정도를 봅니다."
+      meta={{ value: `${completed}/${total}`, label: "완료 / 전체" }}
+    >
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <div className="text-[32px] font-bold leading-none tabular-nums" style={{ color: rateColor }}>
+            {rate}%
+          </div>
+          <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+            runs 기준 완료율
+          </div>
+        </div>
+        <div className="flex min-w-0 flex-1 items-end gap-1.5" style={{ height: 64 }}>
+          {agentBars.length > 0 ? (
+            agentBars.map((bar) => (
+              <div key={bar.label} className="flex flex-1 flex-col items-center gap-2">
                 <div
-                  className="w-full rounded-sm"
+                  className="w-full rounded-[4px]"
                   style={{
-                    height: `${Math.max(bar.rate, 4)}%`,
-                    minHeight: 3,
-                    maxHeight: 36,
-                    backgroundColor: bar.rate >= 80 ? "var(--color-success)" : bar.rate >= 50 ? "var(--color-warning)" : "var(--color-danger)",
-                    opacity: bar.rate === 0 ? 0.25 : 1,
+                    height: `${Math.max(bar.rate, 8)}%`,
+                    minHeight: 8,
+                    maxHeight: 54,
+                    backgroundColor:
+                      bar.rate >= 80
+                        ? "var(--color-success)"
+                        : bar.rate >= 50
+                          ? "var(--color-warning)"
+                          : "var(--color-danger)",
+                    opacity: bar.rate === 0 ? 0.35 : 1,
                   }}
                 />
+                <div className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                  {bar.label || "?"}
+                </div>
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="overflow-hidden rounded-full" style={{ height: 6, backgroundColor: "var(--bg-muted)" }}>
-            <div
-              className="h-full rounded-full"
-              style={{ width: `${rate}%`, backgroundColor: rateColor }}
-            />
-          </div>
-        )}
-      </div>
-      <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-        {completed} / {total} 완료
+            ))
+          ) : (
+            <div className="w-full overflow-hidden rounded-full" style={{ height: 8, backgroundColor: "var(--bg-muted)" }}>
+              <div
+                className="h-full rounded-full"
+                style={{ width: `${rate}%`, backgroundColor: rateColor }}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </ChartTile>
   )

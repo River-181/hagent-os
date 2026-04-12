@@ -59,6 +59,18 @@ const institutionSizeLabelMap: Record<string, string> = {
   large: "대형",
 }
 
+const institutionTypeValueMap: Record<string, string> = {
+  학원: "academy",
+  영어학원: "english_academy",
+  수학학원: "math_academy",
+}
+
+const institutionSizeValueMap: Record<string, string> = {
+  소형: "small",
+  중형: "mid",
+  대형: "large",
+}
+
 function humanizeInstitutionType(value: string | undefined) {
   if (!value) return ""
   return institutionTypeLabelMap[value] ?? value
@@ -67,6 +79,16 @@ function humanizeInstitutionType(value: string | undefined) {
 function humanizeInstitutionSize(value: string | undefined) {
   if (!value) return ""
   return institutionSizeLabelMap[value] ?? value
+}
+
+function normalizeInstitutionType(value: string | undefined) {
+  if (!value) return ""
+  return institutionTypeValueMap[value] ?? value
+}
+
+function normalizeInstitutionSize(value: string | undefined) {
+  if (!value) return ""
+  return institutionSizeValueMap[value] ?? value
 }
 
 function isObjectRecord(value: unknown): value is Record<string, any> {
@@ -253,8 +275,8 @@ export function SettingsPage() {
   const selectedOrg = organizations.find((org) => org.id === selectedOrgId) ?? null
 
   const adaptersQuery = useQuery({
-    queryKey: queryKeys.adapters.all,
-    queryFn: () => adaptersApi.list(),
+    queryKey: [...queryKeys.adapters.all, selectedOrgId ?? "global"],
+    queryFn: () => adaptersApi.list(selectedOrgId ?? undefined),
   })
   const channelsQuery = useQuery({
     queryKey: [...queryKeys.organizations.detail(selectedOrgId ?? ""), "channels", "settings"],
@@ -640,8 +662,8 @@ export function SettingsPage() {
                     description: description.trim() || null,
                     settings: {
                       general: {
-                        institutionType,
-                        institutionSize,
+                        institutionType: normalizeInstitutionType(institutionType),
+                        institutionSize: normalizeInstitutionSize(institutionSize),
                         topGoal,
                         principalName,
                       },

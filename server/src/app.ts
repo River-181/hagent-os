@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url"
 import { existsSync } from "node:fs"
 import type { Db } from "@hagent/db"
 import type { Config } from "./config.js"
-import { healthRoutes } from "./routes/health.js"
+import { getHealthPayload, healthRoutes } from "./routes/health.js"
 import { organizationRoutes } from "./routes/organizations.js"
 import { caseRoutes } from "./routes/cases.js"
 import { agentRoutes } from "./routes/agents.js"
@@ -37,16 +37,27 @@ import { telegramRoutes } from "./routes/telegram.js"
 
 export function createApp(db: Db, config: Config): Express {
   const app = express()
+  const allowedOrigins = [
+    "http://localhost:5173",
+    "http://localhost:5174",
+    "http://localhost:5175",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
+    "http://127.0.0.1:5175",
+  ]
 
   app.use(
     cors({
-      origin: ["http://localhost:5173", "http://localhost:5174"],
+      origin: allowedOrigins,
       credentials: true,
     }),
   )
   app.use(pinoHttp())
   app.use(express.json({ limit: "10mb" }))
 
+  app.get("/", (_req, res) => {
+    res.json(getHealthPayload())
+  })
   app.use("/api/health", healthRoutes(db))
   app.use("/api/organizations", organizationRoutes(db))
   app.use("/api", caseRoutes(db))
