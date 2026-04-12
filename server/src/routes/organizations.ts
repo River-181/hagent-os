@@ -10,6 +10,8 @@ import {
   updateOrganizationSkillConfig,
 } from "../services/skills.js"
 import { bootstrapOrganization as runBootstrap } from "../services/bootstrap.js"
+import { RICH_CASES, CEO_MEMORY } from "../data/rich-demo-seed.js"
+import { createCaseWithRetry } from "../lib/case-create.js"
 
 const organizationPatchSchema = z.object({
   name: z.string().min(2).optional(),
@@ -492,6 +494,67 @@ export function organizationRoutes(db: Db): Router {
       res.json({ ok: true })
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update skill config" })
+    }
+  })
+
+  /** 심사용 풍부한 데모 데이터 시드 — 기존 org에 직접 주입 */
+  router.post("/:orgId/seed-demo", async (req, res) => {
+    try {
+      const { orgId } = req.params
+      const agents = await db.select({ id: schema.agents.id, slug: schema.agents.slug, agentType: schema.agents.agentType })
+        .from(schema.agents)
+        .where(eq(schema.agents.organizationId, orgId))
+
+      const ceoAgent = agents.find((a) => a.slug === "ceo" || a.agentType === "ceo" || a.slug === "orchestrator")
+      const complaintAgent = agents.find((a) => a.slug === "complaint" || a.slug === "counseling")
+      const schedulerAgent = agents.find((a) => a.slug === "scheduler")
+
+      let seeded = 0
+      for (const seed of RICH_CASES) {
+        const daysAgo = seed.daysAgo ?? 0
+        const createdAt = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000)
+        const assigneeAgent =
+          seed.type === "schedule" ? schedulerAgent :
+          (seed.type === "complaint" || seed.type === "refund" || seed.type === "churn") ? complaintAgent :
+          ceoAgent
+        try {
+          const caseRecord = await createCaseWithRetry(db, {
+            organizationId: orgId,
+            title: seed.title,
+            type: seed.type,
+            status: seed.status,
+            severity: seed.severity,
+            source: seed.source as "manual" | "kakao" | "telegram" | "web",
+            agentDraft: seed.agentDraft,
+            assigneeAgentId: assigneeAgent?.id ?? null,
+            metadata: { caseKind: seed.caseKind, seeded: true } as Record<string, unknown>,
+            createdAt,
+            updatedAt: new Date(createdAt.getTime() + (seed.comments.length > 0 ? seed.comments[seed.comments.length - 1].offsetHours * 3600000 : 0)),
+          })
+          for (const comment of seed.comments) {
+            const commentAt = new Date(createdAt.getTime() + comment.offsetHours * 3600000)
+            await db.insert(schema.caseComments).values({
+              caseId: caseRecord.id,
+              authorType: comment.authorType,
+              authorId: comment.authorType === "agent" ? (assigneeAgent?.id ?? "system") : "system",
+              content: comment.content,
+              createdAt: commentAt,
+            }).catch(() => null)
+          }
+          seeded++
+        } catch { /* skip individual failures */ }
+      }
+
+      if (ceoAgent) {
+        await db.update(schema.agents)
+          .set({ memory: CEO_MEMORY as unknown as Record<string, unknown> })
+          .where(eq(schema.agents.id, ceoAgent.id))
+          .catch(() => null)
+      }
+
+      res.json({ ok: true, seeded, agents: agents.length })
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Seed failed" })
     }
   })
 

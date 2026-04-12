@@ -1,48 +1,135 @@
+# HagentOS — AI 학원 운영 에이전트 플랫폼
+
+> KEG 2026 바이브코딩 콘테스트 출품작 | 팀: 이승보 + 김주용
+
 ---
-tags:
-  - area/product
-  - type/reference
-  - status/active
-date: 2026-04-10
-up: "[[_03_제품_MOC]]"
+
+## 🎯 한 줄 설명
+
+학원 원장이 카카오·텔레그램으로 질문하면 AI 에이전트 팀이 케이스를 처리하고, 승인이 필요한 사항만 원장에게 올려 결재받는 운영 플랫폼.
+
 ---
-# App
 
-> 실제 제출 제품 앱 워크스페이스.
-> 현재 `ui/`, `server/`, `packages/` 구조가 존재하고, dev command도 정의되어 있다.
+## 🔴 라이브 데모
 
-## Setup
+> **라이브 URL**: 심사 전 업데이트 예정
 
-- Node: `>=20`
-- Package manager: `pnpm`
-- workspace root: `03_제품/app`
+**심사위원 가이드** → [`JUDGE_DEMO.md`](./JUDGE_DEMO.md)
+
+---
+
+## 🧠 AI 에이전트 팀
+
+| 에이전트 | 역할 |
+|---------|------|
+| **Orchestrator** | 지시 분류 → 에이전트 라우팅 |
+| **Complaint** | 학부모 민원·상담 처리, 답변 초안 |
+| **Scheduler** | 결석·보강·일정 변경, 카카오 안내 |
+| **Retention** | 이탈 위험 감지, 재등록 유도 |
+| **Notification** | 결제·수강료 안내 |
+
+각 에이전트는 **SOUL.md**(역할 정의) · **HEARTBEAT.md**(주기 태스크) · **memory JSON**(누적 인사이트)을 보유하고 학원 상황을 기억합니다.
+
+---
+
+## 📱 채널 연동
+
+- **카카오채널** — 학부모 메시지 → 케이스 자동 생성 → AI 처리 → 카카오 답장
+- **텔레그램** — 운영자 메시지 → 케이스 생성 → AI 응답 → 봇 답장
+- **웹 UI** — 원장 대시보드 (케이스·학생·일정·문서·승인)
+
+---
+
+## 🚀 빠른 시작
+
+### DEMO_MODE (API 키 불필요)
 
 ```bash
-cd "03_제품/app"
+git clone https://github.com/River-181/hagent-os
+cd hagent-os
+cp .env.example .env
+# .env: DEMO_MODE=true 설정
+
 pnpm install
+pnpm build
+
+# 서버 (3200 포트)
+cd server && node dist/index.js &
+# UI (5173 포트)
+cd ../ui && npx vite preview
 ```
 
-## Development
+`DEMO_MODE=true` → Anthropic API 키 없이 mock AI 응답으로 전체 플로우 체험.
 
-루트 스크립트:
+### 실제 AI 사용
 
 ```bash
-cd "03_제품/app"
-pnpm dev      # server
-pnpm dev:ui   # vite ui
+# .env
+ANTHROPIC_API_KEY=sk-ant-...
+DATABASE_URL=postgresql://...    # 미설정 시 embedded PostgreSQL 사용
+
+pnpm install && pnpm build
+node server/dist/index.js
 ```
 
-주요 위치:
-- `03_제품/app/ui` — Vite + React UI
-- `03_제품/app/server` — Express server
-- `03_제품/app/packages/db` — DB package
-- `03_제품/app/packages/shared` — shared package
+---
 
-현재 확인:
-- `package.json`, `pnpm-workspace.yaml`, `ui/vite.config.ts` 존재
-- `node_modules` 존재
-- 이 세션 시점에는 `http://localhost:5173/`가 리스닝 중이지 않았음
+## 📋 환경변수
 
-## Deployment
+```bash
+PORT=3200                        # 서버 포트
+DATABASE_URL=                    # PostgreSQL (미설정 → embedded)
+ANTHROPIC_API_KEY=               # Claude API (미설정 → mock 응답)
+DEMO_MODE=false                  # true = API 키 없이 mock 모드
+DEPLOYMENT_MODE=local_trusted    # local_trusted | authenticated
+```
 
-배포 방식과 최종 런타임 문서는 제품 정본과 함께 계속 갱신한다.
+`.env.example` 파일 참조.
+
+---
+
+## 🏗️ 기술 스택
+
+| 레이어 | 기술 |
+|--------|------|
+| Frontend | React 19 + Vite + TypeScript + Tailwind |
+| Backend | Node.js + Express + TypeScript |
+| Database | PostgreSQL 17 + Drizzle ORM |
+| AI | Anthropic Claude (claude-sonnet-4-6) |
+| Package | pnpm workspace (monorepo) |
+
+---
+
+## 📂 구조
+
+```
+hagent-os/
+├── ui/              React 프론트엔드
+├── server/
+│   ├── src/routes/       API 엔드포인트
+│   ├── src/services/     AI 오케스트레이션
+│   └── src/data/         데모 시드 데이터
+├── packages/
+│   ├── db/               Drizzle 스키마
+│   └── shared/           공유 타입
+├── skills/               k-skill 패키지 레지스트리
+├── Dockerfile
+└── railway.toml
+```
+
+---
+
+## 🤖 AI 활용
+
+- **Claude Code CLI** — 기획·구현·리뷰 전 과정 (세션 로그: `.agent/system/`)
+- **Codex** — 서버 라우트, 서비스 레이어 병렬 구현
+- **Anthropic Claude API** — 실제 에이전트 추론 엔진
+- AI 기획 문서: `.agent/system/` 디렉터리 (공모전 권장 사항 준수)
+
+---
+
+## 🔗 링크
+
+- GitHub: [River-181/hagent-os](https://github.com/River-181/hagent-os)
+- 심사 가이드: [JUDGE_DEMO.md](./JUDGE_DEMO.md)
+- 설계 문서: [docs/design/ui-harness.md](./docs/design/ui-harness.md)
