@@ -6,14 +6,14 @@ RUN npm install -g corepack && corepack enable pnpm
 WORKDIR /app
 
 # 의존성 파일 먼저 복사 (캐시 활용)
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.json ./
 COPY packages/db/package.json ./packages/db/
 COPY packages/shared/package.json ./packages/shared/
 COPY server/package.json ./server/
 
 RUN pnpm install --frozen-lockfile
 
-# 소스 복사
+# 소스 전체 복사
 COPY packages/ ./packages/
 COPY server/ ./server/
 
