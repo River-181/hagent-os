@@ -5,9 +5,11 @@ import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { ToastContext } from "@/components/ToastContext"
 import { activityApi } from "@/api/activity"
+import { casesApi } from "@/api/cases"
 import { notificationsApi } from "@/api/notifications"
 import { organizationsApi } from "@/api/organizations"
 import { projectsApi } from "@/api/projects"
+import { approvalsApi } from "@/api/approvals"
 import { api } from "@/api/client"
 import { queryKeys } from "@/lib/queryKeys"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -28,7 +30,7 @@ import {
   Sparkles,
 } from "lucide-react"
 
-type FeedFilter = "all" | "pending_approvals" | "case_updates" | "agent_completed"
+type FeedFilter = "all" | "pending_approvals" | "case_updates" | "agent_completed" | "inquiry"
 
 type NotificationType =
   | "approval_needed"
@@ -53,6 +55,7 @@ interface ApprovalItem {
   id: string
   status: "pending" | "approved" | "rejected" | "revision_requested"
   payload?: Record<string, unknown> | null
+  decision?: Record<string, unknown> | null
   caseId?: string | null
   caseTitle?: string | null
   createdAt?: string
@@ -95,7 +98,7 @@ type FeedItem =
 
 type ReplayHistoryItem = {
   id: string
-  kind: "kakao" | "telegram" | "project"
+  kind: "kakao" | "telegram" | "project" | "policy" | "law" | "ask"
   title: string
   summary: string
   createdAt: string
@@ -112,8 +115,16 @@ const DEMO_SCENARIOS = {
     summary: "운영 코디네이터 지시를 상담/출결 정리 케이스로 생성합니다.",
   },
   project: {
-    title: "Sample Project 재현",
-    summary: "상반기 프로모션 준비 프로젝트와 하위 케이스 묶음을 생성합니다.",
+    title: "프로모션 프로젝트",
+    summary: "상반기 프로모션 준비 프로젝트와 하위 케이스 묶음을 바로 재현합니다.",
+  },
+  policy: {
+    title: "운영 정책 시나리오",
+    summary: "환불·상담·보강 정책을 직원용 플레이북과 학부모 FAQ로 정리합니다.",
+  },
+  law: {
+    title: "운영/법령 질문",
+    summary: "학원 영업·설립·교습비·환불 핵심을 질문형 inquiry case로 만들고 결과 문서를 남깁니다.",
   },
 } as const
 
@@ -129,10 +140,13 @@ type SampleProjectResponse = {
   cases?: Array<unknown>
 }
 
+type SampleProjectScenario = "project" | "policy"
+
 const FILTERS: { key: FeedFilter; label: string }[] = [
   { key: "all", label: "전체" },
   { key: "pending_approvals", label: "승인대기" },
   { key: "case_updates", label: "케이스 업데이트" },
+  { key: "inquiry", label: "질문 작업" },
   { key: "agent_completed", label: "에이전트 완료" },
 ]
 
@@ -177,7 +191,7 @@ function buildApprovalBody(approval: ApprovalItem) {
 
 export function InboxPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
-  const { selectedOrgId } = useOrganization()
+  const { selectedOrgId, organizations } = useOrganization()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -185,33 +199,44 @@ export function InboxPage() {
 
   const [activeFilter, setActiveFilter] = useState<FeedFilter>("all")
   const [readIds, setReadIds] = useState<Set<string>>(new Set())
-
   useEffect(() => {
     setBreadcrumbs([{ label: "알림함" }])
   }, [setBreadcrumbs])
 
+  const activeOrgId = useMemo(() => {
+    if (!orgPrefix) return selectedOrgId
+    const matchedOrganization = organizations.find(
+      (organization) => organization.prefix === orgPrefix || organization.slug === orgPrefix,
+    )
+    return matchedOrganization?.id ?? selectedOrgId
+  }, [orgPrefix, organizations, selectedOrgId])
+
   const { data: notifications = [], isLoading: notificationsLoading } = useQuery<NotificationItem[]>({
-    queryKey: queryKeys.notifications.list(selectedOrgId ?? ""),
-    queryFn: () => notificationsApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.notifications.list(activeOrgId ?? ""),
+    queryFn: () => notificationsApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
 
   const { data: approvals = [], isLoading: approvalsLoading } = useQuery<ApprovalItem[]>({
-    queryKey: [...queryKeys.approvals.list(selectedOrgId ?? ""), "pending"],
-    queryFn: () => api.get<ApprovalItem[]>(`/organizations/${selectedOrgId}/approvals?status=pending`),
-    enabled: !!selectedOrgId,
+    queryKey: [...queryKeys.approvals.list(activeOrgId ?? ""), "pending"],
+    queryFn: () => api.get<ApprovalItem[]>(`/organizations/${activeOrgId}/approvals?status=pending`),
+    enabled: !!activeOrgId,
+  })
+  const { data: allApprovals = [] } = useQuery<ApprovalItem[]>({
+    queryKey: [...queryKeys.approvals.list(activeOrgId ?? ""), "all-inbox"],
+    queryFn: () => approvalsApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
   const { data: channels = {} } = useQuery<Record<string, any>>({
-    queryKey: [...queryKeys.organizations.detail(selectedOrgId ?? ""), "channels"],
-    queryFn: () => organizationsApi.getChannels(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: [...queryKeys.organizations.detail(activeOrgId ?? ""), "channels"],
+    queryFn: () => organizationsApi.getChannels(activeOrgId!),
+    enabled: !!activeOrgId,
   })
   const { data: activity = [] } = useQuery<ActivityItem[]>({
-    queryKey: queryKeys.activity.list(selectedOrgId ?? ""),
-    queryFn: () => activityApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.activity.list(activeOrgId ?? ""),
+    queryFn: () => activityApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
-
   const replayHistory = useMemo<ReplayHistoryItem[]>(() => {
     if (!orgPrefix) return []
 
@@ -221,7 +246,12 @@ export function InboxPage() {
           ? event.metadata
           : {}
 
-        if (metadata.origin !== "demo_replay") return []
+        const origin = typeof metadata.origin === "string" ? metadata.origin : ""
+        const quickAskOrigin =
+          origin === "demo_replay" ||
+          origin === "inbox_quick_ask" ||
+          origin === "dashboard" ||
+          origin === "manual_check"
 
         if (event.action === "case.created_from_channel" && event.entityId) {
           const scenarioKey = metadata.scenarioKey === "telegram" ? "telegram" : "kakao"
@@ -239,13 +269,38 @@ export function InboxPage() {
           }]
         }
 
-        if (event.action === "project.created_from_instruction" && event.entityId) {
-          const caseCount = typeof metadata.caseCount === "number" ? metadata.caseCount : Number(metadata.caseCount ?? 0)
+        if (
+          event.action === "case.created" &&
+          event.entityId &&
+          quickAskOrigin &&
+          (metadata.scenarioKey === "law-question" ||
+            metadata.generatedBy === "quick-ask" ||
+            metadata.caseKind === "legal-inquiry" ||
+            metadata.caseKind === "quick-ask")
+        ) {
+          const inquiryKind =
+            metadata.caseKind === "legal-inquiry" || metadata.scenarioKey === "law-question" ? "law" : "ask"
           return [{
             id: `activity:${event.id}`,
-            kind: "project",
-            title: DEMO_SCENARIOS.project.title,
-            summary: `${event.entityTitle ?? "Sample Project"} · ${Number.isFinite(caseCount) ? caseCount : 0} cases`,
+            kind: inquiryKind,
+            title:
+              inquiryKind === "law"
+                ? DEMO_SCENARIOS.law.title
+                : "운영 질문",
+            summary: `${event.entityTitle ?? "질문 케이스"} · inquiry`,
+            createdAt: event.createdAt,
+            href: `/${orgPrefix}/cases/${event.entityId}`,
+          }]
+        }
+
+        if (event.action === "project.created_from_instruction" && event.entityId && origin === "demo_replay") {
+          const caseCount = typeof metadata.caseCount === "number" ? metadata.caseCount : Number(metadata.caseCount ?? 0)
+          const scenarioKey = metadata.scenarioKey === "policy" ? "policy" : "project"
+          return [{
+            id: `activity:${event.id}`,
+            kind: scenarioKey,
+            title: scenarioKey === "policy" ? DEMO_SCENARIOS.policy.title : DEMO_SCENARIOS.project.title,
+            summary: `${event.entityTitle ?? "프로모션 프로젝트"} · ${Number.isFinite(caseCount) ? caseCount : 0} cases`,
             createdAt: event.createdAt,
             href: `/${orgPrefix}/projects/${event.entityId}`,
           }]
@@ -287,12 +342,65 @@ export function InboxPage() {
 
   const lastReplayTarget = replayHistory[0] ?? null
 
+  const pendingOutbound = useMemo(() => {
+    return allApprovals.flatMap((approval) => {
+      const decision =
+        approval.decision && typeof approval.decision === "object" && !Array.isArray(approval.decision)
+          ? (approval.decision as Record<string, any>)
+          : {}
+      const sideEffects =
+        decision.sideEffects && typeof decision.sideEffects === "object" && !Array.isArray(decision.sideEffects)
+          ? (decision.sideEffects as Record<string, any>)
+          : {}
+      const kakaoMessage =
+        sideEffects.kakaoMessage && typeof sideEffects.kakaoMessage === "object" && !Array.isArray(sideEffects.kakaoMessage)
+          ? (sideEffects.kakaoMessage as Record<string, any>)
+          : null
+
+      if (!kakaoMessage) return []
+      if (!["ready_to_send", "failed"].includes(String(kakaoMessage.status ?? ""))) return []
+
+      return [{
+        approvalId: approval.id,
+        caseId: approval.caseId ?? null,
+        caseTitle: approval.caseTitle ?? "카카오 회신 승인",
+        status: String(kakaoMessage.status ?? "ready_to_send"),
+        draft: typeof kakaoMessage.draft === "string" ? kakaoMessage.draft : "",
+        chatUrl:
+          typeof kakaoMessage.bridge?.chatUrl === "string"
+            ? kakaoMessage.bridge.chatUrl
+            : typeof kakaoMessage.bridge?.channelUrl === "string"
+              ? kakaoMessage.bridge.channelUrl
+              : "",
+        createdAt: approval.createdAt ?? approval.created_at ?? new Date().toISOString(),
+      }]
+    })
+  }, [allApprovals])
+
   const decisionMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: "approved" | "rejected" }) =>
-      api.patch(`/approvals/${id}`, { status }),
+      approvalsApi.decide(id, status),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.approvals.list(activeOrgId ?? ""), "all-inbox"] })
     },
+  })
+
+  const outboundMutation = useMutation({
+    mutationFn: ({
+      id,
+      mode,
+    }: {
+      id: string
+      mode: "auto" | "confirm_bridge"
+    }) => approvalsApi.send(id, { mode }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: [...queryKeys.approvals.list(activeOrgId ?? ""), "all-inbox"] })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(activeOrgId ?? "") })
+      toast?.success("카카오 회신 상태를 갱신했습니다.")
+    },
+    onError: () => toast?.error("카카오 회신 처리에 실패했습니다."),
   })
 
   const replayInboundMutation = useMutation<ReplayInboundResponse, Error, "kakao" | "telegram">({
@@ -320,9 +428,9 @@ export function InboxPage() {
       })
     },
     onSuccess: (data, channelKey) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.list(selectedOrgId ?? "") })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(selectedOrgId ?? "") })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(selectedOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(activeOrgId ?? "") })
       if (orgPrefix && data?.caseId) {
         const title = channelKey === "kakao" ? DEMO_SCENARIOS.kakao.title : DEMO_SCENARIOS.telegram.title
         const href = `/${orgPrefix}/cases/${data.caseId}`
@@ -333,24 +441,49 @@ export function InboxPage() {
     onError: () => toast?.error("인바운드 replay에 실패했습니다."),
   })
 
-  const sampleProjectMutation = useMutation<SampleProjectResponse>({
-    mutationFn: async () =>
+  const sampleProjectMutation = useMutation<SampleProjectResponse, Error, SampleProjectScenario>({
+    mutationFn: async (scenario) =>
       projectsApi.createFromInstruction({
-        organizationId: selectedOrgId,
-        instruction: "상반기 프로모션 준비해볼까?",
+        organizationId: activeOrgId,
+        instruction:
+          scenario === "policy"
+            ? "우리 학원 환불·상담·보강 운영 정책을 정리해서 직원용 플레이북과 학부모 안내문으로 만들어줘."
+            : "상반기 프로모션 준비해볼까?",
         origin: "demo_replay",
-        scenarioKey: "project",
+        scenarioKey: scenario,
       }),
-    onSuccess: (data) => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.list(selectedOrgId ?? "") })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(selectedOrgId ?? "") })
+    onSuccess: (data, scenario) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.projects.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(activeOrgId ?? "") })
       if (orgPrefix && data?.id) {
         const href = `/${orgPrefix}/projects/${data.id}`
-        toast?.success("Sample project를 생성했습니다.")
+        toast?.success(
+          scenario === "policy" ? "운영 정책 프로젝트를 생성했습니다." : "Sample project를 생성했습니다.",
+        )
         navigate(href)
       }
     },
-    onError: () => toast?.error("Sample project 생성에 실패했습니다."),
+    onError: () => toast?.error("시나리오 프로젝트 생성에 실패했습니다."),
+  })
+
+  const legalQuestionMutation = useMutation({
+    mutationFn: async () =>
+      casesApi.quickAsk(activeOrgId!, {
+        title: "운영/법령 질문",
+        question: "우리나라 학원 영업 법정 현황, 설립/운영 등록, 교습비 게시, 환불 핵심만 운영자 관점으로 정리해줘.",
+        origin: "demo_replay",
+        scenarioKey: "law-question",
+      }),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.notifications.list(activeOrgId ?? "") })
+      toast?.success("운영/법령 질문 케이스를 생성하고 에이전트를 실행했습니다.")
+      if (orgPrefix && data.caseId) {
+        navigate(`/${orgPrefix}/cases/${data.caseId}`)
+      }
+    },
+    onError: () => toast?.error("운영/법령 질문 시나리오 생성에 실패했습니다."),
   })
 
   const feedItems = useMemo<FeedItem[]>(() => {
@@ -385,10 +518,36 @@ export function InboxPage() {
         return [item]
       })
 
-    return [...approvalItems, ...notificationItems].sort((a, b) =>
+    const inquiryItems: FeedItem[] = activity
+      .flatMap((event) => {
+        const metadata =
+          event.metadata && typeof event.metadata === "object" && !Array.isArray(event.metadata)
+            ? (event.metadata as Record<string, unknown>)
+            : {}
+
+        if (event.action !== "case.created" || event.entityType !== "case" || !event.entityId) return []
+        if (metadata.generatedBy !== "quick-ask") return []
+
+        return [{
+          id: `activity:${event.id}`,
+          kind: "notification" as const,
+          category: "inquiry" as const,
+          title: event.entityTitle ?? "운영 질문",
+          body:
+            typeof metadata.caseKind === "string" && metadata.caseKind === "legal-inquiry"
+              ? "질문형 케이스가 생성되었고 답변 문서를 준비합니다."
+              : "질문형 케이스가 생성되었고 운영자 답변 문서를 준비합니다.",
+          createdAt: event.createdAt,
+          read: false,
+          entityType: "case",
+          entityId: event.entityId,
+        }]
+      })
+
+    return [...approvalItems, ...notificationItems, ...inquiryItems].sort((a, b) =>
       b.createdAt.localeCompare(a.createdAt)
     )
-  }, [approvals, notifications])
+  }, [activity, approvals, notifications])
 
   const filteredItems = useMemo(() => {
     if (activeFilter === "all") return feedItems
@@ -499,6 +658,12 @@ export function InboxPage() {
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
               {unreadCount > 0 ? `선택한 탭에 읽지 않은 항목 ${unreadCount}개` : "읽지 않은 항목이 없습니다"}
             </p>
+            {orgPrefix ? (
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => navigate(`/${orgPrefix}/assistant`)}>
+                <Sparkles size={13} />
+                Assistant 열기
+              </Button>
+            ) : null}
           </div>
 
           <div
@@ -511,30 +676,38 @@ export function InboxPage() {
           >
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="font-medium" style={{ color: "var(--text-primary)" }}>Demo Replay</div>
+                <div className="font-medium" style={{ color: "var(--text-primary)" }}>데모 시나리오</div>
                 <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
-                  Tanzania preset에서 Kakao/Telegram 인바운드와 sample project를 바로 재현합니다.
+                  Tanzania preset에서 Kakao/Telegram 인바운드와 프로모션 프로젝트를 바로 재현합니다.
                 </div>
               </div>
               <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
-                preset tools
+                데모 도구
               </Badge>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              <Button size="sm" variant="outline" className="gap-2" disabled={!selectedOrgId || replayInboundMutation.isPending} onClick={() => replayInboundMutation.mutate("kakao")}>
+              <Button size="sm" variant="outline" className="gap-2" disabled={!activeOrgId || replayInboundMutation.isPending} onClick={() => replayInboundMutation.mutate("kakao")}>
                 {replayInboundMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                 Replay Kakao 민원
               </Button>
-              <Button size="sm" variant="outline" className="gap-2" disabled={!selectedOrgId || replayInboundMutation.isPending} onClick={() => replayInboundMutation.mutate("telegram")}>
+              <Button size="sm" variant="outline" className="gap-2" disabled={!activeOrgId || replayInboundMutation.isPending} onClick={() => replayInboundMutation.mutate("telegram")}>
                 {replayInboundMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                 Replay Telegram 상담
               </Button>
-              <Button size="sm" className="gap-2 text-white" style={{ backgroundColor: "var(--color-teal-500)" }} disabled={!selectedOrgId || sampleProjectMutation.isPending} onClick={() => sampleProjectMutation.mutate()}>
+              <Button size="sm" className="gap-2 text-white" style={{ backgroundColor: "var(--color-teal-500)" }} disabled={!activeOrgId || sampleProjectMutation.isPending} onClick={() => sampleProjectMutation.mutate("project")}>
                 {sampleProjectMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                Sample Project 생성
+                프로모션 프로젝트 생성
+              </Button>
+              <Button size="sm" variant="outline" className="gap-2" disabled={!activeOrgId || sampleProjectMutation.isPending} onClick={() => sampleProjectMutation.mutate("policy")}>
+                {sampleProjectMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
+                운영 정책 프로젝트
+              </Button>
+              <Button size="sm" variant="outline" className="gap-2" disabled={!activeOrgId || legalQuestionMutation.isPending} onClick={() => legalQuestionMutation.mutate()}>
+                {legalQuestionMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <MessageSquare size={14} />}
+                운영/법령 질문 예시
               </Button>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
                 <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                   <MessageSquare size={14} />
@@ -560,6 +733,24 @@ export function InboxPage() {
                 </div>
                 <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
                   {DEMO_SCENARIOS.project.summary}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                  <MessageSquare size={14} />
+                  {DEMO_SCENARIOS.policy.title}
+                </div>
+                <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                  {DEMO_SCENARIOS.policy.summary}
+                </p>
+              </div>
+              <div className="rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                  <MessageSquare size={14} />
+                  {DEMO_SCENARIOS.law.title}
+                </div>
+                <p className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                  {DEMO_SCENARIOS.law.summary}
                 </p>
               </div>
             </div>
@@ -603,7 +794,7 @@ export function InboxPage() {
                   </div>
                 ) : (
                   <div className="mt-3 rounded-lg px-3 py-3 text-sm" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
-                    아직 replay로 생성한 항목이 없습니다.
+                    아직 방금 생성한 질문·시나리오 항목이 없습니다.
                   </div>
                 )}
               </div>
@@ -611,7 +802,7 @@ export function InboxPage() {
             {replayHistory.length > 0 && (
               <div className="mt-4 rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
                 <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                  최근 replay 결과
+                  최근 생성 결과
                 </div>
                 <div className="mt-3 space-y-2">
                   {replayHistory.map((item) => (
@@ -670,6 +861,84 @@ export function InboxPage() {
                       </button>
                     )
                   })}
+                </div>
+              )}
+            </div>
+            <div className="mt-4 rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+              <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                Pending outbound
+              </div>
+              {pendingOutbound.length === 0 ? (
+                <div className="mt-3 text-sm" style={{ color: "var(--text-secondary)" }}>
+                  발송 대기 중인 카카오 회신이 없습니다.
+                </div>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {pendingOutbound.map((item) => (
+                    <div
+                      key={item.approvalId}
+                      className="rounded-lg px-3 py-3"
+                      style={{ backgroundColor: "var(--bg-elevated)" }}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                            {item.caseTitle}
+                          </div>
+                          <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                            {item.status === "failed" ? "자동 발송 실패" : "운영자 발송 대기"} · {timeAgo(item.createdAt)}
+                          </div>
+                        </div>
+                        <Badge
+                          className="border-0"
+                          style={{
+                            backgroundColor: item.status === "failed" ? "rgba(239,68,68,0.12)" : "rgba(245,158,11,0.12)",
+                            color: item.status === "failed" ? "var(--color-danger)" : "#d97706",
+                          }}
+                        >
+                          {item.status === "failed" ? "실패" : "발송 준비"}
+                        </Badge>
+                      </div>
+                      {item.draft ? (
+                        <div className="mt-2 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                          {item.draft.length > 120 ? `${item.draft.slice(0, 120)}...` : item.draft}
+                        </div>
+                      ) : null}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {item.caseId && orgPrefix ? (
+                          <Button size="sm" variant="outline" onClick={() => navigate(`/${orgPrefix}/cases/${item.caseId}`)}>
+                            케이스 열기
+                          </Button>
+                        ) : null}
+                        {item.chatUrl ? (
+                          <Button size="sm" variant="outline" onClick={() => window.open(item.chatUrl, "_blank", "noopener,noreferrer")}>
+                            채널 열기
+                          </Button>
+                        ) : null}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={outboundMutation.isPending}
+                          onClick={() => outboundMutation.mutate({ id: item.approvalId, mode: "auto" })}
+                        >
+                          {outboundMutation.isPending && outboundMutation.variables?.id === item.approvalId && outboundMutation.variables?.mode === "auto"
+                            ? <Loader2 size={13} className="animate-spin" />
+                            : "자동 발송"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="text-white"
+                          style={{ backgroundColor: "var(--color-teal-500)" }}
+                          disabled={outboundMutation.isPending}
+                          onClick={() => outboundMutation.mutate({ id: item.approvalId, mode: "confirm_bridge" })}
+                        >
+                          {outboundMutation.isPending && outboundMutation.variables?.id === item.approvalId && outboundMutation.variables?.mode === "confirm_bridge"
+                            ? <Loader2 size={13} className="animate-spin" />
+                            : "전송 완료 처리"}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

@@ -102,50 +102,48 @@ export function ProjectDetailPage() {
   const goals: any[] = project?.goals ?? []
   const activeCases = cases.filter((c) => c.status !== "done")
   const doneCases = cases.filter((c) => c.status === "done")
-  const panelContent = useMemo(() => (
-    <div className="space-y-4">
-      <div>
-        <p className="text-sm font-semibold text-slate-900">프로젝트 운영 요약</p>
-        <p className="mt-1 text-sm text-slate-500">
-          연결 케이스, 산출물, 추천 역할 기준으로 프로젝트 진행 상태를 확인합니다.
-        </p>
-      </div>
-
-      <div className="grid gap-3">
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs text-slate-500">진행 중 케이스</p>
-          <p className="mt-1 text-xl font-semibold text-slate-900">{activeCases.length}건</p>
-        </div>
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <p className="text-xs text-slate-500">연결 산출물</p>
-          <p className="mt-1 text-xl font-semibold text-slate-900">{documents.length}건</p>
-        </div>
-      </div>
-
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <p className="text-xs font-semibold text-slate-600">AI 팀 준비도</p>
-        <div className="mt-3 space-y-2 text-sm text-slate-700">
-          <div className="flex items-center justify-between gap-3">
-            <span>추천 역할</span>
-            <span className="font-medium text-slate-900">{recommendedRoles.length}개</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>추가 고용 필요</span>
-            <span className="font-medium text-slate-900">{missingRecommendedRoles.length}개</span>
-          </div>
-          <div className="flex items-center justify-between gap-3">
-            <span>완료 케이스</span>
-            <span className="font-medium text-slate-900">{doneCases.length}건</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  ), [activeCases.length, documents.length, doneCases.length, missingRecommendedRoles.length, recommendedRoles.length])
-
   useEffect(() => {
-    setPanelContent(panelContent)
+    setPanelContent(
+      <div className="space-y-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">프로젝트 운영 요약</p>
+          <p className="mt-1 text-sm text-slate-500">
+            연결 케이스, 산출물, 추천 역할 기준으로 프로젝트 진행 상태를 확인합니다.
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">진행 중 케이스</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">{activeCases.length}건</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">연결 산출물</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">{documents.length}건</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-semibold text-slate-600">AI 팀 준비도</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <div className="flex items-center justify-between gap-3">
+              <span>추천 역할</span>
+              <span className="font-medium text-slate-900">{recommendedRoles.length}개</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>추가 고용 필요</span>
+              <span className="font-medium text-slate-900">{missingRecommendedRoles.length}개</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>완료 케이스</span>
+              <span className="font-medium text-slate-900">{doneCases.length}건</span>
+            </div>
+          </div>
+        </div>
+      </div>,
+    )
     return () => setPanelContent(null)
-  }, [panelContent, setPanelContent])
+  }, [activeCases.length, documents.length, doneCases.length, missingRecommendedRoles.length, recommendedRoles.length, setPanelContent])
 
   if (isLoading) {
     return (

@@ -6,6 +6,7 @@ import { BreadcrumbBar } from "./BreadcrumbBar"
 import { PropertiesPanel } from "./PropertiesPanel"
 import { MobileTabBar } from "./MobileTabBar"
 import { GlobalCommandPalette } from "./CommandPalette"
+import { AssistantLauncher } from "./AssistantLauncher"
 import { useSidebar } from "@/context/SidebarContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { useSSE } from "@/hooks/useSSE"
@@ -76,6 +77,7 @@ export function Layout() {
 
       {/* Global Command Palette (Cmd+K / Ctrl+K) */}
       <GlobalCommandPalette />
+      <AssistantLauncher />
     </div>
   )
 }

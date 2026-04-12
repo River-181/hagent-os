@@ -1,3 +1,5 @@
+import { spawn, spawnSync } from "node:child_process"
+import { fileURLToPath } from "node:url"
 import Anthropic from "@anthropic-ai/sdk"
 
 export interface RuntimeResponse {
@@ -16,12 +18,159 @@ export interface RuntimeOptions {
 }
 
 let anthropicClient: Anthropic | null = null
+const repoRoot = fileURLToPath(new URL("../../../", import.meta.url))
 
 function getAnthropicClient() {
   if (!anthropicClient) {
     anthropicClient = new Anthropic()
   }
   return anthropicClient
+}
+
+function isJsonObjectLine(line: string) {
+  const trimmed = line.trim()
+  return trimmed.startsWith("{") && trimmed.endsWith("}")
+}
+
+function extractCodexContentFromJsonLines(output: string) {
+  let latest = ""
+
+  for (const line of output.split(/\r?\n/)) {
+    if (!isJsonObjectLine(line)) continue
+
+    try {
+      const event = JSON.parse(line) as {
+        type?: string
+        item?: {
+          type?: string
+          text?: string
+          content?: Array<{ text?: string }>
+        }
+      }
+
+      if (event.type !== "item.completed" || event.item?.type !== "agent_message") continue
+
+      if (typeof event.item.text === "string" && event.item.text.trim()) {
+        latest = event.item.text.trim()
+        continue
+      }
+
+      if (Array.isArray(event.item.content)) {
+        const content = event.item.content
+          .map((item) => item.text ?? "")
+          .join("\n")
+          .trim()
+        if (content) latest = content
+      }
+    } catch {
+      // ignore non-codex json lines
+    }
+  }
+
+  return latest
+}
+
+function hasCodexQauthSessionSync() {
+  const result = spawnSync("codex", ["login", "status"], {
+    encoding: "utf8",
+    timeout: 5000,
+  })
+
+  if (result.error) return false
+  const combined = `${result.stdout ?? ""}\n${result.stderr ?? ""}`
+  return /Logged in using ChatGPT|logged in|authenticated/i.test(combined)
+}
+
+async function callCodexCli(
+  systemPrompt: string,
+  userMessage: string,
+  options: RuntimeOptions,
+): Promise<RuntimeResponse> {
+  const connected = hasCodexQauthSessionSync()
+  if (!connected) {
+    return {
+      ...getMockResponse(systemPrompt, userMessage),
+      adapterType: options.adapterType ?? "codex_qauth",
+      model: options.model ?? "gpt-5-codex",
+      degraded: true,
+    }
+  }
+
+  const instruction = [
+    "You are executing a HagentOS runtime request.",
+    "Do not modify files, inspect the repository, or take tool actions unless explicitly required.",
+    "Respond only with the final answer content that satisfies the request.",
+    "",
+    "<SYSTEM_PROMPT>",
+    systemPrompt,
+    "</SYSTEM_PROMPT>",
+    "",
+    "<USER_MESSAGE>",
+    userMessage,
+    "</USER_MESSAGE>",
+  ].join("\n")
+
+  const args = [
+    "exec",
+    "--json",
+    "-m",
+    options.model ?? "gpt-5-codex",
+    "-s",
+    "workspace-write",
+    "-C",
+    repoRoot,
+    instruction,
+  ]
+
+  const { output, exitCode } = await new Promise<{ output: string; exitCode: number }>((resolve) => {
+    const child = spawn("codex", args, {
+      cwd: repoRoot,
+      env: {
+        ...process.env,
+        TERM: process.env.TERM ?? "dumb",
+      },
+    })
+
+    let stdout = ""
+    let stderr = ""
+
+    child.stdout.on("data", (chunk) => {
+      stdout += String(chunk)
+    })
+    child.stderr.on("data", (chunk) => {
+      stderr += String(chunk)
+    })
+    child.on("close", (code) => {
+      resolve({
+        output: `${stdout}\n${stderr}`,
+        exitCode: code ?? 0,
+      })
+    })
+    child.on("error", () => {
+      resolve({
+        output: `${stdout}\n${stderr}`,
+        exitCode: 1,
+      })
+    })
+  })
+
+  const content = extractCodexContentFromJsonLines(output)
+  if (exitCode !== 0 || !content) {
+    return {
+      ...getMockResponse(systemPrompt, userMessage),
+      adapterType: options.adapterType ?? "codex_qauth",
+      model: options.model ?? "gpt-5-codex",
+      degraded: true,
+    }
+  }
+
+  return {
+    content,
+    inputTokens: 0,
+    outputTokens: 0,
+    adapterType: options.adapterType ?? "codex_qauth",
+    model: options.model ?? "gpt-5-codex",
+  }
 }
 
 function parseInstruction(userMessage: string) {
@@ -214,6 +363,12 @@ async function callClaude(systemPrompt: string, userMessage: string, options: Ru
 
 async function callCodex(systemPrompt: string, userMessage: string, options: RuntimeOptions): Promise<RuntimeResponse> {
   if (!process.env.OPENAI_API_KEY) {
+    if (hasCodexQauthSessionSync()) {
+      return callCodexCli(systemPrompt, userMessage, {
+        ...options,
+        adapterType: options.adapterType ?? "codex_local",
+      })
+    }
     return {
       ...getMockResponse(systemPrompt, userMessage),
       adapterType: options.adapterType ?? "codex_local",
@@ -277,6 +432,9 @@ export async function runWithAdapter(
   const adapterType = options.adapterType ?? "mock_local"
   if (adapterType === "claude_local") {
     return callClaude(systemPrompt, userMessage, options)
+  }
+  if (adapterType === "codex_qauth") {
+    return callCodexCli(systemPrompt, userMessage, options)
   }
   if (adapterType === "codex_local") {
     return callCodex(systemPrompt, userMessage, options)

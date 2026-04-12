@@ -41,7 +41,28 @@ const SYSTEM_PROMPT = `당신은 탄자니아 영어학원의 민원 처리 전�
 - normal: 2-3일 내 처리
 - low: 일반 문의`
 
+const LEGAL_INQUIRY_SYSTEM_PROMPT = `당신은 학원 운영자의 질문을 정리해 주는 학원 운영·법령 보조 AI입니다.
+
+## 역할
+- 학원 설립/운영/교습비/환불/상담 정책 관련 질문에 짧고 정확하게 답합니다.
+- 운영자가 바로 이해할 수 있게 핵심만 정리합니다.
+- 법령 근거가 있으면 요약해서 함께 제시합니다.
+
+## 출력 형식
+반드시 아래 JSON 형식만 출력하세요. 다른 텍스트는 포함하지 마세요.
+
+{
+  "category": "법률질문|운영정책|일반문의",
+  "urgency": "normal|low",
+  "summary": "질문 핵심을 1-2문장으로 요약",
+  "suggestedReply": "운영자에게 보여줄 간략한 답변 본문",
+  "requiresApproval": false,
+  "reasoning": "이 답변을 구성한 이유",
+  "suggestedActions": ["후속 조치 1", "후속 조치 2"]
+}`
+
 export async function runComplaintAgent(input: ComplaintAgentInput): Promise<ComplaintAgentOutput> {
+  const isInquiry = input.caseType === "inquiry" || input.caseKind === "legal-inquiry" || input.caseKind === "quick-ask"
   const studentInfo = input.studentId
     ? `연관 학생 ID: ${input.studentId}`
     : "연관 학생 정보 없음"
@@ -62,7 +83,21 @@ export async function runComplaintAgent(input: ComplaintAgentInput): Promise<Com
 - summary: ${legalContext.summary ?? legalContext.error ?? "없음"}`
     : ""
 
-  const userMessage = `다음 민원을 분석하고 처리 방안을 JSON으로 출력해주세요.
+  const userMessage = isInquiry
+    ? `다음 질문에 운영자 관점의 답변을 JSON으로 출력해주세요.
+
+질문 제목: ${input.title}
+질문 내용: ${input.description || "(내용 없음)"}
+${reporterInfo}
+${studentInfo}
+${input.allowedChannels?.length ? `허용 채널: ${input.allowedChannels.join(", ")}` : ""}
+${input.runtimeSkills?.length ? `장착된 스킬: ${input.runtimeSkills.map((skill) => `${skill.displayName}(${skill.slug})`).join(", ")}` : ""}
+${input.followUpContext ? `\n후속 지시/대화 맥락:\n${input.followUpContext}\n` : ""}
+${input.skillContext ? `\n실행 스킬 번들:\n${input.skillContext}\n` : ""}
+${legalContextBlock}
+
+학원 운영자가 바로 읽고 판단할 수 있도록 핵심만 간단히 정리해주세요.`
+    : `다음 민원을 분석하고 처리 방안을 JSON으로 출력해주세요.
 
 민원 제목: ${input.title}
 민원 내용: ${input.description || "(내용 없음)"}
@@ -76,7 +111,7 @@ ${legalContextBlock}
 
 위 민원을 분류하고, 학원 방침에 맞는 답변 초안을 작성해주세요.`
 
-  const response = await runWithAdapter(SYSTEM_PROMPT, userMessage, {
+  const response = await runWithAdapter(isInquiry ? LEGAL_INQUIRY_SYSTEM_PROMPT : SYSTEM_PROMPT, userMessage, {
     adapterType: input.adapterType ?? undefined,
     model: input.model ?? undefined,
     maxTokens: 2048,
@@ -100,7 +135,7 @@ ${legalContextBlock}
         urgency: parsed.urgency,
         summary: parsed.summary,
         suggestedReply: parsed.suggestedReply,
-        requiresApproval: parsed.requiresApproval ?? true,
+        requiresApproval: parsed.requiresApproval ?? !isInquiry,
         legalBasis: legalContext
           ? {
               source: legalContext.source,
@@ -118,12 +153,13 @@ ${legalContextBlock}
     return {
       caseId: input.caseId,
       analysis: {
-        category: "기타",
+        category: isInquiry ? "법률질문" : "기타",
         urgency: "normal",
-        summary: `${input.title}에 대한 민원이 접수되었습니다.`,
-        suggestedReply:
-          "안녕하세요. 소중한 의견을 주셔서 감사합니다. 담당자가 검토 후 빠른 시일 내에 연락드리겠습니다.",
-        requiresApproval: true,
+        summary: isInquiry ? `${input.title}에 대한 질문을 정리했습니다.` : `${input.title}에 대한 민원이 접수되었습니다.`,
+        suggestedReply: isInquiry
+          ? "관련 운영 기준과 법령 근거를 확인한 뒤 핵심만 다시 정리해 드리겠습니다."
+          : "안녕하세요. 소중한 의견을 주셔서 감사합니다. 담당자가 검토 후 빠른 시일 내에 연락드리겠습니다.",
+        requiresApproval: !isInquiry,
         legalBasis: legalContext
           ? {
               source: legalContext.source,

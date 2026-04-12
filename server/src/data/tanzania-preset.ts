@@ -109,4 +109,6 @@ export const TANZANIA_PRESET = {
     ],
   },
   sampleProjectInstruction: "상반기 프로모션 준비해볼까?",
+  samplePolicyInstruction: "우리 학원 환불·상담·보강 운영 정책을 정리해서 직원용 플레이북과 학부모 안내문으로 만들어줘.",
+  sampleLegalQuestion: "우리나라 학원 영업 법정 현황, 설립/운영 등록, 교습비 게시, 환불 핵심만 운영자 관점으로 정리해줘.",
 } as const

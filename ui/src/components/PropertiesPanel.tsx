@@ -25,7 +25,7 @@ export function PropertiesPanel() {
           className="text-sm font-semibold"
           style={{ color: "var(--text-primary)" }}
         >
-          속성
+          운영 요약
         </span>
         <button
           onClick={togglePanel}
@@ -39,9 +39,14 @@ export function PropertiesPanel() {
       {/* Panel content */}
       <div className="flex-1 p-4">
         {panelContent ?? (
-          <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-            항목을 선택하면 여기에 속성이 표시됩니다.
-          </p>
+          <div className="space-y-3">
+            <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+              아직 선택된 항목이 없습니다.
+            </p>
+            <p className="text-sm leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
+              학생, 일정, 케이스, 문서, AI 팀을 선택하면 운영 요약과 바로 실행할 작업이 여기에 표시됩니다.
+            </p>
+          </div>
         )}
       </div>
     </div>

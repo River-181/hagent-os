@@ -89,18 +89,24 @@ ${scheduleContext || "- 없음"}
 위 요청을 해결할 상담/보강/대체 일정 초안을 JSON으로 제안하세요.`,
     {
       adapterType: input.adapterType ?? "mock_local",
-      model: input.model,
+      model: input.model ?? undefined,
       maxTokens: 1024,
     },
   )
 
   try {
     const parsed = JSON.parse(response.content.trim()) as SchedulerAgentOutput["plan"]
+    const suggestedSchedule = parsed.suggestedSchedule
+      ? {
+          ...parsed.suggestedSchedule,
+          room: parsed.suggestedSchedule.room ?? undefined,
+        }
+      : undefined
     return {
       caseId: input.caseId,
       plan: {
         summary: parsed.summary,
-        suggestedSchedule: parsed.suggestedSchedule,
+        suggestedSchedule,
         calendarAction: parsed.calendarAction,
         requiresApproval: parsed.requiresApproval ?? true,
         suggestedActions: parsed.suggestedActions ?? [],

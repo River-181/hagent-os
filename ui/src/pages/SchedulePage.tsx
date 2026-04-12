@@ -1,9 +1,12 @@
 // v0.4.0
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
+import { useNavigate, useParams } from "react-router-dom"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
+import { usePanel } from "@/context/PanelContext"
 import { schedulesApi } from "@/api/schedules"
+import { casesApi } from "@/api/cases"
 import { api } from "@/api/client"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
@@ -991,6 +994,9 @@ function InstructorList({ schedules }: { schedules: ScheduleItem[] }) {
 export function SchedulePage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
+  const { setPanelContent } = usePanel()
+  const navigate = useNavigate()
+  const { orgPrefix } = useParams<{ orgPrefix: string }>()
 
   const [viewMode, setViewMode] = useState<"weekly" | "monthly">("weekly")
   const [currentDate, setCurrentDate] = useState(new Date())
@@ -1003,13 +1009,32 @@ export function SchedulePage() {
   const [newScheduleOpen, setNewScheduleOpen] = useState(false)
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "스케줄" }])
+    setBreadcrumbs([{ label: "일정" }])
   }, [setBreadcrumbs])
 
   const { data: schedules = [], isLoading, isError } = useQuery({
     queryKey: selectedOrgId ? queryKeys.schedules.list(selectedOrgId) : [],
     queryFn: () => schedulesApi.list(selectedOrgId!),
     enabled: !!selectedOrgId,
+  })
+
+  const { data: studentSchedules = [] } = useQuery({
+    queryKey: ["student-schedules", selectedOrgId],
+    enabled: !!selectedOrgId,
+    queryFn: () => api.get<StudentScheduleRow[]>(`/organizations/${selectedOrgId}/student-schedules`),
+  })
+
+  const { data: cases = [] } = useQuery<any[]>({
+    queryKey: queryKeys.cases.list(selectedOrgId ?? ""),
+    enabled: !!selectedOrgId,
+    queryFn: async () => {
+      if (!selectedOrgId) return []
+      try {
+        return await casesApi.list(selectedOrgId)
+      } catch {
+        return []
+      }
+    },
   })
 
   const filteredSchedules = typeFilter
@@ -1053,16 +1078,152 @@ export function SchedulePage() {
     ? formatWeekLabel(weekDates)
     : formatMonthLabel(currentDate)
 
+  const panelContent = useMemo(() => {
+    if (!selectedSchedule) {
+      const counselingCount = (schedules as ScheduleItem[]).filter((item) => item.type === "counseling").length
+      return (
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">일정 운영 요약</p>
+            <p className="mt-1 text-sm text-slate-500">
+              일정을 선택하면 담당 직원, 연결 학생, 관련 케이스와 후속 작업을 확인할 수 있습니다.
+            </p>
+          </div>
+
+          <div className="grid gap-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs text-slate-500">전체 일정</p>
+              <p className="mt-1 text-xl font-semibold text-slate-900">{(schedules as ScheduleItem[]).length}개</p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-xs text-amber-700">상담 일정</p>
+              <p className="mt-1 text-xl font-semibold text-amber-900">{counselingCount}개</p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-semibold text-slate-600">일정 유형</p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {Object.values(TYPE_COLORS).slice(0, 6).map((item) => (
+                <span key={item.label} className="rounded-full px-2.5 py-1 text-xs font-medium" style={{ backgroundColor: item.bg, color: item.text }}>
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    const selectedStudentIds = Array.from(
+      new Set(
+        (studentSchedules as StudentScheduleRow[])
+          .filter((item) => item.scheduleId === selectedSchedule.id)
+          .map((item) => item.studentId)
+      )
+    )
+    const linkedCaseCount = (cases as any[]).filter((item) => selectedStudentIds.includes(String(item.studentId ?? ""))).length
+    const linkedCases = (cases as any[]).filter((item) => selectedStudentIds.includes(String(item.studentId ?? ""))).slice(0, 3)
+    const typeInfo = getTypeColor(selectedSchedule.type)
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <p className="text-lg font-semibold text-slate-900">{selectedSchedule.title}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {typeInfo.label} · {formatTimeRange(selectedSchedule.startTime, selectedSchedule.endTime)}
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">담당 직원/강사</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">{selectedSchedule.instructor?.name ?? "미지정"}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">연결 학생</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">{selectedStudentIds.length}명</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-semibold text-slate-600">운영 연결</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <div className="flex items-center justify-between gap-3">
+              <span>일정 유형</span>
+              <span className="font-medium text-slate-900">{typeInfo.label}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>강의실</span>
+              <span className="font-medium text-slate-900">{selectedSchedule.room ?? "미지정"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>관련 케이스</span>
+              <span className="font-medium text-slate-900">{linkedCaseCount}건</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-600">바로 실행</p>
+          <div className="mt-3 flex flex-col gap-2">
+            <Button size="sm" variant="outline" className="justify-start" onClick={() => setDetailOpen(true)}>
+              일정 상세/수정
+            </Button>
+            <Button size="sm" variant="outline" className="justify-start" onClick={() => setNewScheduleOpen(true)}>
+              후속 일정 추가
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-600">관련 케이스 바로가기</p>
+          <div className="mt-3 space-y-2">
+            {linkedCases.length > 0 ? linkedCases.map((item: any) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => orgPrefix && navigate(`/${orgPrefix}/cases/${item.id}`)}
+                className="w-full rounded-xl bg-slate-50 px-3 py-2 text-left"
+              >
+                <p className="text-sm font-medium text-slate-900">{item.title}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{item.identifier ?? item.type ?? "케이스"}</p>
+              </button>
+            )) : (
+              <p className="text-sm text-slate-500">연결된 케이스가 없습니다.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }, [cases, navigate, orgPrefix, schedules, selectedSchedule, studentSchedules])
+
+  const panelContentKey = useMemo(
+    () =>
+      JSON.stringify({
+        selectedScheduleId: selectedSchedule?.id ?? null,
+        scheduleCount: (schedules as ScheduleItem[]).length,
+        studentScheduleCount: (studentSchedules as StudentScheduleRow[]).length,
+        caseCount: (cases as any[]).length,
+      }),
+    [cases, schedules, selectedSchedule?.id, studentSchedules],
+  )
+
+  useEffect(() => {
+    setPanelContent(panelContent)
+    return () => setPanelContent(null)
+  }, [panelContentKey, setPanelContent])
+
   return (
     <div className="p-6">
       {/* Header */}
       <div className="flex flex-col gap-4 mb-6 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold" style={{ color: "var(--text-primary)" }}>
-            일정 관리
+            일정
           </h1>
           <p className="text-sm mt-0.5" style={{ color: "var(--text-secondary)" }}>
-            수업, 상담, 등하원, 법정기한 등 모든 일정
+            수업, 상담, 보강, 차량, 행정 일정을 한 화면에서 운영합니다.
           </p>
         </div>
 

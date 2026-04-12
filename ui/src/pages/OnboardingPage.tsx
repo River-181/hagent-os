@@ -26,10 +26,16 @@ const STEPS = [
 
 const MODEL_OPTIONS = [
   {
+    value: "codex_qauth",
+    model: "gpt-5-codex",
+    label: "Codex QAuth (Recommended)",
+    description: "ChatGPT 로그인 기반 실사용 실행",
+  },
+  {
     value: "codex_local",
     model: "gpt-5-codex",
-    label: "Codex (Recommended)",
-    description: "실사용 테스트 기준 모델",
+    label: "Codex API Key",
+    description: "OPENAI_API_KEY 기반 실행",
   },
   {
     value: "claude_local",
@@ -165,7 +171,7 @@ export function OnboardingPage() {
   const [starterProjectName, setStarterProjectName] = useState("운영 시작")
   const [setupProjectName, setSetupProjectName] = useState("Academy Setup")
   const [initialInstruction, setInitialInstruction] = useState("오늘 들어온 민원과 상담 요청, 이번 주 일정 이슈를 우선순위대로 정리해줘.")
-  const [selectedAdapterType, setSelectedAdapterType] = useState<(typeof MODEL_OPTIONS)[number]["value"]>("codex_local")
+  const [selectedAdapterType, setSelectedAdapterType] = useState<(typeof MODEL_OPTIONS)[number]["value"]>("codex_qauth")
 
   const [kakaoEnabled, setKakaoEnabled] = useState(true)
   const [kakaoChannelId, setKakaoChannelId] = useState("tanzania-channel")

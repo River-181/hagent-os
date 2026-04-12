@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { createCaseWithRetry } from "../lib/case-create.js"
+import { enrichDocuments } from "../services/document-links.js"
 
 function createProjectBreakdown(instruction: string) {
   const normalized = instruction.toLowerCase()
@@ -90,6 +91,7 @@ export function projectRoutes(db: Db): Router {
       const documents = (await db.select().from(schema.documents)
         .where(eq(schema.documents.organizationId, project.organizationId)))
         .filter((document: typeof schema.documents.$inferSelect) => Array.isArray(document.tags) && document.tags.includes(`project:${project.id}`))
+      const enrichedDocuments = enrichDocuments(documents, { cases, projects: [project] })
 
       const projectActivity = (await db.select().from(schema.activityEvents)
         .where(eq(schema.activityEvents.organizationId, project.organizationId)))
@@ -112,7 +114,7 @@ export function projectRoutes(db: Db): Router {
       res.json({
         ...project,
         cases,
-        documents,
+        documents: enrichedDocuments,
         goals,
         recommendedRoles,
         sourceInstruction: typeof creationMetadata.instruction === "string" ? creationMetadata.instruction : null,
@@ -211,7 +213,7 @@ export function projectRoutes(db: Db): Router {
       res.status(201).json({
         ...project,
         cases: createdCases,
-        documents: [brief],
+        documents: enrichDocuments([brief], { cases: createdCases, projects: [project] }),
         recommendedRoles: breakdown.recommendedRoles,
       })
     } catch {

@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process"
 import fs from "node:fs"
 import { fileURLToPath } from "node:url"
 
@@ -14,7 +15,7 @@ export interface IntegrationStatus {
 }
 
 export interface AdapterStatus {
-  key: "codex_local" | "claude_local" | "mock_local"
+  key: "codex_qauth" | "codex_local" | "claude_local" | "mock_local"
   label: string
   installed: boolean
   connected: boolean
@@ -23,6 +24,8 @@ export interface AdapterStatus {
   availableModels: string[]
   description: string
   missingEnv: string[]
+  statusSummary: string
+  statusDetail: string
 }
 
 export interface PluginStatus {
@@ -60,11 +63,23 @@ function which(command: string) {
   return null
 }
 
+function hasCodexQauthSession() {
+  const result = spawnSync("codex", ["login", "status"], {
+    encoding: "utf8",
+    timeout: 5000,
+  })
+
+  if (result.error) return false
+  const combined = `${result.stdout ?? ""}\n${result.stderr ?? ""}`
+  return /Logged in using ChatGPT|logged in|authenticated/i.test(combined)
+}
+
 export function getIntegrationStatuses(): IntegrationStatus[] {
   const lawEnv = customEnvStatus(["LAW_OC", "KOREAN_LAW_API_KEY"], "LAW_OC")
   const calendarEnv = envStatus(["GOOGLE_CALENDAR_ACCESS_TOKEN"])
   const kakaoEnv = customEnvStatus(["KAKAO_REST_API_KEY", "KAKAO_ADMIN_KEY"], "KAKAO_REST_API_KEY")
   const kakaoOutboundEnv = envStatus(["KAKAO_OUTBOUND_PROVIDER_URL"])
+  const telegramOutboundEnv = customEnvStatus(["TELEGRAM_BOT_TOKEN", "TELEGRAM_BOT_API_TOKEN"], "TELEGRAM_BOT_TOKEN")
   const smsEnv = envStatus(["ALIGO_API_KEY", "ALIGO_USER_ID"])
   const lawCliPath = fileURLToPath(
     new URL("../../../integrations/korean-law-mcp/build/cli.js", import.meta.url),
@@ -116,6 +131,17 @@ export function getIntegrationStatuses(): IntegrationStatus[] {
       description: "승인 후 카카오 자동 회신 provider",
     },
     {
+      key: "telegram-outbound",
+      label: "Telegram Outbound",
+      category: "messaging",
+      installed: true,
+      connected: telegramOutboundEnv.connected,
+      inactive: !telegramOutboundEnv.connected,
+      missingEnv: telegramOutboundEnv.missingEnv,
+      command: null,
+      description: "승인 후 텔레그램 자동 회신 또는 운영자 브리지",
+    },
+    {
       key: "aligo-sms",
       label: "Aligo SMS",
       category: "messaging",
@@ -132,18 +158,44 @@ export function getIntegrationStatuses(): IntegrationStatus[] {
 export function getAdapterStatuses(): AdapterStatus[] {
   const openaiEnv = envStatus(["OPENAI_API_KEY"])
   const anthropicEnv = envStatus(["ANTHROPIC_API_KEY"])
+  const codexQauthConnected = hasCodexQauthSession()
 
   return [
+    {
+      key: "codex_qauth",
+      label: "Codex QAuth",
+      installed: Boolean(which("codex")),
+      connected: codexQauthConnected,
+      inactive: false,
+      defaultModel: "gpt-5-codex",
+      availableModels: ["gpt-5-codex", "gpt-5.4", "gpt-5.4-mini"],
+      description: "ChatGPT 로그인 기반 Codex 실행",
+      missingEnv: codexQauthConnected ? [] : ["Codex qauth login"],
+      statusSummary: codexQauthConnected ? "qauth logged in" : "qauth login required",
+      statusDetail: codexQauthConnected
+        ? "codex exec can run with the current ChatGPT session"
+        : "run `codex login` and authenticate with ChatGPT before using this adapter",
+    },
     {
       key: "codex_local",
       label: "Codex Local",
       installed: true,
-      connected: openaiEnv.connected,
+      connected: openaiEnv.connected || codexQauthConnected,
       inactive: false,
       defaultModel: "gpt-5-codex",
       availableModels: ["gpt-5-codex", "gpt-5.4", "gpt-5.4-mini"],
-      description: "기본 실사용 테스트 어댑터",
-      missingEnv: openaiEnv.missingEnv,
+      description: "API key 또는 qauth를 사용하는 Codex 실행",
+      missingEnv: openaiEnv.connected || codexQauthConnected ? [] : ["OPENAI_API_KEY 또는 Codex qauth login"],
+      statusSummary: openaiEnv.connected
+        ? "openai api key connected"
+        : codexQauthConnected
+          ? "falling back to codex qauth"
+          : "no codex auth configured",
+      statusDetail: openaiEnv.connected
+        ? "backend can call the OpenAI Responses API directly"
+        : codexQauthConnected
+          ? "backend will use the active ChatGPT session through `codex exec`"
+          : "set OPENAI_API_KEY or log in with Codex qauth",
     },
     {
       key: "claude_local",
@@ -155,6 +207,10 @@ export function getAdapterStatuses(): AdapterStatus[] {
       availableModels: ["claude-sonnet-4-6", "claude-haiku-4-5"],
       description: "fallback 어댑터",
       missingEnv: anthropicEnv.missingEnv,
+      statusSummary: anthropicEnv.connected ? "anthropic api key connected" : "anthropic key missing",
+      statusDetail: anthropicEnv.connected
+        ? "backend can call Anthropic directly"
+        : "set ANTHROPIC_API_KEY to enable Claude fallback",
     },
     {
       key: "mock_local",
@@ -166,6 +222,8 @@ export function getAdapterStatuses(): AdapterStatus[] {
       availableModels: ["mock-local"],
       description: "실연동 미설정 시 degraded mode",
       missingEnv: [],
+      statusSummary: "degraded fallback",
+      statusDetail: "used only when live adapters are unavailable",
     },
   ]
 }

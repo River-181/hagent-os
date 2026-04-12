@@ -1,15 +1,16 @@
 // v0.3.0
-import { useEffect, useState, useContext } from "react"
+import { useEffect, useState, useContext, useMemo } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
+import { usePanel } from "@/context/PanelContext"
 import { agentsApi } from "@/api/agents"
 import { casesApi } from "@/api/cases"
 import { adaptersApi } from "@/api/adapters"
+import { costsApi } from "@/api/costs"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
@@ -352,6 +353,10 @@ function BudgetBar({
 function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory: any }) {
   const queryClient = useQueryClient()
   const { selectedOrgId } = useOrganization()
+  const { data: runtimeSkills = [] } = useQuery<any[]>({
+    queryKey: ["agents", agent.id, "skills", "overview"],
+    queryFn: () => agentsApi.listSkills(agent.id),
+  })
   const currentRun = runs.find((r) => r.status === "running")
   const sortedRuns = [...runs].sort((a, b) => {
     const aTime = a.startedAt ?? a.started_at ?? a.createdAt ?? ""
@@ -594,6 +599,49 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
           ))}
         </div>
       )}
+
+      <div
+        className="rounded-xl p-4"
+        style={{ backgroundColor: "var(--bg-elevated)", border: "1px solid var(--border-default)" }}
+      >
+        <div className="mb-2 flex items-center gap-2">
+          <Zap size={14} style={{ color: "var(--color-teal-500)" }} />
+          <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            Runtime Skill Bundle
+          </p>
+        </div>
+        {runtimeSkills.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            현재 장착된 스킬이 없습니다.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              {runtimeSkills.slice(0, 6).map((skill: any) => (
+                <Badge key={skill.slug ?? skill.name} className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+                  {skill.displayName ?? skill.name ?? skill.slug}
+                </Badge>
+              ))}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {runtimeSkills.slice(0, 2).map((skill: any) => (
+                <div
+                  key={skill.slug ?? skill.name}
+                  className="rounded-xl border px-4 py-3"
+                  style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+                >
+                  <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                    {skill.displayName ?? skill.name ?? skill.slug}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                    {skill.summary ?? "실행 시 output requirement와 integration requirement를 함께 주입합니다."}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Current case */}
       {currentRun && (
@@ -1331,6 +1379,7 @@ function SettingsTab({ agent }: { agent: any }) {
   const envPath = "/Users/river/workspace/active/hagent-os/.env"
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
+  const { selectedOrgId, organizations } = useOrganization()
   const settings = agent.settings ?? {}
   const adaptersQuery = useQuery({
     queryKey: queryKeys.adapters.all,
@@ -1339,7 +1388,7 @@ function SettingsTab({ agent }: { agent: any }) {
   const adapters = adaptersQuery.data?.adapters ?? []
   const integrations = adaptersQuery.data?.integrations ?? []
 
-  const [adapterType, setAdapterType] = useState<string>(agent.adapterType ?? "codex_local")
+  const [adapterType, setAdapterType] = useState<string>(agent.adapterType ?? "codex_qauth")
   const [model, setModel] = useState<string>(
     agent.adapterConfig?.model ?? agent.model ?? settings.model ?? "gpt-5-codex"
   )
@@ -1389,6 +1438,21 @@ function SettingsTab({ agent }: { agent: any }) {
   const adapterModels = selectedAdapter?.availableModels ?? ["gpt-5-codex"]
   const liveReady = Boolean(selectedAdapter?.connected)
   const lawIntegration = integrations.find((item: any) => item.key === "korean-law-mcp")
+  const selectedOrg = organizations.find((org) => org.id === selectedOrgId) ?? null
+  const connectionTests =
+    selectedOrg?.agentTeamConfig &&
+    typeof selectedOrg.agentTeamConfig === "object" &&
+    !Array.isArray(selectedOrg.agentTeamConfig) &&
+    selectedOrg.agentTeamConfig.instance &&
+    typeof selectedOrg.agentTeamConfig.instance === "object" &&
+    !Array.isArray(selectedOrg.agentTeamConfig.instance) &&
+    selectedOrg.agentTeamConfig.instance.connectionTests &&
+    typeof selectedOrg.agentTeamConfig.instance.connectionTests === "object" &&
+    !Array.isArray(selectedOrg.agentTeamConfig.instance.connectionTests)
+      ? (selectedOrg.agentTeamConfig.instance.connectionTests as Record<string, any>)
+      : {}
+  const adapterTest = connectionTests[adapterType]
+  const lawTest = connectionTests["korean-law-mcp"]
 
   return (
     <div className="space-y-5">
@@ -1428,11 +1492,19 @@ function SettingsTab({ agent }: { agent: any }) {
             <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
               {liveReady
                 ? `${selectedAdapter?.label ?? adapterType}로 실제 응답을 생성합니다.`
-                : `${selectedAdapter?.label ?? adapterType} 연결 키가 없어 mock fallback이 사용됩니다.`}
+                : `${selectedAdapter?.label ?? adapterType} 연결 정보가 없어 mock fallback이 사용됩니다.`}
             </p>
+            {adapterTest?.testedAt ? (
+              <p className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                마지막 테스트: {new Date(adapterTest.testedAt).toLocaleString("ko-KR")}
+                {adapterTest.preview ? ` · ${adapterTest.preview}` : ""}
+              </p>
+            ) : null}
             {!liveReady ? (
               <p className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                `{envPath}`에 `{selectedAdapter?.missingEnv?.[0] ?? "OPENAI_API_KEY"}`를 넣고 서버를 다시 시작해야 합니다.
+                {selectedAdapter?.key === "codex_qauth"
+                  ? "`codex login`으로 ChatGPT 로그인을 유지한 뒤 서버를 다시 실행해야 합니다."
+                  : `\`${envPath}\`에 \`${selectedAdapter?.missingEnv?.[0] ?? "OPENAI_API_KEY"}\`를 넣고 서버를 다시 시작해야 합니다.`}
               </p>
             ) : null}
           </div>
@@ -1455,6 +1527,12 @@ function SettingsTab({ agent }: { agent: any }) {
             <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
               민원/환불/근로 이슈는 이 연결이 있어야 실제 법령 근거까지 붙습니다.
             </p>
+            {lawTest?.testedAt ? (
+              <p className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                마지막 테스트: {new Date(lawTest.testedAt).toLocaleString("ko-KR")}
+                {lawTest.preview ? ` · ${lawTest.preview}` : ""}
+              </p>
+            ) : null}
             {!lawIntegration?.connected ? (
               <p className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
                 `{envPath}`에 `LAW_OC`를 넣고 서버를 다시 시작해야 합니다.
@@ -1644,10 +1722,17 @@ function RunHistoryTab({ runs }: { runs: any[] }) {
 // ─── Budget tab ───────────────────────────────────────────────────────────────
 
 function BudgetTab({ agent }: { agent: any }) {
-  const tokenLimit = agent.tokenLimit ?? agent.token_limit ?? 100000
-  const tokensUsed = agent.tokensUsed ?? agent.tokens_used ?? agent.tokensThisMonth ?? 0
-  const costLimit = agent.costLimit ?? agent.cost_limit ?? 0
-  const costUsed = agent.costUsed ?? agent.cost_used ?? 0
+  const { selectedOrgId } = useOrganization()
+  const { data: costSummary } = useQuery({
+    queryKey: [...queryKeys.organizations.detail(selectedOrgId ?? ""), "costs", "summary", "agent", agent.id],
+    queryFn: () => costsApi.summary(selectedOrgId!),
+    enabled: !!selectedOrgId,
+  })
+  const agentCost = costSummary?.agents?.find((item) => item.agentId === agent.id)
+  const tokenLimit = agentCost?.budgetLimitTokens ?? agent.tokenLimit ?? agent.token_limit ?? 100000
+  const tokensUsed = agentCost?.budgetUsedTokens ?? agent.tokensUsed ?? agent.tokens_used ?? agent.tokensThisMonth ?? 0
+  const costLimit = costSummary?.monthlyBudgetKrw ?? agent.costLimit ?? agent.cost_limit ?? 0
+  const costUsed = agentCost?.estimatedCostKrw ?? agent.costUsed ?? agent.cost_used ?? 0
 
   return (
     <div className="space-y-5">
@@ -1676,6 +1761,31 @@ function BudgetTab({ agent }: { agent: any }) {
       </div>
 
       <div
+        className="rounded-xl p-5 space-y-3"
+        style={{
+          backgroundColor: "var(--bg-elevated)",
+          border: "1px solid var(--border-default)",
+        }}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            이번 달 실행 수
+          </span>
+          <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            {agentCost?.totalRuns ?? 0}회
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-sm" style={{ color: "var(--text-secondary)" }}>
+            추정 비용
+          </span>
+          <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+            ₩{Number(costUsed ?? 0).toLocaleString("ko-KR")}
+          </span>
+        </div>
+      </div>
+
+      <div
         className="rounded-xl p-4"
         style={{
           backgroundColor: "rgba(20,184,166,0.04)",
@@ -1695,11 +1805,13 @@ function BudgetTab({ agent }: { agent: any }) {
 export function AgentDetailPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
+  const { setPanelContent } = usePanel()
   const { orgPrefix, id } = useParams<{ orgPrefix: string; id: string }>()
+  const [activeTab, setActiveTab] = useState<"overview" | "instructions" | "skills" | "settings" | "history" | "budget">("overview")
 
   useEffect(() => {
     setBreadcrumbs([
-      { label: "에이전트 팀", href: `/${orgPrefix}/agents` },
+      { label: "AI 팀", href: `/${orgPrefix}/agents` },
       { label: id ?? "에이전트" },
     ])
   }, [setBreadcrumbs, orgPrefix, id])
@@ -1740,19 +1852,115 @@ export function AgentDetailPage() {
   })
 
   // Collect runs that belong to this agent
-  const agentRuns: any[] = agent?.runs
-    ?? (allCases as any[])
-        .flatMap((c: any) => (c.runs ?? []).map((r: any) => ({ ...r, case: c })))
-        .filter((r: any) => r.agentId === id || r.agent_id === id)
+  const agentRuns: any[] = useMemo(
+    () =>
+      agent?.runs
+      ?? (allCases as any[])
+          .flatMap((c: any) => (c.runs ?? []).map((r: any) => ({ ...r, case: c })))
+          .filter((r: any) => r.agentId === id || r.agent_id === id),
+    [agent?.runs, allCases, id],
+  )
 
   // Update breadcrumb when agent name loads
   useEffect(() => {
     if (!agent) return
     setBreadcrumbs([
-      { label: "에이전트 팀", href: `/${orgPrefix}/agents` },
+      { label: "AI 팀", href: `/${orgPrefix}/agents` },
       { label: agent.name ?? id ?? "에이전트" },
     ])
   }, [agent, setBreadcrumbs, orgPrefix, id])
+
+  const agentId = agent?.id ?? ""
+  const agentName = agent?.name ?? "에이전트"
+  const agentRole = agent?.role ?? "운영 담당"
+  const agentStatus = agent?.status ?? "idle"
+  const agentAdapterType = agent?.adapterType ?? "미지정"
+  const relatedCaseCount = useMemo(
+    () => (allCases as any[]).filter((item: any) => String(item.assigneeAgentId ?? "") === String(agentId)).length,
+    [allCases, agentId],
+  )
+  const connectedSkillCount = Array.isArray(agent?.skills)
+    ? agent.skills.length
+    : Array.isArray(agent?.enabledSkills)
+      ? agent.enabledSkills.length
+      : 0
+  const lastRunStartedAt = agentRuns[0]?.startedAt ?? agentRuns[0]?.createdAt ?? ""
+  const budgetUsed = agent?.costUsed ?? agent?.cost_used ?? 0
+  const budgetLimit = agent?.costLimit ?? agent?.cost_limit ?? 0
+
+  useEffect(() => {
+    if (!agentId) {
+      setPanelContent(
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">AI 팀 요약</p>
+            <p className="mt-1 text-sm text-slate-500">
+              AI 팀을 선택하면 최근 실행, 연결 스킬, 예산, 처리 중 케이스를 확인할 수 있습니다.
+            </p>
+          </div>
+        </div>,
+      )
+      return () => setPanelContent(null)
+    }
+
+    setPanelContent(
+      <div className="space-y-4">
+        <div>
+          <p className="text-lg font-semibold text-slate-900">{agentName}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {agentRole} · {statusLabel(agentStatus)}
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">최근 실행</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">
+              {lastRunStartedAt ? timeAgo(lastRunStartedAt) : "없음"}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">연결 스킬</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">{connectedSkillCount}개</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-semibold text-slate-600">운영 연결</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <div className="flex items-center justify-between gap-3">
+              <span>처리 중/연결 케이스</span>
+              <span className="font-medium text-slate-900">{relatedCaseCount}건</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>실행 어댑터</span>
+              <span className="font-medium text-slate-900">{agentAdapterType}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>예산 상태</span>
+              <span className="font-medium text-slate-900">
+                {budgetLimit > 0 ? `${budgetUsed} / ${budgetLimit}` : `${budgetUsed}`}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>,
+    )
+
+    return () => setPanelContent(null)
+  }, [
+    agentAdapterType,
+    agentId,
+    agentName,
+    agentRole,
+    agentStatus,
+    budgetLimit,
+    budgetUsed,
+    connectedSkillCount,
+    lastRunStartedAt,
+    relatedCaseCount,
+    setPanelContent,
+  ])
 
   if (agentLoading) {
     return (
@@ -1779,66 +1987,55 @@ export function AgentDetailPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <Tabs defaultValue="overview" className="flex flex-col flex-1 overflow-hidden">
-        {/* Tab bar */}
-        <div
-          className="px-6 pt-4"
-          style={{ borderBottom: "1px solid var(--border-default)" }}
-        >
-          <TabsList className="h-9 bg-transparent p-0 gap-1">
-            {(
-              [
-                { value: "overview", label: "개요", icon: <Bot size={14} /> },
-                { value: "instructions", label: "지시사항", icon: <FileText size={14} /> },
-                { value: "skills", label: "스킬", icon: <Zap size={14} /> },
-                { value: "settings", label: "설정", icon: <Settings size={14} /> },
-                { value: "history", label: "실행 이력", icon: <History size={14} /> },
-                { value: "budget", label: "예산", icon: <Wallet size={14} /> },
-              ] as const
-            ).map(({ value, label, icon }) => (
-              <TabsTrigger
+      <div
+        className="px-6 pt-4"
+        style={{ borderBottom: "1px solid var(--border-default)" }}
+      >
+        <div className="flex h-9 gap-1">
+          {(
+            [
+              { value: "overview", label: "대시보드", icon: <Bot size={14} /> },
+              { value: "instructions", label: "지침", icon: <FileText size={14} /> },
+              { value: "skills", label: "스킬", icon: <Zap size={14} /> },
+              { value: "settings", label: "설정", icon: <Settings size={14} /> },
+              { value: "history", label: "실행", icon: <History size={14} /> },
+              { value: "budget", label: "예산", icon: <Wallet size={14} /> },
+            ] as const
+          ).map(({ value, label, icon }) => {
+            const isActive = activeTab === value
+            return (
+              <button
                 key={value}
-                value={value}
-                className="h-8 px-3 text-xs font-medium rounded-md border-0 gap-1.5 data-[state=active]:bg-[var(--bg-tertiary)] data-[state=active]:text-[var(--text-primary)] data-[state=inactive]:text-[var(--text-tertiary)]"
+                type="button"
+                onClick={() => setActiveTab(value)}
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-medium transition-colors"
+                style={{
+                  backgroundColor: isActive ? "var(--bg-tertiary)" : "transparent",
+                  color: isActive ? "var(--text-primary)" : "var(--text-tertiary)",
+                }}
               >
                 {icon}
                 {label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+              </button>
+            )
+          })}
         </div>
+      </div>
 
-        {/* Tab contents */}
-        <div className="flex-1 overflow-hidden">
-          <ScrollArea className="h-full">
-            <div className="p-6 max-w-2xl mx-auto">
-              <TabsContent value="overview" className="mt-0">
-                <OverviewTab agent={agent} runs={agentRuns} memory={memory} />
-              </TabsContent>
-
-              <TabsContent value="instructions" className="mt-0">
-                <InstructionsTab agent={agent} instructionFiles={(instructionFiles as any).files ?? []} />
-              </TabsContent>
-
-              <TabsContent value="skills" className="mt-0">
-                <SkillsTab agent={agent} />
-              </TabsContent>
-
-              <TabsContent value="settings" className="mt-0">
-                <SettingsTab agent={agent} />
-              </TabsContent>
-
-              <TabsContent value="history" className="mt-0">
-                <RunHistoryTab runs={agentRuns} />
-              </TabsContent>
-
-              <TabsContent value="budget" className="mt-0">
-                <BudgetTab agent={agent} />
-              </TabsContent>
-            </div>
-          </ScrollArea>
-        </div>
-      </Tabs>
+      <div className="flex-1 overflow-hidden">
+        <ScrollArea className="h-full">
+          <div className="p-6 max-w-2xl mx-auto">
+            {activeTab === "overview" ? <OverviewTab agent={agent} runs={agentRuns} memory={memory} /> : null}
+            {activeTab === "instructions" ? (
+              <InstructionsTab agent={agent} instructionFiles={(instructionFiles as any).files ?? []} />
+            ) : null}
+            {activeTab === "skills" ? <SkillsTab agent={agent} /> : null}
+            {activeTab === "settings" ? <SettingsTab agent={agent} /> : null}
+            {activeTab === "history" ? <RunHistoryTab runs={agentRuns} /> : null}
+            {activeTab === "budget" ? <BudgetTab agent={agent} /> : null}
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   )
 }

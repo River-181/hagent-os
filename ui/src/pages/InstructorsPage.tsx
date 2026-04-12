@@ -3,6 +3,7 @@ import { useContext, useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api } from "@/api/client"
 import { instructorsApi } from "@/api/students"
+import { casesApi } from "@/api/cases"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -33,6 +34,7 @@ import {
 import { ToastContext } from "@/components/ToastContext"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
+import { usePanel } from "@/context/PanelContext"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 import {
@@ -66,6 +68,11 @@ interface Instructor {
 interface ScheduleSummary {
   id: string
   instructorId: string | null
+}
+
+interface StudentScheduleSummary {
+  studentId: string
+  scheduleId: string
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -674,6 +681,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 export function InstructorsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
+  const { setPanelContent } = usePanel()
 
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -712,6 +720,33 @@ export function InstructorsPage() {
       try {
         const response = await api.get<ScheduleSummary[]>(`/organizations/${selectedOrgId}/schedules`)
         return Array.isArray(response) ? response : []
+      } catch {
+        return []
+      }
+    },
+  })
+
+  const studentSchedulesQuery = useQuery<StudentScheduleSummary[]>({
+    queryKey: ["student-schedules", selectedOrgId],
+    enabled: !!selectedOrgId,
+    queryFn: async () => {
+      if (!selectedOrgId) return []
+      try {
+        const response = await api.get<StudentScheduleSummary[]>(`/organizations/${selectedOrgId}/student-schedules`)
+        return Array.isArray(response) ? response : []
+      } catch {
+        return []
+      }
+    },
+  })
+
+  const casesQuery = useQuery<any[]>({
+    queryKey: queryKeys.cases.list(selectedOrgId ?? ""),
+    enabled: !!selectedOrgId,
+    queryFn: async () => {
+      if (!selectedOrgId) return []
+      try {
+        return await casesApi.list(selectedOrgId)
       } catch {
         return []
       }
@@ -769,6 +804,146 @@ export function InstructorsPage() {
 
   const activeCount = instructors.filter((i) => i.status === "active").length
   const inactiveCount = instructors.filter((i) => i.status !== "active").length
+
+  const panelContent = useMemo(() => {
+    if (!detailTarget) {
+      return (
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">직원/강사 운영 요약</p>
+            <p className="mt-1 text-sm text-slate-500">
+              직원을 선택하면 담당 수업, 연결 학생, 최근 케이스를 바로 확인할 수 있습니다.
+            </p>
+          </div>
+
+          <div className="grid gap-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs text-slate-500">전체 직원/강사</p>
+              <p className="mt-1 text-xl font-semibold text-slate-900">{instructors.length}명</p>
+            </div>
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+              <p className="text-xs text-emerald-700">재직중</p>
+              <p className="mt-1 text-xl font-semibold text-emerald-900">{activeCount}명</p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-semibold text-slate-600">바로 실행</p>
+            <div className="mt-3 flex flex-col gap-2">
+              <Button size="sm" className="justify-start bg-teal-600 text-white hover:bg-teal-700" onClick={() => setShowNewDialog(true)}>
+                직원/강사 등록
+              </Button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    const linkedScheduleIds = new Set(
+      (schedulesQuery.data ?? [])
+        .filter((schedule) => schedule.instructorId === detailTarget.id)
+        .map((schedule) => schedule.id)
+    )
+    const linkedStudentIds = new Set(
+      (studentSchedulesQuery.data ?? [])
+        .filter((item) => linkedScheduleIds.has(item.scheduleId))
+        .map((item) => item.studentId)
+    )
+    const linkedCases = (casesQuery.data ?? []).filter((item: any) => linkedStudentIds.has(String(item.studentId ?? "")))
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <p className="text-lg font-semibold text-slate-900">{detailTarget.name}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {detailTarget.subject} · {statusLabel(detailTarget.status)}
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">담당 수업</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">{linkedScheduleIds.size}개</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">연결 학생</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">{linkedStudentIds.size}명</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-semibold text-slate-600">운영 연결</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <div className="flex items-center justify-between gap-3">
+              <span>연락처</span>
+              <span className="font-medium text-slate-900">{detailTarget.phone || "미등록"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>이메일</span>
+              <span className="font-medium text-slate-900">{detailTarget.email || "미등록"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>관련 케이스</span>
+              <span className="font-medium text-slate-900">{linkedCases.length}건</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-600">바로 실행</p>
+          <div className="mt-3 flex flex-col gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="justify-start"
+              onClick={() => {
+                setEditTarget(detailTarget)
+                setShowDetail(false)
+                setShowEditDialog(true)
+              }}
+            >
+              정보 수정
+            </Button>
+            <Button size="sm" variant="outline" className="justify-start" onClick={() => setShowDetail(true)}>
+              상세 열기
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }, [
+    activeCount,
+    casesQuery.data,
+    detailTarget,
+    instructors.length,
+    schedulesQuery.data,
+    studentSchedulesQuery.data,
+  ])
+
+  const panelContentKey = useMemo(
+    () =>
+      JSON.stringify({
+        detailTargetId: detailTarget?.id ?? null,
+        instructorCount: instructors.length,
+        activeCount,
+        caseCount: Array.isArray(casesQuery.data) ? casesQuery.data.length : 0,
+        scheduleCount: Array.isArray(schedulesQuery.data) ? schedulesQuery.data.length : 0,
+        studentScheduleCount: Array.isArray(studentSchedulesQuery.data) ? studentSchedulesQuery.data.length : 0,
+      }),
+    [
+      activeCount,
+      casesQuery.data,
+      detailTarget?.id,
+      instructors.length,
+      schedulesQuery.data,
+      studentSchedulesQuery.data,
+    ],
+  )
+
+  useEffect(() => {
+    setPanelContent(panelContent)
+    return () => setPanelContent(null)
+  }, [panelContentKey, setPanelContent])
 
   return (
     <div

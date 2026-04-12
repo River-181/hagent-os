@@ -19,11 +19,12 @@ import {
 } from "@/components/ui/select"
 import { casesApi } from "@/api/cases"
 import { agentsApi } from "@/api/agents"
+import { projectsApi } from "@/api/projects"
 import { queryKeys } from "@/lib/queryKeys"
 import { useOrganization } from "@/context/OrganizationContext"
 import { ToastContext } from "@/components/ToastContext"
 import { cn } from "@/lib/utils"
-import { Loader2, Paperclip, Tag, X } from "lucide-react"
+import { Loader2, Paperclip, Tag } from "lucide-react"
 
 // ─── constants ─────────────────────────────────────────────────────────────
 
@@ -53,7 +54,8 @@ function defaultForm() {
     title: "",
     description: "",
     severity: "normal",
-    agentId: "",
+    assigneeAgentId: "unassigned",
+    projectId: "none",
   }
 }
 
@@ -83,6 +85,12 @@ export function NewCaseDialog({ open, onOpenChange, casesCount = 0 }: NewCaseDia
     enabled: !!selectedOrgId && open,
   })
 
+  const { data: projects = [] } = useQuery({
+    queryKey: queryKeys.projects.list(selectedOrgId ?? ""),
+    queryFn: () => projectsApi.list(selectedOrgId!),
+    enabled: !!selectedOrgId && open,
+  })
+
   const nextId = `C-${String(casesCount + 1).padStart(3, "0")}`
 
   const create = useMutation({
@@ -92,7 +100,14 @@ export function NewCaseDialog({ open, onOpenChange, casesCount = 0 }: NewCaseDia
         title: form.title,
         description: form.description || undefined,
         severity: form.severity,
-        agentId: form.agentId || undefined,
+        assigneeAgentId:
+          form.assigneeAgentId && form.assigneeAgentId !== "unassigned"
+            ? form.assigneeAgentId
+            : undefined,
+        opsGroupId:
+          form.projectId && form.projectId !== "none"
+            ? form.projectId
+            : undefined,
       }),
     onSuccess: (created: any) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(selectedOrgId ?? "") })
@@ -125,7 +140,13 @@ export function NewCaseDialog({ open, onOpenChange, casesCount = 0 }: NewCaseDia
     onOpenChange(false)
   }
 
-  const isDirty = !!(form.type || form.title || form.description || form.agentId)
+  const isDirty = !!(
+    form.type
+    || form.title
+    || form.description
+    || form.assigneeAgentId !== "unassigned"
+    || form.projectId !== "none"
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -179,26 +200,55 @@ export function NewCaseDialog({ open, onOpenChange, casesCount = 0 }: NewCaseDia
             </p>
           )}
 
-          {/* Assignee + Type */}
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <Select
-                value={form.agentId}
-                onValueChange={(v) => setForm((f) => ({ ...f, agentId: v }))}
-              >
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="에이전트 선택" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(agents as any[]).map((a: any) => (
-                    <SelectItem key={a.id} value={a.id} className="text-xs">
-                      {a.name}
+          {/* Assignee + Project + Type */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+              <span>For</span>
+              <div className="flex-1">
+                <Select
+                  value={form.assigneeAgentId}
+                  onValueChange={(value) => setForm((current) => ({ ...current, assigneeAgentId: value }))}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="담당 에이전트" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="unassigned" className="text-xs">
+                      담당 없음
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    {(agents as any[]).map((agent: any) => (
+                      <SelectItem key={agent.id} value={agent.id} className="text-xs">
+                        {agent.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <span>in</span>
+              <div className="flex-1">
+                <Select
+                  value={form.projectId}
+                  onValueChange={(value) => setForm((current) => ({ ...current, projectId: value }))}
+                >
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="프로젝트 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none" className="text-xs">
+                      프로젝트 없음
+                    </SelectItem>
+                    {(projects as any[]).map((project: any) => (
+                      <SelectItem key={project.id} value={project.id} className="text-xs">
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            <div className="flex-1">
+
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
               <Select
                 value={form.type}
                 onValueChange={(v) => setForm((f) => ({ ...f, type: v }))}
@@ -215,6 +265,7 @@ export function NewCaseDialog({ open, onOpenChange, casesCount = 0 }: NewCaseDia
                 </SelectContent>
               </Select>
             </div>
+          </div>
           </div>
 
           {/* Description */}

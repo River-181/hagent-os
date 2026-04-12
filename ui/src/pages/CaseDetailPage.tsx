@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext } from "react"
+import React, { useEffect, useState, useContext, useMemo } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
@@ -14,7 +14,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Select,
   SelectContent,
@@ -30,6 +29,7 @@ import { LiveRunWidget } from "@/components/LiveRunWidget"
 import { CaseProperties } from "@/components/CaseProperties"
 import { ApprovalCard } from "@/components/ApprovalCard"
 import { ToastContext } from "@/components/ToastContext"
+import { usePanel } from "@/context/PanelContext"
 import {
   CheckCircle2,
   XCircle,
@@ -40,6 +40,9 @@ import {
   FileText,
   MessageSquare,
   GitBranchPlus,
+  RefreshCcw,
+  Scale,
+  Coins,
 } from "lucide-react"
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -70,6 +73,13 @@ const caseTypeLabel: Record<string, string> = {
   inquiry: "문의",
   churn: "이탈",
   schedule: "일정",
+}
+
+function resolveChannelLabel(source?: string | null) {
+  if (source === "telegram") return "텔레그램"
+  if (source === "kakao") return "카카오톡"
+  if (source === "sms") return "SMS"
+  return "외부 채널"
 }
 
 // ─── Activity Timeline ────────────────────────────────────────────────────────
@@ -580,10 +590,12 @@ export function CaseDetailPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
+  const { setPanelContent } = usePanel()
   const [newDocumentTitle, setNewDocumentTitle] = useState("")
   const [newDocumentBody, setNewDocumentBody] = useState("")
   const [newChildCaseTitle, setNewChildCaseTitle] = useState("")
   const [newChildCaseDescription, setNewChildCaseDescription] = useState("")
+  const [activeTab, setActiveTab] = useState("documents")
 
   // ── fetch case ─────────────────────────────────────────────────────────────
   const {
@@ -641,8 +653,12 @@ export function CaseDetailPage() {
   })
 
   const approvalDecision = useMutation({
-    mutationFn: ({ approvalId, decision }: { approvalId: string; decision: "approve" | "reject" }) =>
-      decision === "approve" ? approvalsApi.approve(approvalId) : approvalsApi.reject(approvalId),
+    mutationFn: ({ approvalId, decision }: { approvalId: string; decision: "approve" | "reject" | "revision" }) =>
+      decision === "approve"
+        ? approvalsApi.approve(approvalId)
+        : decision === "revision"
+          ? approvalsApi.requestRevision(approvalId)
+          : approvalsApi.reject(approvalId),
     onSuccess: () => {
       toast?.success("승인 상태를 갱신했습니다.")
       void queryClient.invalidateQueries({ queryKey: queryKeys.cases.detail(id!) })
@@ -650,6 +666,23 @@ export function CaseDetailPage() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(selectedOrgId ?? "") })
     },
     onError: () => toast?.error("승인 처리에 실패했습니다."),
+  })
+
+  const outboundMutation = useMutation({
+    mutationFn: ({
+      approvalId,
+      mode,
+    }: {
+      approvalId: string
+      mode: "auto" | "confirm_bridge"
+    }) => approvalsApi.send(approvalId, { mode }),
+    onSuccess: () => {
+      toast?.success(`${resolveChannelLabel(caseData?.source)} 회신 상태를 갱신했습니다.`)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.cases.detail(id!) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(selectedOrgId ?? "") })
+    },
+    onError: () => toast?.error(`${resolveChannelLabel(caseData?.source)} 회신 처리에 실패했습니다.`),
   })
 
   const createDocument = useMutation({
@@ -684,6 +717,138 @@ export function CaseDetailPage() {
     onError: () => toast?.error("서브 케이스 생성에 실패했습니다."),
   })
 
+  // ── derived data ───────────────────────────────────────────────────────────
+  const runs = caseData?.runs ?? []
+  const hasActiveRun = runs.some(
+    (r: any) =>
+      r.status === "running" || r.status === "pending_approval"
+  )
+  const agentDraft =
+    caseData?.agentDraft ?? caseData?.agent_draft ?? null
+  const approvals = caseData?.approvals ?? []
+  const pendingApproval = approvals.find(
+    (a: any) => a.status === "pending"
+  )
+  const comments = caseData?.comments ?? []
+  const documents = caseData?.documents ?? []
+  const childCases = caseData?.childCases ?? []
+  const runIds = runs.map((run: any) => run.id)
+  const approvalIds = approvals.map((approval: any) => approval.id)
+  const relatedActivity = caseData ? filterCaseActivity(orgActivity as any[], caseData.id, runIds, approvalIds) : []
+  const status = (caseData?.status ?? "backlog") as CaseStatus
+  const identifier = caseData?.identifier ?? caseData?.id ?? id
+  const typeLabel =
+    caseTypeLabel[caseData?.type ?? ""] ?? caseData?.type ?? ""
+  const channelContext = caseData?.channelContext ?? {}
+  const channelLabel = resolveChannelLabel(caseData?.source)
+  const latestOutboundStatus = approvals
+    .map((approval: any) =>
+      approval?.decision?.sideEffects?.telegramMessage?.status ??
+      approval?.decision?.sideEffects?.kakaoMessage?.status,
+    )
+    .find((status: unknown) => typeof status === "string")
+  const usedSkills = caseData?.usedSkills ?? []
+  const skillContext = caseData?.skillContext ?? ""
+  const legalBasis = caseData?.legalBasis ?? null
+  const latestRun = runs[0] ?? null
+  const latestUsage = latestRun?.usage ?? null
+  const reviewSummary =
+    pendingApproval
+      ? "AI 초안과 회신 상태를 검토한 뒤 승인, 반려, 수정 요청 또는 후속 케이스로 넘길 수 있습니다."
+      : status === "in_review"
+        ? "검토 상태로 이동한 케이스입니다. 다음 액션을 정하고 기록을 남기세요."
+        : null
+  useEffect(() => {
+    const studentId = caseData?.studentId
+    const pendingApprovalId = pendingApproval?.id
+    const statusLabel = statusOptions.find((item) => item.value === status)?.label ?? status
+
+    setPanelContent(
+      <div className="space-y-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">케이스 운영 요약</p>
+          <p className="mt-1 text-sm text-slate-500">
+            케이스의 연결 객체와 다음 액션을 한 번에 확인합니다.
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">상태</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">{statusLabel}</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">연결 문서</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">{documents.length}건</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-semibold text-slate-600">운영 연결</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <div className="flex items-center justify-between gap-3">
+              <span>채널</span>
+              <span className="font-medium text-slate-900">{channelLabel}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>승인 요청</span>
+              <span className="font-medium text-slate-900">{approvals.length}건</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>서브 케이스</span>
+              <span className="font-medium text-slate-900">{childCases.length}건</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>최근 처리</span>
+              <span className="font-medium text-slate-900">{relatedActivity.length}건</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-600">바로 실행</p>
+          <div className="mt-3 flex flex-col gap-2">
+            {studentId && orgPrefix ? (
+              <Button size="sm" variant="outline" className="justify-start" onClick={() => navigate(`/${orgPrefix}/students/${studentId}`)}>
+                학생 상세 보기
+              </Button>
+            ) : null}
+            {pendingApprovalId ? (
+              <Button
+                size="sm"
+                className="justify-start bg-teal-600 text-white hover:bg-teal-700"
+                disabled={outboundMutation.isPending}
+                onClick={() => outboundMutation.mutate({ approvalId: pendingApprovalId, mode: "auto" })}
+              >
+                {channelLabel} 답변 초안 발송
+              </Button>
+            ) : null}
+            <Button size="sm" variant="outline" className="justify-start" onClick={() => dispatchForCase.mutate()} disabled={dispatchForCase.isPending || hasActiveRun}>
+              AI 팀 다시 배정
+            </Button>
+          </div>
+        </div>
+      </div>,
+    )
+
+    return () => setPanelContent(null)
+  }, [
+    approvals.length,
+    caseData?.studentId,
+    channelLabel,
+    childCases.length,
+    dispatchForCase.isPending,
+    documents.length,
+    hasActiveRun,
+    navigate,
+    orgPrefix,
+    outboundMutation.isPending,
+    pendingApproval?.id,
+    relatedActivity.length,
+    setPanelContent,
+    status,
+  ])
+
   // ── loading / error states ─────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -710,29 +875,6 @@ export function CaseDetailPage() {
       </div>
     )
   }
-
-  // ── derived data ───────────────────────────────────────────────────────────
-  const hasActiveRun = (caseData.runs ?? []).some(
-    (r: any) =>
-      r.status === "running" || r.status === "pending_approval"
-  )
-  const agentDraft =
-    caseData.agentDraft ?? caseData.agent_draft ?? null
-  const pendingApproval = (caseData.approvals ?? []).find(
-    (a: any) => a.status === "pending"
-  )
-  const comments = caseData.comments ?? []
-  const approvals = caseData.approvals ?? []
-  const documents = caseData.documents ?? []
-  const childCases = caseData.childCases ?? []
-  const runIds = (caseData.runs ?? []).map((run: any) => run.id)
-  const approvalIds = approvals.map((approval: any) => approval.id)
-  const relatedActivity = filterCaseActivity(orgActivity as any[], caseData.id, runIds, approvalIds)
-  const status = (caseData.status ?? "backlog") as CaseStatus
-  const identifier = caseData.identifier ?? caseData.id
-  const typeLabel =
-    caseTypeLabel[caseData.type ?? ""] ?? caseData.type ?? ""
-  const channelContext = caseData.channelContext ?? {}
 
   return (
     <ScrollArea className="flex-1 h-full">
@@ -771,7 +913,7 @@ export function CaseDetailPage() {
                       color: caseData.source === 'kakao' ? '#3C1E1E' : '#3b82f6',
                     }}
                   >
-                    {caseData.source === 'kakao' ? '카카오톡' : 'SMS'}
+                    {channelLabel}
                   </Badge>
                 )}
                 {channelContext.threadId ? (
@@ -788,6 +930,31 @@ export function CaseDetailPage() {
                     style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
                   >
                     {String(channelContext.senderName)}
+                  </Badge>
+                ) : null}
+                {typeof latestOutboundStatus === "string" ? (
+                  <Badge
+                    className="text-xs border-0"
+                    style={{
+                      backgroundColor:
+                        latestOutboundStatus === "sent"
+                          ? "rgba(34,197,94,0.12)"
+                          : latestOutboundStatus === "failed"
+                            ? "rgba(239,68,68,0.12)"
+                            : "rgba(245,158,11,0.12)",
+                      color:
+                        latestOutboundStatus === "sent"
+                          ? "var(--color-success)"
+                          : latestOutboundStatus === "failed"
+                            ? "var(--color-danger)"
+                            : "#d97706",
+                    }}
+                  >
+                    {latestOutboundStatus === "sent"
+                      ? `${channelLabel} 회신 완료`
+                      : latestOutboundStatus === "failed"
+                        ? `${channelLabel} 회신 실패`
+                        : `${channelLabel} 회신 준비`}
                   </Badge>
                 ) : null}
               </div>
@@ -882,16 +1049,93 @@ export function CaseDetailPage() {
 
             <Separator />
 
-            <Tabs defaultValue="documents" className="space-y-4">
-              <TabsList variant="line" className="w-full justify-start bg-transparent p-0">
-                <TabsTrigger value="documents">Documents {documents.length > 0 ? `(${documents.length})` : ""}</TabsTrigger>
-                <TabsTrigger value="approvals">Approvals {approvals.length > 0 ? `(${approvals.length})` : ""}</TabsTrigger>
-                <TabsTrigger value="activity">Activity {relatedActivity.length > 0 ? `(${relatedActivity.length})` : ""}</TabsTrigger>
-                <TabsTrigger value="comments">Comments {comments.length > 0 ? `(${comments.length})` : ""}</TabsTrigger>
-                <TabsTrigger value="childCases">Child Cases {childCases.length > 0 ? `(${childCases.length})` : ""}</TabsTrigger>
-              </TabsList>
+            {reviewSummary ? (
+              <div
+                className="rounded-2xl border px-4 py-4"
+                style={{
+                  borderColor: pendingApproval ? "rgba(245,158,11,0.28)" : "var(--border-default)",
+                  backgroundColor: pendingApproval ? "rgba(245,158,11,0.08)" : "var(--bg-elevated)",
+                }}
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={15} style={{ color: pendingApproval ? "#d97706" : "var(--text-secondary)" }} />
+                      <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                        {pendingApproval ? "검토 대기 중" : "검토 단계"}
+                      </div>
+                      {latestOutboundStatus ? (
+                        <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+                          회신 상태: {latestOutboundStatus}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                      {reviewSummary}
+                    </div>
+                  </div>
+                  {pendingApproval ? (
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" className="gap-1.5 border-0 text-white" style={{ backgroundColor: "var(--color-success)" }} onClick={() => approvalDecision.mutate({ approvalId: pendingApproval.id, decision: "approve" })}>
+                        <CheckCircle2 size={13} />
+                        승인
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => approvalDecision.mutate({ approvalId: pendingApproval.id, decision: "revision" })}>
+                        <RefreshCcw size={13} />
+                        수정 요청
+                      </Button>
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => approvalDecision.mutate({ approvalId: pendingApproval.id, decision: "reject" })}>
+                        <XCircle size={13} />
+                        반려
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5"
+                        onClick={() => {
+                          setActiveTab("childCases")
+                          setNewChildCaseTitle((current) => current || `${caseData.title} 후속 작업`)
+                          setNewChildCaseDescription((current) => current || "검토 결과를 반영한 후속 작업을 생성합니다.")
+                        }}
+                      >
+                        <GitBranchPlus size={13} />
+                        후속 케이스
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
 
-              <TabsContent value="documents" className="space-y-4">
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { value: "documents", label: `Documents${documents.length > 0 ? ` (${documents.length})` : ""}` },
+                  { value: "approvals", label: `Approvals${approvals.length > 0 ? ` (${approvals.length})` : ""}` },
+                  { value: "activity", label: `Activity${relatedActivity.length > 0 ? ` (${relatedActivity.length})` : ""}` },
+                  { value: "comments", label: `Comments${comments.length > 0 ? ` (${comments.length})` : ""}` },
+                  { value: "childCases", label: `Child Cases${childCases.length > 0 ? ` (${childCases.length})` : ""}` },
+                ].map((tab) => {
+                  const isActive = activeTab === tab.value
+                  return (
+                    <button
+                      key={tab.value}
+                      type="button"
+                      onClick={() => setActiveTab(tab.value)}
+                      className="rounded-full px-3 py-1.5 text-sm transition-colors"
+                      style={{
+                        backgroundColor: isActive ? "var(--bg-tertiary)" : "transparent",
+                        color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
+                        border: `1px solid ${isActive ? "var(--border-strong)" : "var(--border-default)"}`,
+                      }}
+                    >
+                      {tab.label}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {activeTab === "documents" ? (
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
                   <div className="space-y-3">
                     {documents.length === 0 ? (
@@ -900,7 +1144,16 @@ export function CaseDetailPage() {
                       </div>
                     ) : (
                       documents.map((document: any) => (
-                        <div key={document.id} className="rounded-xl border p-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                        <div
+                          key={document.id}
+                          className="rounded-xl border p-4"
+                          style={{
+                            borderColor:
+                              document.title?.includes("질문 브리프") ? "rgba(20,184,166,0.24)" : "var(--border-default)",
+                            backgroundColor:
+                              document.title?.includes("질문 브리프") ? "rgba(20,184,166,0.05)" : "var(--bg-secondary)",
+                          }}
+                        >
                           <div className="flex items-center justify-between gap-3">
                             <div>
                               <div className="font-medium" style={{ color: "var(--text-primary)" }}>{document.title}</div>
@@ -922,10 +1175,10 @@ export function CaseDetailPage() {
                     </Button>
                   </div>
                 </div>
-              </TabsContent>
+              ) : null}
 
-              <TabsContent value="approvals" className="space-y-3">
-                {approvals.length === 0 ? (
+              {activeTab === "approvals" ? (
+                approvals.length === 0 ? (
                   <div className="rounded-xl border p-4 text-sm" style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}>
                     아직 생성된 approval이 없습니다.
                   </div>
@@ -934,21 +1187,34 @@ export function CaseDetailPage() {
                     <ApprovalCard
                       key={approval.id}
                       approval={approval}
+                      channelLabel={channelLabel}
                       caseHref={orgPrefix ? `/${orgPrefix}/cases/${caseData.id}` : undefined}
                       onApprove={(approvalId) => approvalDecision.mutate({ approvalId, decision: "approve" })}
                       onReject={(approvalId) => approvalDecision.mutate({ approvalId, decision: "reject" })}
+                      onSend={(approvalId, mode) =>
+                        outboundMutation.mutate({
+                          approvalId,
+                          mode: mode ?? "auto",
+                        })
+                      }
                       isPending={approvalDecision.isPending && approvalDecision.variables?.approvalId === approval.id}
                       pendingAction={approvalDecision.variables?.decision}
+                      sending={outboundMutation.isPending && outboundMutation.variables?.approvalId === approval.id}
+                      sendingMode={
+                        outboundMutation.variables?.approvalId === approval.id
+                          ? outboundMutation.variables?.mode
+                          : null
+                      }
                     />
                   ))
-                )}
-              </TabsContent>
+                )
+              ) : null}
 
-              <TabsContent value="activity">
+              {activeTab === "activity" ? (
                 <ActivityTab events={relatedActivity} orgPrefix={orgPrefix} />
-              </TabsContent>
+              ) : null}
 
-              <TabsContent value="comments">
+              {activeTab === "comments" ? (
                 <div>
                   <h2
                     className="text-sm font-semibold mb-3"
@@ -958,9 +1224,9 @@ export function CaseDetailPage() {
                   </h2>
                   <ChatThread caseId={caseData.id} comments={comments} orgPrefix={orgPrefix} />
                 </div>
-              </TabsContent>
+              ) : null}
 
-              <TabsContent value="childCases" className="space-y-4">
+              {activeTab === "childCases" ? (
                 <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
                   <div className="space-y-3">
                     {childCases.length === 0 ? (
@@ -1001,8 +1267,8 @@ export function CaseDetailPage() {
                     </Button>
                   </div>
                 </div>
-              </TabsContent>
-            </Tabs>
+              ) : null}
+            </div>
           </div>
 
           <aside className="space-y-4">
@@ -1065,6 +1331,77 @@ export function CaseDetailPage() {
                   <div style={{ color: "var(--text-tertiary)" }}>Pending Approval</div>
                   <div style={{ color: "var(--text-primary)" }}>{pendingApproval ? "있음" : "없음"}</div>
                 </div>
+              </div>
+            </div>
+
+            <div
+              className="rounded-2xl border p-4"
+              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}
+            >
+              <div className="mb-3 flex items-center gap-2">
+                <Bot size={14} style={{ color: "var(--color-teal-500)" }} />
+                <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  AI 실행 컨텍스트
+                </h2>
+              </div>
+              <div className="space-y-3 text-sm">
+                <div>
+                  <div style={{ color: "var(--text-tertiary)" }}>Used Skills</div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {usedSkills.length === 0 ? (
+                      <span style={{ color: "var(--text-secondary)" }}>표시 가능한 스킬이 없습니다.</span>
+                    ) : (
+                      usedSkills.map((skill: any) => (
+                        <Badge key={skill.slug ?? skill.name} className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+                          {skill.displayName ?? skill.name ?? skill.slug}
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                </div>
+                {skillContext ? (
+                  <div>
+                    <div style={{ color: "var(--text-tertiary)" }}>Skill Context</div>
+                    <pre
+                      className="mt-2 whitespace-pre-wrap rounded-xl border px-3 py-3 text-xs leading-relaxed"
+                      style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)", fontFamily: "inherit" }}
+                    >
+                      {String(skillContext).slice(0, 900)}
+                    </pre>
+                  </div>
+                ) : null}
+                {legalBasis ? (
+                  <div>
+                    <div style={{ color: "var(--text-tertiary)" }}>Legal Basis</div>
+                    <div
+                      className="mt-2 rounded-xl border px-3 py-3"
+                      style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+                    >
+                      <div className="flex items-center gap-2 font-medium" style={{ color: "var(--text-primary)" }}>
+                        <Scale size={13} style={{ color: "var(--color-teal-500)" }} />
+                        {String((legalBasis as any).summary ?? "근거 요약 없음")}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div style={{ color: "var(--text-tertiary)" }}>Outbound</div>
+                    <div style={{ color: "var(--text-primary)" }}>{caseData.outboundStatus ?? latestOutboundStatus ?? "없음"}</div>
+                  </div>
+                  <div>
+                    <div style={{ color: "var(--text-tertiary)" }}>Latest Cost</div>
+                    <div style={{ color: "var(--text-primary)" }}>
+                      {latestUsage ? `₩${Number(latestUsage.estimatedCostKrw ?? 0).toLocaleString("ko-KR")}` : "없음"}
+                    </div>
+                  </div>
+                </div>
+                {latestUsage ? (
+                  <div className="flex items-center gap-2 text-xs" style={{ color: "var(--text-secondary)" }}>
+                    <Coins size={12} />
+                    입력 {Number(latestUsage.inputTokens ?? 0).toLocaleString()} / 출력 {Number(latestUsage.outputTokens ?? 0).toLocaleString()} / 총 {Number(latestUsage.totalTokens ?? 0).toLocaleString()} tokens
+                  </div>
+                ) : null}
               </div>
             </div>
           </aside>

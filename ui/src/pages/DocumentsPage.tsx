@@ -4,6 +4,7 @@ import { useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
+import { usePanel } from "@/context/PanelContext"
 import { useToast } from "@/context/ToastContext"
 import { documentsApi } from "@/api/documents"
 import { queryKeys } from "@/lib/queryKeys"
@@ -25,11 +26,38 @@ interface Document {
   updatedAt?: string
   updated_at?: string
   tags?: string[]
+  rawTags?: string[]
   author?: string
+  documentScope?: "knowledge_base" | "project" | "case"
+  documentScopeLabel?: string
+  documentRole?: "knowledge_base" | "project_brief" | "project_artifact" | "case_artifact"
+  documentRoleLabel?: string
+  linkedCase?: {
+    id: string
+    identifier: string
+    title: string
+    type: string
+    status: string
+  } | null
+  linkedProject?: {
+    id: string
+    name: string
+    color?: string | null
+  } | null
+  runId?: string | null
+  artifactType?: string | null
+  statusTag?: string | null
+  versionTag?: string | null
+  aiGenerated?: boolean
 }
 
 interface CategoryOption {
   value: string
+  label: string
+}
+
+interface ScopeOption {
+  value: "all" | "knowledge_base" | "project" | "case"
   label: string
 }
 
@@ -50,6 +78,20 @@ const CATEGORY_COLORS: Record<string, { bg: string; color: string }> = {
   general: { bg: "var(--bg-tertiary)", color: "var(--text-secondary)" },
 }
 
+const SCOPE_OPTIONS: ScopeOption[] = [
+  { value: "all", label: "전체" },
+  { value: "knowledge_base", label: "지식베이스" },
+  { value: "project", label: "프로젝트" },
+  { value: "case", label: "케이스 산출물" },
+]
+
+const ROLE_COLORS: Record<string, { bg: string; color: string }> = {
+  knowledge_base: { bg: "rgba(59,130,246,0.10)", color: "#2563eb" },
+  project_brief: { bg: "rgba(124,58,237,0.10)", color: "#7c3aed" },
+  project_artifact: { bg: "rgba(168,85,247,0.12)", color: "#9333ea" },
+  case_artifact: { bg: "rgba(245,158,11,0.12)", color: "#d97706" },
+}
+
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 function normalizeDocument(doc: any): Document {
@@ -61,7 +103,43 @@ function normalizeDocument(doc: any): Document {
     updatedAt: typeof doc.updatedAt === "string" ? doc.updatedAt : undefined,
     updated_at: typeof doc.updated_at === "string" ? doc.updated_at : undefined,
     tags: Array.isArray(doc.tags) ? doc.tags.filter((tag: unknown): tag is string => typeof tag === "string") : [],
+    rawTags: Array.isArray(doc.rawTags) ? doc.rawTags.filter((tag: unknown): tag is string => typeof tag === "string") : undefined,
     author: typeof doc.author === "string" ? doc.author : undefined,
+    documentScope: doc.documentScope === "project" || doc.documentScope === "case" || doc.documentScope === "knowledge_base"
+      ? doc.documentScope
+      : "knowledge_base",
+    documentScopeLabel: typeof doc.documentScopeLabel === "string" ? doc.documentScopeLabel : "지식베이스",
+    documentRole:
+      doc.documentRole === "project_brief"
+      || doc.documentRole === "project_artifact"
+      || doc.documentRole === "case_artifact"
+      || doc.documentRole === "knowledge_base"
+        ? doc.documentRole
+        : "knowledge_base",
+    documentRoleLabel: typeof doc.documentRoleLabel === "string" ? doc.documentRoleLabel : "지식베이스",
+    linkedCase:
+      doc.linkedCase && typeof doc.linkedCase === "object"
+        ? {
+            id: String(doc.linkedCase.id ?? ""),
+            identifier: String(doc.linkedCase.identifier ?? ""),
+            title: String(doc.linkedCase.title ?? ""),
+            type: String(doc.linkedCase.type ?? ""),
+            status: String(doc.linkedCase.status ?? ""),
+          }
+        : null,
+    linkedProject:
+      doc.linkedProject && typeof doc.linkedProject === "object"
+        ? {
+            id: String(doc.linkedProject.id ?? ""),
+            name: String(doc.linkedProject.name ?? ""),
+            color: typeof doc.linkedProject.color === "string" ? doc.linkedProject.color : null,
+          }
+        : null,
+    runId: typeof doc.runId === "string" ? doc.runId : null,
+    artifactType: typeof doc.artifactType === "string" ? doc.artifactType : null,
+    statusTag: typeof doc.statusTag === "string" ? doc.statusTag : null,
+    versionTag: typeof doc.versionTag === "string" ? doc.versionTag : null,
+    aiGenerated: Boolean(doc.aiGenerated),
   }
 }
 
@@ -79,12 +157,41 @@ function mergeCategories(base: CategoryOption[], docs: Document[]) {
 }
 
 function isAiGenerated(doc: Document) {
-  return doc.author === "AI" || doc.tags?.includes("ai-generated")
+  return doc.aiGenerated || doc.author === "AI" || doc.tags?.includes("ai-generated")
 }
 
 function getCaseId(doc: Document) {
-  const caseTag = doc.tags?.find((tag) => tag.startsWith("case:"))
-  return caseTag ? caseTag.slice(5) : null
+  return doc.linkedCase?.id ?? doc.tags?.find((tag) => tag.startsWith("case:"))?.slice(5) ?? null
+}
+
+function getProjectId(doc: Document) {
+  return doc.linkedProject?.id ?? doc.tags?.find((tag) => tag.startsWith("project:"))?.slice(8) ?? null
+}
+
+function getVisibleTags(doc: Document) {
+  return (doc.rawTags ?? doc.tags ?? []).filter((tag) => tag !== "ai-generated")
+}
+
+function getDocumentConnectionSummary(doc: Document) {
+  if (doc.linkedCase && doc.linkedProject) {
+    return `${doc.linkedProject.name} / ${doc.linkedCase.identifier}`
+  }
+  if (doc.linkedProject) {
+    return doc.linkedProject.name
+  }
+  if (doc.linkedCase) {
+    return `${doc.linkedCase.identifier} · ${doc.linkedCase.title}`
+  }
+  return "공통 지식베이스"
+}
+
+function RoleBadge({ doc }: { doc: Document }) {
+  const cfg = ROLE_COLORS[doc.documentRole ?? "knowledge_base"] ?? ROLE_COLORS.knowledge_base
+  return (
+    <Badge className="text-xs border-0 px-2 py-0.5" style={{ backgroundColor: cfg.bg, color: cfg.color }}>
+      {doc.documentRoleLabel ?? "지식베이스"}
+    </Badge>
+  )
 }
 
 function MarkdownBody({ text }: { text: string }) {
@@ -392,15 +499,18 @@ function NewDocDialog({
 export function DocumentsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
+  const { setPanelContent } = usePanel()
   const { addToast } = useToast()
   const { id: routeDocId, orgPrefix } = useParams<{ id?: string; orgPrefix: string }>()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   const [activeCategory, setActiveCategory] = useState("all")
+  const [activeScope, setActiveScope] = useState<ScopeOption["value"]>("all")
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
   const [showNewDialog, setShowNewDialog] = useState(false)
   const [localDocs, setLocalDocs] = useState<Document[]>([])
   const [searchQuery, setSearchQuery] = useState("")
+  const [hideCaseArtifacts, setHideCaseArtifacts] = useState(true)
   const [categories, setCategories] = useState<CategoryOption[]>(INITIAL_CATEGORIES)
   const [isEditing, setIsEditing] = useState(false)
   const [editTitle, setEditTitle] = useState("")
@@ -415,7 +525,7 @@ export function DocumentsPage() {
   const [isImporting, setIsImporting] = useState(false)
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "지식베이스" }])
+    setBreadcrumbs([{ label: "문서/지식베이스" }])
   }, [setBreadcrumbs])
 
   const { data: apiDocs, isLoading } = useQuery({
@@ -446,11 +556,30 @@ export function DocumentsPage() {
     ? allDocs
     : allDocs.filter((doc) => doc.category === activeCategory)
 
-  const filtered = categoryFiltered.filter((doc) => {
+  const scopeFiltered = activeScope === "all"
+    ? categoryFiltered
+    : categoryFiltered.filter((doc) => doc.documentScope === activeScope)
+
+  const clutterFiltered = hideCaseArtifacts
+    ? scopeFiltered.filter((doc) => doc.documentRole !== "case_artifact")
+    : scopeFiltered
+
+  const filtered = clutterFiltered.filter((doc) => {
     if (!searchQuery.trim()) return true
     const query = searchQuery.toLowerCase()
     return doc.title.toLowerCase().includes(query) || doc.body.toLowerCase().includes(query)
   })
+
+  const groupedDocs = useMemo(
+    () =>
+      SCOPE_OPTIONS.filter((option) => option.value !== "all")
+        .map((option) => ({
+          ...option,
+          docs: filtered.filter((doc) => doc.documentScope === option.value),
+        }))
+        .filter((section) => activeScope === "all" ? section.docs.length > 0 : section.value === activeScope),
+    [activeScope, filtered],
+  )
 
   const displayDoc = useMemo(
     () => allDocs.find((doc) => doc.id === selectedDocId) ?? null,
@@ -490,19 +619,12 @@ export function DocumentsPage() {
     setCategories((prev) => mergeCategories(prev, [nextDoc]))
 
     try {
-      const response = await fetch(`/api/organizations/${selectedOrgId}/documents/${displayDoc.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: nextDoc.title,
-          body: nextDoc.body,
-          category: nextDoc.category,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error("PATCH failed")
-      }
+      const saved = normalizeDocument(await documentsApi.update(displayDoc.id, {
+        title: nextDoc.title,
+        body: nextDoc.body,
+        category: nextDoc.category,
+      }))
+      replaceDocument(displayDoc.id, () => saved)
 
       addToast("문서를 저장했습니다.", "success")
     } catch {
@@ -521,13 +643,7 @@ export function DocumentsPage() {
     const deletingId = displayDoc.id
 
     try {
-      const response = await fetch(`/api/organizations/${selectedOrgId}/documents/${deletingId}`, {
-        method: "DELETE",
-      })
-
-      if (!response.ok) {
-        throw new Error("DELETE failed")
-      }
+      await documentsApi.delete(deletingId)
     } catch {
       await delay(500)
       addToast("문서를 mock 상태로 삭제했습니다.", "info")
@@ -689,6 +805,153 @@ export function DocumentsPage() {
   }
 
   const caseId = displayDoc ? getCaseId(displayDoc) : null
+  const projectId = displayDoc ? getProjectId(displayDoc) : null
+
+  const triggerKnowledgeAction = (actionLabel: string) => {
+    if (!displayDoc) return
+
+    const caseLinked = Boolean(caseId)
+    const messages: Record<string, string> = {
+      "FAQ로 활용": `"${displayDoc.title}" 문서를 FAQ 응답 흐름에 연결했습니다.`,
+      "상담 답변 초안 생성": `"${displayDoc.title}" 기반 상담 답변 초안 생성을 요청했습니다.`,
+      "관련 케이스에 연결": caseLinked
+        ? "관련 케이스 화면으로 이동합니다."
+        : "먼저 연결할 케이스를 지정해 주세요. 현재는 관련 케이스 태그가 없습니다.",
+      "AI 팀에게 보완 요청": `"${displayDoc.title}" 문서 보완 요청을 AI 팀 대기열에 올렸습니다.`,
+      "법령 검토": `"${displayDoc.title}" 문서를 기준으로 법령 검토를 시작합니다.`,
+      "공지 초안": `"${displayDoc.title}" 내용을 바탕으로 공지 초안 생성을 시작합니다.`,
+    }
+
+    if (actionLabel === "관련 케이스에 연결" && caseLinked) {
+      window.location.assign(`/${orgPrefix}/cases/${caseId}`)
+      return
+    }
+
+    addToast(messages[actionLabel] ?? `${actionLabel} 작업을 시작했습니다.`, caseLinked ? "success" : "info")
+  }
+
+  const panelContent = useMemo(() => {
+    if (!displayDoc) {
+      return (
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">문서/지식베이스 요약</p>
+            <p className="mt-1 text-sm text-slate-500">
+              문서를 선택하면 분류, 최근 수정, 연결 케이스와 운영 액션을 바로 실행할 수 있습니다.
+            </p>
+          </div>
+
+          <div className="grid gap-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs text-slate-500">전체 문서</p>
+              <p className="mt-1 text-xl font-semibold text-slate-900">{allDocs.length}개</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-xs text-slate-500">지식베이스 문서</p>
+              <p className="mt-1 text-base font-semibold text-slate-900">
+                {allDocs.filter((doc) => doc.documentScope === "knowledge_base").length}개
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-semibold text-slate-600">바로 실행</p>
+            <div className="mt-3 flex flex-col gap-2">
+              <Button size="sm" className="justify-start bg-teal-600 text-white hover:bg-teal-700" onClick={() => setShowNewDialog(true)}>
+                새 문서 작성
+              </Button>
+              <Button size="sm" variant="outline" className="justify-start" onClick={() => fileInputRef.current?.click()}>
+                문서 가져오기
+              </Button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    const visibleTags = getVisibleTags(displayDoc)
+    const displayCategory = categories.find((item) => item.value === displayDoc.category)?.label ?? displayDoc.category
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <p className="text-lg font-semibold text-slate-900">{displayDoc.title}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {displayDoc.documentRoleLabel ?? "지식베이스"} · {displayCategory}
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">마지막 수정</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">
+              {formatDate(displayDoc.updatedAt ?? displayDoc.updated_at)}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">연결 구조</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">{getDocumentConnectionSummary(displayDoc)}</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-semibold text-slate-600">문서 메타데이터</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <div className="flex items-center justify-between gap-3">
+              <span>작성자</span>
+              <span className="font-medium text-slate-900">{displayDoc.author ?? "미기록"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>태그</span>
+              <span className="font-medium text-slate-900">{visibleTags.length}개</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>프로젝트</span>
+              <span className="font-medium text-slate-900">{displayDoc.linkedProject?.name ?? "미연결"}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-600">운영 액션</p>
+          <div className="mt-3 flex flex-col gap-2">
+            {["FAQ로 활용", "상담 답변 초안 생성", "관련 케이스에 연결", "AI 팀에게 보완 요청"].map((label) => (
+              <Button key={label} size="sm" variant="outline" className="justify-start" onClick={() => triggerKnowledgeAction(label)}>
+                {label}
+              </Button>
+            ))}
+            {projectId && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="justify-start"
+                onClick={() => window.location.assign(`/${orgPrefix}/projects/${projectId}`)}
+              >
+                연결 프로젝트 보기
+              </Button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }, [allDocs, caseId, categories, displayDoc, orgPrefix, projectId, setShowNewDialog])
+
+  const panelContentKey = useMemo(
+    () =>
+      JSON.stringify({
+        displayDocId: displayDoc?.id ?? null,
+        allDocCount: allDocs.length,
+        categoryCount: categories.length,
+        caseId: caseId ?? null,
+        projectId: projectId ?? null,
+      }),
+    [allDocs.length, caseId, categories.length, displayDoc?.id, projectId],
+  )
+
+  useEffect(() => {
+    setPanelContent(panelContent)
+    return () => setPanelContent(null)
+  }, [panelContentKey, setPanelContent])
 
   return (
     <div className="h-full flex flex-col">
@@ -698,7 +961,7 @@ export function DocumentsPage() {
       >
         <div>
           <h1 className="text-lg font-bold" style={{ color: "var(--text-primary)" }}>
-            지식베이스
+            문서/지식베이스
           </h1>
           <p className="text-xs mt-0.5" style={{ color: "var(--text-tertiary)" }}>
             {allDocs.length}개 문서
@@ -710,11 +973,11 @@ export function DocumentsPage() {
           )}
           <Button size="sm" variant="outline" className="text-xs gap-1" onClick={handleExport}>
             <Download size={14} />
-            Markdown Export
+            Markdown 내보내기
           </Button>
           <Button size="sm" variant="outline" className="text-xs gap-1" onClick={() => fileInputRef.current?.click()} disabled={isImporting}>
             <Upload size={14} />
-            Import
+            문서 가져오기
           </Button>
           <input
             ref={fileInputRef}
@@ -740,7 +1003,24 @@ export function DocumentsPage() {
         className="flex items-center justify-between gap-3 px-6 py-2 shrink-0"
         style={{ borderBottom: "1px solid var(--border-default)" }}
       >
-        <div className="flex gap-1 overflow-x-auto">
+        <div className="flex flex-col gap-2 overflow-x-auto">
+          <div className="flex gap-1 overflow-x-auto">
+            {SCOPE_OPTIONS.map((scope) => (
+              <button
+                key={scope.value}
+                onClick={() => setActiveScope(scope.value)}
+                className="px-3 py-1 rounded-full text-xs font-medium transition-colors whitespace-nowrap"
+                style={
+                  activeScope === scope.value
+                    ? { backgroundColor: "var(--text-primary)", color: "#fff" }
+                    : { backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }
+                }
+              >
+                {scope.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-1 overflow-x-auto">
           {categories.map((category) => (
             <button
               key={category.value}
@@ -755,10 +1035,21 @@ export function DocumentsPage() {
               {category.label}
             </button>
           ))}
+          </div>
         </div>
-        <Button size="sm" variant="outline" className="text-xs shrink-0" onClick={handleAddCategory}>
-          카테고리 추가
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs shrink-0"
+            onClick={() => setHideCaseArtifacts((current) => !current)}
+          >
+            {hideCaseArtifacts ? "케이스 산출물 숨김" : "케이스 산출물 포함"}
+          </Button>
+          <Button size="sm" variant="outline" className="text-xs shrink-0" onClick={handleAddCategory}>
+            카테고리 추가
+          </Button>
+        </div>
       </div>
 
       <div className="flex flex-1 min-h-0">
@@ -788,49 +1079,66 @@ export function DocumentsPage() {
               action={{ label: "새 문서 작성", onClick: () => setShowNewDialog(true) }}
             />
           ) : (
-            <div className="p-2 flex flex-col gap-2">
-              {filtered.map((doc) => {
-                const updatedAt = doc.updatedAt ?? doc.updated_at
-                const isActive = displayDoc?.id === doc.id
-                return (
-                  <div
-                    key={doc.id}
-                    className="rounded-lg px-3 py-3 transition-colors"
-                    style={{
-                      backgroundColor: isActive ? "var(--color-primary-bg)" : "transparent",
-                      border: isActive ? "1px solid rgba(20,184,166,0.25)" : "1px solid var(--border-default)",
-                    }}
-                  >
-                    <button
-                      onClick={() => setSelectedDocId(doc.id)}
-                      className="w-full text-left"
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-1">
-                        <p
-                          className="text-sm font-medium truncate flex-1"
-                          style={{ color: isActive ? "var(--color-teal-500)" : "var(--text-primary)" }}
-                        >
-                          {doc.title}
-                        </p>
-                        <CategoryBadge category={doc.category} categories={categories} />
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                        {isAiGenerated(doc) && (
-                          <Badge className="text-xs border-0 px-1.5 py-0" style={{ backgroundColor: "rgba(20,184,166,0.1)", color: "var(--color-teal-500)" }}>
-                            AI 생성
-                          </Badge>
-                        )}
-                      </div>
-                      {updatedAt && (
-                        <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                          {formatDate(updatedAt)}
-                        </p>
-                      )}
-                    </button>
-
+            <div className="p-2 flex flex-col gap-4">
+              {groupedDocs.map((section) => (
+                <div key={section.value} className="space-y-2">
+                  <div className="px-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--text-tertiary)" }}>
+                        {section.label}
+                      </p>
+                      <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                        {section.docs.length}개
+                      </span>
+                    </div>
                   </div>
-                )
-              })}
+                  {section.docs.map((doc) => {
+                    const updatedAt = doc.updatedAt ?? doc.updated_at
+                    const isActive = displayDoc?.id === doc.id
+                    return (
+                      <div
+                        key={doc.id}
+                        className="rounded-lg px-3 py-3 transition-colors"
+                        style={{
+                          backgroundColor: isActive ? "var(--color-primary-bg)" : "transparent",
+                          border: isActive ? "1px solid rgba(20,184,166,0.25)" : "1px solid var(--border-default)",
+                        }}
+                      >
+                        <button
+                          onClick={() => setSelectedDocId(doc.id)}
+                          className="w-full text-left"
+                        >
+                          <div className="flex items-start justify-between gap-2 mb-1">
+                            <p
+                              className="text-sm font-medium truncate flex-1"
+                              style={{ color: isActive ? "var(--color-teal-500)" : "var(--text-primary)" }}
+                            >
+                              {doc.title}
+                            </p>
+                            <CategoryBadge category={doc.category} categories={categories} />
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                            <RoleBadge doc={doc} />
+                            {isAiGenerated(doc) && (
+                              <Badge className="text-xs border-0 px-1.5 py-0" style={{ backgroundColor: "rgba(20,184,166,0.1)", color: "var(--color-teal-500)" }}>
+                                AI 생성
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs truncate mb-1" style={{ color: "var(--text-secondary)" }}>
+                            {getDocumentConnectionSummary(doc)}
+                          </p>
+                          {updatedAt && (
+                            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                              {formatDate(updatedAt)}
+                            </p>
+                          )}
+                        </button>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
             </div>
           )}
         </ScrollArea>
@@ -886,6 +1194,8 @@ export function DocumentsPage() {
               </div>
 
               <div className="flex items-center gap-2 flex-wrap mb-5">
+                <RoleBadge doc={displayDoc} />
+                <CategoryBadge category={displayDoc.category} categories={categories} />
                 {isAiGenerated(displayDoc) && (
                   <Badge
                     className="text-xs border-0 px-2 py-0.5"
@@ -913,7 +1223,26 @@ export function DocumentsPage() {
                     관련 케이스 보기
                   </button>
                 )}
+                {projectId && (
+                  <button
+                    className="text-xs underline underline-offset-2"
+                    style={{ color: "var(--color-teal-500)" }}
+                    onClick={() => window.location.assign(`/${orgPrefix}/projects/${projectId}`)}
+                  >
+                    연결 프로젝트 보기
+                  </button>
+                )}
               </div>
+
+              {!isEditing && (
+                <div className="mb-5 flex flex-wrap gap-2">
+                  {["FAQ로 활용", "상담 답변 초안 생성", "관련 케이스에 연결", "AI 팀에게 보완 요청", "법령 검토", "공지 초안"].map((label) => (
+                    <Button key={label} size="sm" variant="outline" onClick={() => triggerKnowledgeAction(label)}>
+                      {label}
+                    </Button>
+                  ))}
+                </div>
+              )}
 
               {isEditing ? (
                 <div className="flex flex-col gap-3 mb-5">
@@ -940,9 +1269,9 @@ export function DocumentsPage() {
                 </div>
               ) : (
                 <>
-                  {displayDoc.tags && displayDoc.tags.filter((tag) => tag !== "ai-generated").length > 0 && (
+                  {getVisibleTags(displayDoc).length > 0 && (
                     <div className="flex gap-1.5 flex-wrap mb-5">
-                      {displayDoc.tags.filter((tag) => tag !== "ai-generated").map((tag) => (
+                      {getVisibleTags(displayDoc).map((tag) => (
                         <Badge
                           key={tag}
                           className="text-xs border-0 px-2 py-0.5"

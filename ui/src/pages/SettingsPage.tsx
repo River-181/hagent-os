@@ -32,6 +32,7 @@ import {
   Cpu,
   Download,
   Loader2,
+  MessageSquare,
   ShieldCheck,
   SlidersHorizontal,
   Trash2,
@@ -61,6 +62,10 @@ function humanizeInstitutionType(value: string | undefined) {
 function humanizeInstitutionSize(value: string | undefined) {
   if (!value) return ""
   return institutionSizeLabelMap[value] ?? value
+}
+
+function isObjectRecord(value: unknown): value is Record<string, any> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
 
 function SectionCard({
@@ -210,12 +215,17 @@ export function SettingsPage() {
   const [topGoal, setTopGoal] = useState("")
   const [principalName, setPrincipalName] = useState("")
 
-  const [primaryAdapterType, setPrimaryAdapterType] = useState("codex_local")
+  const [primaryAdapterType, setPrimaryAdapterType] = useState("codex_qauth")
   const [primaryModel, setPrimaryModel] = useState("gpt-5-codex")
   const [fallbackAdapterType, setFallbackAdapterType] = useState("claude_local")
   const [autoRun, setAutoRun] = useState(true)
   const [allowDegradedMode, setAllowDegradedMode] = useState(true)
   const [applyToExistingAgents, setApplyToExistingAgents] = useState(true)
+  const [monthlyBudgetKrw, setMonthlyBudgetKrw] = useState("500000")
+  const [primaryInputUnitCost, setPrimaryInputUnitCost] = useState("6")
+  const [primaryOutputUnitCost, setPrimaryOutputUnitCost] = useState("18")
+  const [fallbackInputUnitCost, setFallbackInputUnitCost] = useState("5")
+  const [fallbackOutputUnitCost, setFallbackOutputUnitCost] = useState("15")
 
   const [integrationPrefs, setIntegrationPrefs] = useState<Record<string, IntegrationPreference>>({})
   const [censorLogs, setCensorLogs] = useState(false)
@@ -233,6 +243,11 @@ export function SettingsPage() {
     queryKey: queryKeys.adapters.all,
     queryFn: () => adaptersApi.list(),
   })
+  const channelsQuery = useQuery({
+    queryKey: [...queryKeys.organizations.detail(selectedOrgId ?? ""), "channels", "settings"],
+    queryFn: () => organizationsApi.getChannels(selectedOrgId!),
+    enabled: !!selectedOrgId,
+  })
   const pluginsQuery = useQuery({
     queryKey: queryKeys.plugins.all,
     queryFn: () => pluginsApi.list(),
@@ -245,6 +260,7 @@ export function SettingsPage() {
 
   const adapters = adaptersQuery.data?.adapters ?? []
   const integrations = adaptersQuery.data?.integrations ?? []
+  const channels = channelsQuery.data ?? {}
   const plugins = pluginsQuery.data ?? []
   const skills = skillsQuery.data ?? []
 
@@ -272,12 +288,24 @@ export function SettingsPage() {
     setTopGoal((general.topGoal as string | undefined) ?? (bootstrap.topGoal as string | undefined) ?? "")
     setPrincipalName((general.principalName as string | undefined) ?? "원장")
 
-    setPrimaryAdapterType((aiPolicy.primaryAdapterType as string | undefined) ?? (bootstrap.selectedAdapterType as string | undefined) ?? "codex_local")
+    setPrimaryAdapterType((aiPolicy.primaryAdapterType as string | undefined) ?? (bootstrap.selectedAdapterType as string | undefined) ?? "codex_qauth")
     setPrimaryModel((aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-5-codex")
     setFallbackAdapterType((aiPolicy.fallbackAdapterType as string | undefined) ?? "claude_local")
     setAutoRun((aiPolicy.autoRun as boolean | undefined) ?? true)
     setAllowDegradedMode((aiPolicy.allowDegradedMode as boolean | undefined) ?? true)
     setApplyToExistingAgents(true)
+    setMonthlyBudgetKrw(String(aiPolicy.monthlyBudgetKrw ?? 500000))
+
+    const modelPricing =
+      isObjectRecord(aiPolicy.modelPricing) ? (aiPolicy.modelPricing as Record<string, any>) : {}
+    const primaryPricing = isObjectRecord(modelPricing[(aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-5-codex"])
+      ? modelPricing[(aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-5-codex"]
+      : {}
+    const fallbackPricing = isObjectRecord(modelPricing["claude-sonnet-4-6"]) ? modelPricing["claude-sonnet-4-6"] : {}
+    setPrimaryInputUnitCost(String(primaryPricing.inputPer1kKrw ?? primaryPricing.input ?? 6))
+    setPrimaryOutputUnitCost(String(primaryPricing.outputPer1kKrw ?? primaryPricing.output ?? 18))
+    setFallbackInputUnitCost(String(fallbackPricing.inputPer1kKrw ?? fallbackPricing.input ?? 5))
+    setFallbackOutputUnitCost(String(fallbackPricing.outputPer1kKrw ?? fallbackPricing.output ?? 15))
 
     const nextIntegrationPrefs: Record<string, IntegrationPreference> = {}
     for (const item of integrations) {
@@ -292,9 +320,14 @@ export function SettingsPage() {
     setCensorLogs((instance.censorLogs as boolean | undefined) ?? false)
     setKeyboardShortcuts((instance.keyboardShortcuts as boolean | undefined) ?? true)
     setFeedbackSharing((instance.feedbackSharing as string | undefined) ?? "prompt")
+    setAdapterTestResult(
+      isObjectRecord(instance.connectionTests) ? (instance.connectionTests as Record<string, any>) : {},
+    )
   }, [selectedOrg, integrations])
 
   const selectedAdapter = adapters.find((adapter: any) => adapter.key === primaryAdapterType) ?? adapters[0] ?? null
+  const selectedCodexAdapterKey = primaryAdapterType === "codex_qauth" ? "codex_qauth" : "codex_local"
+  const selectedCodexAdapterTest = adapterTestResult[selectedCodexAdapterKey]
   const installedSkills = skills.filter((item: any) => item.installed)
   const actionRequiredSkills = skills.filter((item: any) => !item.ready)
   const connectedIntegrations = integrations.filter((item: any) => item.connected)
@@ -325,9 +358,25 @@ export function SettingsPage() {
   })
 
   const adapterTestMutation = useMutation({
-    mutationFn: (key: string) => adaptersApi.test(key),
-    onSuccess: (result, key) => {
+    mutationFn: (key: string) => adaptersApi.test(key, selectedOrgId ?? undefined),
+    onSuccess: async (result, key) => {
       setAdapterTestResult((prev) => ({ ...prev, [key]: result }))
+      try {
+        if (selectedOrgId) {
+          await organizationsApi.update(selectedOrgId, {
+            settings: {
+              instance: {
+                connectionTests: {
+                  [key]: result,
+                },
+              },
+            },
+          })
+          await queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all })
+        }
+      } catch (persistError) {
+        toastError(persistError instanceof Error ? persistError.message : "연결 테스트 결과 저장에 실패했습니다.")
+      }
       success(result.connected ? "연결 테스트가 성공했습니다." : "연결 테스트는 응답했지만 실연동은 아닙니다.")
     },
     onError: (err) => {
@@ -393,6 +442,7 @@ export function SettingsPage() {
             { href: "#company-settings", label: "기관 기본 정보", icon: <Building2 size={15} /> },
             { href: "#ai-policy", label: "AI 운영 정책", icon: <Bot size={15} /> },
             { href: "#integrations", label: "외부 연동", icon: <Cable size={15} /> },
+            { href: "#channel-operations", label: "채널 운영", icon: <MessageSquare size={15} /> },
             { href: "#instance", label: "앱 환경", icon: <SlidersHorizontal size={15} /> },
           ].map((item) => (
             <a
@@ -610,6 +660,47 @@ export function SettingsPage() {
             onCheckedChange={setApplyToExistingAgents}
           />
 
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Field label="월 예산 (KRW)" hint="조직 전체 AI 실행 예산 경고 기준입니다.">
+              <Input
+                value={monthlyBudgetKrw}
+                onChange={(e) => setMonthlyBudgetKrw(e.target.value.replace(/[^0-9]/g, ""))}
+                placeholder="500000"
+              />
+            </Field>
+            <Field label={`${primaryModel} 입력 단가`} hint="1K input tokens 당 원화 추정값">
+              <Input
+                value={primaryInputUnitCost}
+                onChange={(e) => setPrimaryInputUnitCost(e.target.value.replace(/[^0-9.]/g, ""))}
+                placeholder="6"
+              />
+            </Field>
+            <Field label={`${primaryModel} 출력 단가`} hint="1K output tokens 당 원화 추정값">
+              <Input
+                value={primaryOutputUnitCost}
+                onChange={(e) => setPrimaryOutputUnitCost(e.target.value.replace(/[^0-9.]/g, ""))}
+                placeholder="18"
+              />
+            </Field>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Field label="Fallback 입력 단가" hint="보조 모델 입력 토큰 단가입니다.">
+              <Input
+                value={fallbackInputUnitCost}
+                onChange={(e) => setFallbackInputUnitCost(e.target.value.replace(/[^0-9.]/g, ""))}
+                placeholder="5"
+              />
+            </Field>
+            <Field label="Fallback 출력 단가" hint="보조 모델 출력 토큰 단가입니다.">
+              <Input
+                value={fallbackOutputUnitCost}
+                onChange={(e) => setFallbackOutputUnitCost(e.target.value.replace(/[^0-9.]/g, ""))}
+                placeholder="15"
+              />
+            </Field>
+          </div>
+
           <div className="grid gap-3 lg:grid-cols-2">
             <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
               <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
@@ -617,14 +708,18 @@ export function SettingsPage() {
                 Codex 연결 상태
               </div>
               <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                `OPENAI_API_KEY`가 있어야 실제 케이스를 Codex로 처리합니다. 없으면 `mock_local` fallback이 사용됩니다.
+                `Codex qauth 로그인` 또는 `OPENAI_API_KEY`가 있으면 실제 케이스를 Codex로 처리합니다. 없으면 `mock_local` fallback이 사용됩니다.
               </p>
               <p className="mt-2 text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
-                연결 방법: `{SETTINGS_ENV_PATH}`에 `OPENAI_API_KEY=...`를 넣고 서버를 다시 시작하면 됩니다.
+                연결 방법: 심사 환경에서는 `codex login`으로 ChatGPT 로그인 상태를 유지하세요. API key 방식을 쓸 경우에는 `{SETTINGS_ENV_PATH}`에 `OPENAI_API_KEY=...`를 넣고 서버를 다시 시작하면 됩니다.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <StatusPill tone={selectedAdapter?.connected ? "good" : "warn"}>
-                  {selectedAdapter?.connected ? "Codex 연결됨" : "OPENAI_API_KEY 필요"}
+                  {selectedAdapter?.connected
+                    ? "Codex 연결됨"
+                    : primaryAdapterType === "codex_qauth"
+                      ? "Codex 로그인 필요"
+                      : "OPENAI_API_KEY 필요"}
                 </StatusPill>
                 {selectedAdapter?.missingEnv?.map((item: string) => (
                   <button
@@ -644,17 +739,20 @@ export function SettingsPage() {
                   size="sm"
                   variant="outline"
                   disabled={adapterTestMutation.isPending}
-                  onClick={() => adapterTestMutation.mutate("codex_local")}
+                  onClick={() => adapterTestMutation.mutate(selectedCodexAdapterKey)}
                 >
                   {adapterTestMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
                   Codex 연결 테스트
                 </Button>
-                {adapterTestResult.codex_local ? (
+                {selectedCodexAdapterTest ? (
                   <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                    {adapterTestResult.codex_local.connected
-                      ? `실연동 응답: ${adapterTestResult.codex_local.preview ?? "-"}`
-                      : `degraded 응답: ${adapterTestResult.codex_local.preview ?? "-"}`
+                    {selectedCodexAdapterTest.connected
+                      ? `실연동 응답: ${selectedCodexAdapterTest.preview ?? "-"}`
+                      : `degraded 응답: ${selectedCodexAdapterTest.preview ?? "-"}`
                     }
+                    {selectedCodexAdapterTest.testedAt
+                      ? ` · ${new Date(selectedCodexAdapterTest.testedAt).toLocaleString("ko-KR")}`
+                      : ""}
                   </span>
                 ) : null}
               </div>
@@ -704,6 +802,9 @@ export function SettingsPage() {
                       ? `조회 가능: ${adapterTestResult["korean-law-mcp"].preview ?? "-"}`
                       : `degraded: ${adapterTestResult["korean-law-mcp"].preview ?? "-"}`
                     }
+                    {adapterTestResult["korean-law-mcp"].testedAt
+                      ? ` · ${new Date(adapterTestResult["korean-law-mcp"].testedAt).toLocaleString("ko-KR")}`
+                      : ""}
                   </span>
                 ) : null}
               </div>
@@ -724,6 +825,17 @@ export function SettingsPage() {
                         autoRun,
                         allowDegradedMode,
                         applyToExistingAgents,
+                        monthlyBudgetKrw: Number(monthlyBudgetKrw || 0),
+                        modelPricing: {
+                          [primaryModel]: {
+                            inputPer1kKrw: Number(primaryInputUnitCost || 0),
+                            outputPer1kKrw: Number(primaryOutputUnitCost || 0),
+                          },
+                          "claude-sonnet-4-6": {
+                            inputPer1kKrw: Number(fallbackInputUnitCost || 0),
+                            outputPer1kKrw: Number(fallbackOutputUnitCost || 0),
+                          },
+                        },
                       },
                     },
                   },
@@ -849,6 +961,106 @@ export function SettingsPage() {
             >
               연동 설정 저장
             </Button>
+          </div>
+        </SectionCard>
+
+        <SectionCard
+          id="channel-operations"
+          icon={<MessageSquare size={16} />}
+          title="채널 운영"
+          description="실제 문의가 들어오는 채널 상태와 Kakao/Telegram 회신 경로를 운영 관점에서 확인합니다."
+        >
+          <div className="grid gap-4 lg:grid-cols-3">
+            {[
+              {
+                key: "kakao",
+                label: "Kakao Channel",
+                description: "학부모 민원/상담 인바운드",
+                status: channels.kakao?.enabled ? "활성" : "비활성",
+                detail: channels.kakao?.channelUrl ?? channels.kakao?.searchId ?? "channel not configured",
+              },
+              {
+                key: "telegram",
+                label: "Telegram Bot",
+                description: "운영 요청/상담 인바운드",
+                status: channels.telegram?.enabled ? "활성" : "비활성",
+                detail: channels.telegram?.botUsername ?? "bot not configured",
+              },
+              {
+                key: "kakao-outbound",
+                label: "Kakao Outbound",
+                description: "승인 후 자동 회신 또는 운영자 발송 브리지",
+                status: integrations.find((item: any) => item.key === "kakao-outbound")?.connected ? "자동 발송 가능" : "operator bridge fallback",
+                detail:
+                  adapterTestResult["kakao-outbound"]?.preview ??
+                  integrations.find((item: any) => item.key === "kakao-outbound")?.description ??
+                  "provider not configured",
+              },
+              {
+                key: "telegram-outbound",
+                label: "Telegram Outbound",
+                description: "승인 후 텔레그램 자동 회신 또는 운영자 브리지",
+                status:
+                  channels.telegram?.enabled && channels.telegram?.botToken
+                    ? "자동 발송 가능"
+                    : "operator bridge fallback",
+                detail:
+                  adapterTestResult["telegram-outbound"]?.preview ??
+                  channels.telegram?.botUsername ??
+                  "bot not configured",
+              },
+            ].map((channel) => (
+              <div
+                key={channel.key}
+                className="rounded-2xl border px-4 py-4"
+                style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                    {channel.label}
+                  </div>
+                  <StatusPill tone={/가능|활성/.test(channel.status) ? "good" : "warn"}>
+                    {channel.status}
+                  </StatusPill>
+                </div>
+                <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+                  {channel.description}
+                </div>
+                <div className="mt-3 text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
+                  {channel.detail}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={adapterTestMutation.isPending}
+              onClick={() => adapterTestMutation.mutate("kakao-outbound")}
+            >
+              {adapterTestMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+              Kakao 발송 경로 테스트
+            </Button>
+            {adapterTestResult["kakao-outbound"]?.testedAt ? (
+              <span className="text-xs self-center" style={{ color: "var(--text-secondary)" }}>
+                마지막 테스트 {new Date(adapterTestResult["kakao-outbound"].testedAt).toLocaleString("ko-KR")}
+              </span>
+            ) : null}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={adapterTestMutation.isPending}
+              onClick={() => adapterTestMutation.mutate("telegram-outbound")}
+            >
+              {adapterTestMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+              Telegram 발송 경로 테스트
+            </Button>
+            {adapterTestResult["telegram-outbound"]?.testedAt ? (
+              <span className="text-xs self-center" style={{ color: "var(--text-secondary)" }}>
+                마지막 테스트 {new Date(adapterTestResult["telegram-outbound"].testedAt).toLocaleString("ko-KR")}
+              </span>
+            ) : null}
           </div>
         </SectionCard>
 

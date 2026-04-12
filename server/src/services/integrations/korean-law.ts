@@ -48,7 +48,7 @@ export function buildComplaintLawQuery(title: string, description: string) {
   if (/강사|근로|급여|해고|휴게|근무/.test(source)) {
     return "학원 강사 근로기준법 및 근로조건 관련 규정"
   }
-  if (/학원법|법적|규정|위법|소송/.test(source)) {
+  if (/학원법|법적|규정|위법|소송|영업|운영 현황|설립|등록|교습비/.test(source)) {
     return `${title} ${description}`.trim()
   }
   return null

@@ -2,6 +2,8 @@ import { Router } from "express"
 import { eq, desc } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
+import { buildRunUsageSummary } from "../services/costs.js"
+import { buildAgentSkillRuntimeContext } from "../services/skill-runtime.js"
 
 export function runRoutes(db: Db): Router {
   const router = Router()
@@ -34,6 +36,15 @@ export function runRoutes(db: Db): Router {
         .from(schema.activityEvents)
         .where(eq(schema.activityEvents.entityId, run.id))
         .orderBy(desc(schema.activityEvents.createdAt))
+      const runtimeSkills = agent ? await buildAgentSkillRuntimeContext(db, agent.id) : { bundles: [], text: "" }
+      const usage = await buildRunUsageSummary(db, {
+        organizationId: run.organizationId,
+        runId: run.id,
+        inputTokens: run.inputTokens ?? 0,
+        outputTokens: run.outputTokens ?? 0,
+        totalTokens: run.tokensUsed ?? 0,
+        model: (agent?.adapterConfig as { model?: string } | null)?.model ?? null,
+      })
 
       res.json({
         ...run,
@@ -48,11 +59,9 @@ export function runRoutes(db: Db): Router {
           run.input ? { role: "user", type: "input", content: run.input, createdAt: run.createdAt } : null,
           run.output ? { role: "assistant", type: "output", content: run.output, createdAt: run.completedAt ?? run.updatedAt } : null,
         ].filter(Boolean),
-        usage: {
-          totalTokens: run.tokensUsed,
-          inputTokens: run.inputTokens,
-          outputTokens: run.outputTokens,
-        },
+        usage,
+        usedSkills: runtimeSkills.bundles,
+        skillContext: runtimeSkills.text,
         activity,
       })
     } catch (err) {

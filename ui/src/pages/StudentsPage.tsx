@@ -1,7 +1,9 @@
 import { useContext, useEffect, useMemo, useState, type ChangeEvent, type DragEvent } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useNavigate, useParams } from "react-router-dom"
 import { studentsApi } from "@/api/students"
 import { schedulesApi } from "@/api/schedules"
+import { casesApi } from "@/api/cases"
 import { ApiError, api } from "@/api/client"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -34,6 +36,7 @@ import { Switch } from "@/components/ui/switch"
 import { ToastContext } from "@/components/ToastContext"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
+import { usePanel } from "@/context/PanelContext"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
 import {
@@ -68,6 +71,17 @@ interface Parent {
   email: string
 }
 
+interface BillingProfile {
+  payerName: string
+  paymentMethod: string
+  bankName: string
+  accountHolder: string
+  accountNumberMasked: string
+  cardLabel: string
+  cardLast4: string
+  billingMemo: string
+}
+
 interface AttendanceRecord {
   id: string
   date: string
@@ -92,6 +106,7 @@ interface StudentRecord {
   primaryPhone: string
   parent: Parent | null
   parents: Parent[]
+  billing: BillingProfile
   attendance: AttendanceRecord[]
   counselingHistory: CounselingEntry[]
   shuttle: boolean
@@ -126,6 +141,13 @@ const STATUS_OPTIONS = [
   { value: "inactive", label: "휴원" },
   { value: "at_risk", label: "이탈위험" },
   { value: "withdrawn", label: "퇴원" },
+]
+
+const PAYMENT_METHOD_OPTIONS = [
+  { value: "bank_transfer", label: "계좌이체" },
+  { value: "card", label: "카드" },
+  { value: "mixed", label: "혼합" },
+  { value: "cash", label: "현금" },
 ]
 
 const GRADE_FILTERS = ["", "초", "중", "고", "성인"] as const
@@ -222,6 +244,10 @@ function statusBadgeClass(status: StudentStatus): string {
     default:
       return "bg-slate-100 text-slate-700 border-slate-200"
   }
+}
+
+function paymentMethodLabel(value: string): string {
+  return PAYMENT_METHOD_OPTIONS.find((option) => option.value === value)?.label ?? (value || "-")
 }
 
 function riskTone(score: number) {
@@ -328,6 +354,7 @@ function normalizeStudent(value: unknown): StudentRecord {
   )
   const shuttle = toBooleanValue(record.shuttle, record.vehicleBoarding, record.busBoarding, record.usesShuttle)
   const attendance = toArray<unknown>(record.attendance).map(normalizeAttendance).filter(Boolean) as AttendanceRecord[]
+  const billingRecord = isRecord(record.billing) ? record.billing : isRecord(record.metadata) && isRecord(record.metadata.billing) ? record.metadata.billing : {}
   return {
     id: toStringValue(record.id),
     name: toStringValue(record.name, record.studentName, "이름 없음"),
@@ -338,6 +365,16 @@ function normalizeStudent(value: unknown): StudentRecord {
     primaryPhone: phone,
     parent,
     parents,
+    billing: {
+      payerName: toStringValue(billingRecord.payerName, parent?.name),
+      paymentMethod: toStringValue(billingRecord.paymentMethod),
+      bankName: toStringValue(billingRecord.bankName),
+      accountHolder: toStringValue(billingRecord.accountHolder),
+      accountNumberMasked: toStringValue(billingRecord.accountNumberMasked),
+      cardLabel: toStringValue(billingRecord.cardLabel),
+      cardLast4: toStringValue(billingRecord.cardLast4),
+      billingMemo: toStringValue(billingRecord.billingMemo, billingRecord.memo),
+    },
     attendance,
     counselingHistory: normalizeCounselingHistory(record.counselingHistory ?? record.counselings ?? record.consultations),
     shuttle,
@@ -714,6 +751,15 @@ function StudentFormDialog({
   const [parentName, setParentName] = useState("")
   const [parentPhone, setParentPhone] = useState("")
   const [parentEmail, setParentEmail] = useState("")
+  const [parentRelation, setParentRelation] = useState("부모")
+  const [paymentMethod, setPaymentMethod] = useState("bank_transfer")
+  const [payerName, setPayerName] = useState("")
+  const [bankName, setBankName] = useState("")
+  const [accountHolder, setAccountHolder] = useState("")
+  const [accountNumber, setAccountNumber] = useState("")
+  const [cardLabel, setCardLabel] = useState("")
+  const [cardLast4, setCardLast4] = useState("")
+  const [billingMemo, setBillingMemo] = useState("")
   const [shuttle, setShuttle] = useState(false)
   const [errors, setErrors] = useState<{ name?: string; grade?: string }>({})
 
@@ -726,6 +772,15 @@ function StudentFormDialog({
     setParentName(student?.parent?.name ?? "")
     setParentPhone(student?.parent?.phone ?? student?.primaryPhone ?? "")
     setParentEmail(student?.parent?.email ?? "")
+    setParentRelation(student?.parent?.relation ?? "부모")
+    setPaymentMethod(student?.billing.paymentMethod || "bank_transfer")
+    setPayerName(student?.billing.payerName ?? student?.parent?.name ?? "")
+    setBankName(student?.billing.bankName ?? "")
+    setAccountHolder(student?.billing.accountHolder ?? "")
+    setAccountNumber(student?.billing.accountNumberMasked ?? "")
+    setCardLabel(student?.billing.cardLabel ?? "")
+    setCardLast4(student?.billing.cardLast4 ?? "")
+    setBillingMemo(student?.billing.billingMemo ?? "")
     setShuttle(student?.shuttle ?? false)
     setErrors({})
   }, [open, student])
@@ -749,6 +804,17 @@ function StudentFormDialog({
         parentName,
         parentPhone,
         parentEmail,
+        parentRelation,
+        billing: {
+          payerName,
+          paymentMethod,
+          bankName,
+          accountHolder,
+          accountNumber,
+          cardLabel,
+          cardLast4,
+          memo: billingMemo,
+        },
         shuttle,
       }
 
@@ -827,8 +893,34 @@ function StudentFormDialog({
           <div className="space-y-2">
             <p className="text-xs font-medium text-slate-500">보호자 정보</p>
             <Input value={parentName} onChange={(event) => setParentName(event.target.value)} placeholder="보호자 이름" />
+            <Input value={parentRelation} onChange={(event) => setParentRelation(event.target.value)} placeholder="관계 (모/부/본인)" />
             <Input value={parentPhone} onChange={(event) => setParentPhone(event.target.value)} placeholder="연락처 (010-0000-0000)" />
             <Input value={parentEmail} onChange={(event) => setParentEmail(event.target.value)} placeholder="이메일" />
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-slate-500">결제 정보</p>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="결제 방식 선택" />
+              </SelectTrigger>
+              <SelectContent>
+                {PAYMENT_METHOD_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input value={payerName} onChange={(event) => setPayerName(event.target.value)} placeholder="납부자명" />
+            <div className="grid grid-cols-2 gap-2">
+              <Input value={bankName} onChange={(event) => setBankName(event.target.value)} placeholder="은행명" />
+              <Input value={accountHolder} onChange={(event) => setAccountHolder(event.target.value)} placeholder="예금주" />
+            </div>
+            <Input value={accountNumber} onChange={(event) => setAccountNumber(event.target.value)} placeholder="계좌번호 또는 마스킹값" />
+            <div className="grid grid-cols-2 gap-2">
+              <Input value={cardLabel} onChange={(event) => setCardLabel(event.target.value)} placeholder="카드 라벨" />
+              <Input value={cardLast4} onChange={(event) => setCardLast4(event.target.value)} placeholder="카드 끝 4자리" />
+            </div>
+            <Input value={billingMemo} onChange={(event) => setBillingMemo(event.target.value)} placeholder="납부 메모" />
           </div>
 
           <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
@@ -1006,6 +1098,57 @@ function StudentDetailSheet({
                   <Card className="gap-4 border-slate-200 bg-white py-5">
                     <div className="space-y-4 px-5">
                       <div className="flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-slate-500" />
+                        <h3 className="text-sm font-semibold text-slate-900">보호자 · 결제 정보</h3>
+                      </div>
+                      <div className="grid gap-3 rounded-2xl bg-slate-50 p-4 sm:grid-cols-2">
+                        <div>
+                          <p className="text-xs text-slate-500">주 보호자</p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.parent?.name ?? "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">관계</p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.parent?.relation ?? "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">보호자 연락처</p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">{formatPhone(mergedStudent.parent?.phone ?? "")}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">납부자</p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.billing.payerName || "-"}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">결제 방식</p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">{paymentMethodLabel(mergedStudent.billing.paymentMethod)}</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">계좌</p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">
+                            {mergedStudent.billing.bankName || mergedStudent.billing.accountNumberMasked
+                              ? `${mergedStudent.billing.bankName || "계좌"} ${mergedStudent.billing.accountNumberMasked}`.trim()
+                              : "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">카드</p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">
+                            {mergedStudent.billing.cardLabel || mergedStudent.billing.cardLast4
+                              ? `${mergedStudent.billing.cardLabel || "카드"} ${mergedStudent.billing.cardLast4 ? `· **** ${mergedStudent.billing.cardLast4}` : ""}`.trim()
+                              : "-"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-slate-500">메모</p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.billing.billingMemo || "-"}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="gap-4 border-slate-200 bg-white py-5">
+                    <div className="space-y-4 px-5">
+                      <div className="flex items-center gap-2">
                         <BookOpen className="h-4 w-4 text-slate-500" />
                         <h3 className="text-sm font-semibold text-slate-900">수강 중인 수업</h3>
                       </div>
@@ -1125,6 +1268,9 @@ function EmptyState({
 export function StudentsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
+  const { setPanelContent } = usePanel()
+  const navigate = useNavigate()
+  const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const [viewMode, setViewMode] = useState<ViewMode>("table")
   const [search, setSearch] = useState("")
   const [gradeFilter, setGradeFilter] = useState<(typeof GRADE_FILTERS)[number]>("")
@@ -1170,8 +1316,22 @@ export function StudentsPage() {
     },
   })
 
+  const casesQuery = useQuery<any[]>({
+    queryKey: queryKeys.cases.list(selectedOrgId ?? ""),
+    enabled: !!selectedOrgId,
+    queryFn: async () => {
+      if (!selectedOrgId) return []
+      try {
+        return await casesApi.list(selectedOrgId)
+      } catch {
+        return []
+      }
+    },
+  })
+
   const students = studentsQuery.data ?? []
   const schedules = schedulesQuery.data ?? []
+  const cases = casesQuery.data ?? []
 
   const filteredStudents = useMemo(() => {
     const query = debouncedSearch.trim().toLowerCase()
@@ -1256,7 +1416,179 @@ export function StudentsPage() {
     [selectedStudentId, students]
   )
 
+  const selectedStudentSchedules = useMemo(
+    () =>
+      selectedStudent
+        ? schedules.filter((schedule) => schedule.studentIds.includes(selectedStudent.id))
+        : [],
+    [selectedStudent, schedules]
+  )
+
+  const selectedStudentCases = useMemo(
+    () =>
+      selectedStudent
+        ? cases.filter((item: any) => String(item.studentId ?? "") === selectedStudent.id)
+        : [],
+    [cases, selectedStudent]
+  )
+
   const atRiskStudents = filteredStudents.filter((student) => student.riskPercent > 50)
+
+  const panelContent = useMemo(() => {
+    if (!selectedStudent) {
+      return (
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-semibold text-slate-900">학생 운영 요약</p>
+            <p className="mt-1 text-sm text-slate-500">
+              학생을 선택하면 보호자, 차량, 연결 수업, 최근 상담, 관련 케이스를 바로 확인할 수 있습니다.
+            </p>
+          </div>
+
+          <div className="grid gap-3">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs text-slate-500">전체 학생</p>
+              <p className="mt-1 text-xl font-semibold text-slate-900">{students.length}명</p>
+            </div>
+            <div className="rounded-2xl border border-orange-200 bg-orange-50 p-4">
+              <p className="text-xs text-orange-700">이탈 위험</p>
+              <p className="mt-1 text-xl font-semibold text-orange-900">{atRiskStudents.length}명</p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs font-semibold text-slate-600">바로 실행</p>
+            <div className="mt-3 flex flex-col gap-2">
+              <Button size="sm" className="justify-start bg-teal-600 text-white hover:bg-teal-700" onClick={() => setShowNewDialog(true)}>
+                학생 등록
+              </Button>
+              <Button size="sm" variant="outline" className="justify-start" onClick={() => setShowImportDialog(true)}>
+                CSV 가져오기
+              </Button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    const primaryGuardian = selectedStudent.parent ?? selectedStudent.parents[0] ?? null
+
+    return (
+      <div className="space-y-4">
+        <div>
+          <p className="text-lg font-semibold text-slate-900">{selectedStudent.name}</p>
+          <p className="mt-1 text-sm text-slate-500">
+            {selectedStudent.grade} · {statusLabel(selectedStudent.status)}
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">이탈 위험</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">{selectedStudent.riskPercent}%</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">차량 탑승</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">{selectedStudent.shuttle ? "탑승" : "미탑승"}</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-semibold text-slate-600">운영 연결</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <div className="flex items-center justify-between gap-3">
+              <span>보호자</span>
+              <span className="font-medium text-slate-900">{primaryGuardian?.name ?? "미등록"}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>결제 방식</span>
+              <span className="font-medium text-slate-900">{paymentMethodLabel(selectedStudent.billing.paymentMethod)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>연결 수업</span>
+              <span className="font-medium text-slate-900">{selectedStudentSchedules.length}개</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>최근 상담</span>
+              <span className="font-medium text-slate-900">{selectedStudent.counselingHistory.length}건</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>관련 케이스</span>
+              <span className="font-medium text-slate-900">{selectedStudentCases.length}건</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-600">연결 수업 미리보기</p>
+          <div className="mt-3 space-y-2">
+            {selectedStudentSchedules.length > 0 ? selectedStudentSchedules.slice(0, 3).map((schedule) => (
+              <div key={schedule.id} className="rounded-xl bg-slate-50 px-3 py-2">
+                <p className="text-sm font-medium text-slate-900">{schedule.title}</p>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  {schedule.instructorName || "담당 미지정"} · {schedule.startTime.slice(0, 5)}-{schedule.endTime.slice(0, 5)}
+                </p>
+              </div>
+            )) : (
+              <p className="text-sm text-slate-500">아직 연결된 수업이 없습니다.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-600">관련 케이스 바로가기</p>
+          <div className="mt-3 space-y-2">
+            {selectedStudentCases.length > 0 ? selectedStudentCases.slice(0, 3).map((item: any) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => orgPrefix && navigate(`/${orgPrefix}/cases/${item.id}`)}
+                className="w-full rounded-xl bg-slate-50 px-3 py-2 text-left"
+              >
+                <p className="text-sm font-medium text-slate-900">{item.title}</p>
+                <p className="mt-0.5 text-xs text-slate-500">{item.identifier ?? item.type ?? "케이스"}</p>
+              </button>
+            )) : (
+              <p className="text-sm text-slate-500">관련 케이스가 없습니다.</p>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }, [
+    navigate,
+    orgPrefix,
+    atRiskStudents.length,
+    selectedStudent,
+    selectedStudentCases,
+    selectedStudentSchedules,
+    setShowImportDialog,
+    setShowNewDialog,
+    students.length,
+  ])
+
+  const panelContentKey = useMemo(
+    () =>
+      JSON.stringify({
+        selectedStudentId: selectedStudent?.id ?? null,
+        studentCount: students.length,
+        atRiskCount: atRiskStudents.length,
+        caseCount: selectedStudentCases.length,
+        scheduleCount: selectedStudentSchedules.length,
+      }),
+    [
+      atRiskStudents.length,
+      selectedStudent?.id,
+      selectedStudentCases.length,
+      selectedStudentSchedules.length,
+      students.length,
+    ],
+  )
+
+  useEffect(() => {
+    setPanelContent(panelContent)
+    return () => setPanelContent(null)
+  }, [panelContentKey, setPanelContent])
 
   function handleSort(key: SortKey) {
     setSortState((current) => {

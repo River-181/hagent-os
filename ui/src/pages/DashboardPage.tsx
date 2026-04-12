@@ -29,6 +29,7 @@ import {
   CheckCircle,
   AlertTriangle,
   Loader2,
+  Sparkles,
 } from "lucide-react"
 
 // ─── case type labels ─────────────────────────────────────────────────────────
@@ -164,10 +165,10 @@ export function DashboardPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
   const [instruction, setInstruction] = useState("")
-
   const [lastDispatchResult, setLastDispatchResult] = useState<{
     plan: string
     runs: string[]
@@ -292,6 +293,15 @@ export function DashboardPage() {
         className="px-6 py-3 min-h-0"
         style={{ borderBottom: "1px solid var(--border-default)" }}
       >
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+            운영 지시
+          </div>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => navigate(`/${orgPrefix}/assistant`)}>
+            <Sparkles size={13} />
+            Assistant 열기
+          </Button>
+        </div>
         <InstructionBar
           agents={agentMentions}
           value={instruction}
@@ -299,6 +309,7 @@ export function DashboardPage() {
           onSubmit={() => dispatchMutation.mutate()}
           loading={dispatchMutation.isPending}
           disabled={!selectedOrgId}
+          placeholder="오케스트레이터에게 지시하기..."
         />
       </div>
 

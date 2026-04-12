@@ -20,13 +20,8 @@ import {
   Wallet,
   CheckSquare,
   Calendar,
-  Brain,
-  Shield,
-  Heart,
-  Sparkles,
   Cpu,
   Cog,
-  Lightbulb,
   FolderKanban,
   GraduationCap,
 } from "lucide-react"
@@ -35,7 +30,6 @@ import { useOrganization } from "@/context/OrganizationContext"
 import { useSidebar } from "@/context/SidebarContext"
 import { useQuery } from "@tanstack/react-query"
 import { casesApi } from "@/api/cases"
-import { agentsApi } from "@/api/agents"
 import { queryKeys } from "@/lib/queryKeys"
 import { NewCaseDialog } from "@/components/NewCaseDialog"
 import { cn } from "@/lib/utils"
@@ -106,27 +100,6 @@ function Divider() {
   return <div className="my-2 mx-3" style={{ height: 1, background: "var(--border-default)" }} />
 }
 
-function AgentStatusDot({ status }: { status?: string }) {
-  const classes: Record<string, string> = {
-    running: "w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse shrink-0",
-    idle: "w-1.5 h-1.5 rounded-full bg-gray-400 shrink-0",
-    error: "w-1.5 h-1.5 rounded-full bg-red-500 shrink-0",
-    paused: "w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0",
-  }
-  return <span className={classes[status ?? ""] ?? classes.idle} />
-}
-
-const sidebarAgentIconMap: Record<string, React.FC<{ size: number }>> = {
-  brain: ({ size }) => <Brain size={size} style={{ color: "var(--color-teal-500)" }} />,
-  shield: ({ size }) => <Shield size={size} style={{ color: "var(--color-teal-500)" }} />,
-  heart: ({ size }) => <Heart size={size} style={{ color: "#ef4444" }} />,
-  calendar: ({ size }) => <Calendar size={size} style={{ color: "#8b5cf6" }} />,
-  sparkles: ({ size }) => <Sparkles size={size} style={{ color: "#f59e0b" }} />,
-  cpu: ({ size }) => <Cpu size={size} style={{ color: "#3b82f6" }} />,
-  cog: ({ size }) => <Cog size={size} style={{ color: "#6b7280" }} />,
-  lightbulb: ({ size }) => <Lightbulb size={size} style={{ color: "#10b981" }} />,
-}
-
 export function Sidebar() {
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const base = `/${orgPrefix}`
@@ -143,15 +116,6 @@ export function Sidebar() {
     queryFn: () => casesApi.list(selectedOrgId!),
     enabled: !!selectedOrgId,
   })
-
-  const { data: agents = [] } = useQuery({
-    queryKey: queryKeys.agents.list(selectedOrgId ?? ""),
-    queryFn: () => agentsApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
-  })
-
-  const [agentsExpanded, setAgentsExpanded] = useState(true)
-  const MAX_AGENTS = 6
 
   const handleNavClick = () => {
     if (isMobile) closeSidebar()
@@ -198,80 +162,30 @@ export function Sidebar() {
 
       {/* Main nav */}
       <nav className="flex-1 px-2" onClick={handleNavClick}>
+        <SectionLabel label="오늘 운영" />
         <NavItem to={`${base}/dashboard`} icon={<LayoutDashboard size={16} />} label="대시보드" />
         <NavItem to={`${base}/inbox`} icon={<Bell size={16} />} label="알림함" />
-
-        <SectionLabel label="업무" />
         <NavItem to={`${base}/cases`} icon={<FileText size={16} />} label="케이스" />
-        <NavItem to={`${base}/projects`} icon={<FolderKanban size={16} />} label="프로젝트" />
         <NavItem to={`${base}/approvals`} icon={<CheckSquare size={16} />} label="승인" />
-        <NavItem to={`${base}/routines`} icon={<Clock size={16} />} label="자동 실행" />
-        <NavItem to={`${base}/goals`} icon={<Target size={16} />} label="운영 목표" />
 
-        <SectionLabel label="에이전트 팀" />
-        <NavItem to={`${base}/agents`} icon={<Bot size={16} />} label="에이전트" />
-        <NavItem
-          to={`${base}/org`}
-          icon={<Network size={16} />}
-          label="에이전트 조직도"
-        />
-
-        {/* Live agent list */}
-        {(agents as any[]).length > 0 && (
-          <div className="mt-1">
-            {agentsExpanded &&
-              (agents as any[]).slice(0, MAX_AGENTS).map((agent) => {
-                const AgentIcon = agent.icon ? sidebarAgentIconMap[agent.icon] : undefined
-                return (
-                  <NavLink
-                    key={agent.id}
-                    to={`${base}/agents/${agent.id}`}
-                    onClick={handleNavClick}
-                    className={({ isActive }) =>
-                      cn(
-                        "flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-colors",
-                        isActive
-                          ? "font-semibold"
-                          : "hover:bg-[var(--bg-tertiary)]"
-                      )
-                    }
-                    style={({ isActive }) => ({
-                      color: isActive ? "var(--color-teal-500)" : "var(--text-tertiary)",
-                      backgroundColor: isActive ? "var(--color-primary-bg)" : undefined,
-                    })}
-                  >
-                    {AgentIcon
-                      ? <AgentIcon size={12} />
-                      : <Bot size={12} style={{ color: "var(--text-tertiary)" }} />
-                    }
-                    <span className="truncate flex-1">{agent.name}</span>
-                    <AgentStatusDot status={agent.status} />
-                  </NavLink>
-                )
-              })}
-            {(agents as any[]).length > MAX_AGENTS && (
-              <button
-                onClick={() => setAgentsExpanded((v) => !v)}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs w-full rounded-lg hover:bg-[var(--bg-tertiary)] transition-colors"
-                style={{ color: "var(--text-disabled)" }}
-              >
-                {agentsExpanded
-                  ? `접기`
-                  : `더 보기 (+${(agents as any[]).length - MAX_AGENTS})`}
-              </button>
-            )}
-          </div>
-        )}
-
-        <SectionLabel label="학원 관리" />
+        <SectionLabel label="학원 운영" />
         <NavItem to={`${base}/students`} icon={<GraduationCap size={16} />} label="학생 관리" />
         <NavItem to={`${base}/instructors`} icon={<GraduationCap size={16} />} label="직원/강사 관리" />
-        <NavItem to={`${base}/documents`} icon={<BookOpen size={16} />} label="문서" />
-        <NavItem to={`${base}/skills`} icon={<Puzzle size={16} />} label="k-skill 레지스트리" />
-        <NavItem to={`${base}/plugins`} icon={<Cpu size={16} />} label="플러그인" />
-        <NavItem to={`${base}/adapters`} icon={<Cog size={16} />} label="어댑터" />
-        <NavItem to={`${base}/costs`} icon={<Wallet size={16} />} label="비용" />
         <NavItem to={`${base}/schedule`} icon={<Calendar size={16} />} label="일정" />
+        <NavItem to={`${base}/documents`} icon={<BookOpen size={16} />} label="문서" />
+
+        <SectionLabel label="AI 운영" />
+        <NavItem to={`${base}/agents`} icon={<Bot size={16} />} label="AI 팀" />
+        <NavItem to={`${base}/org`} icon={<Network size={16} />} label="조직도" />
+        <NavItem to={`${base}/routines`} icon={<Clock size={16} />} label="자동 실행" />
+        <NavItem to={`${base}/skills`} icon={<Puzzle size={16} />} label="업무 스킬" />
+        <NavItem to={`${base}/plugins`} icon={<Cpu size={16} />} label="외부 연동" />
+        <NavItem to={`${base}/adapters`} icon={<Cog size={16} />} label="AI 연결" />
+
+        <SectionLabel label="운영 관리" />
+        <NavItem to={`${base}/projects`} icon={<FolderKanban size={16} />} label="프로젝트" />
+        <NavItem to={`${base}/goals`} icon={<Target size={16} />} label="운영 목표" />
+        <NavItem to={`${base}/costs`} icon={<Wallet size={16} />} label="비용" />
         <NavItem to={`${base}/activity`} icon={<Activity size={16} />} label="처리 이력" />
         <NavItem to={`${base}/settings`} icon={<Settings size={16} />} label="설정" />
       </nav>

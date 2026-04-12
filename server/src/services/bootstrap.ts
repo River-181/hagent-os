@@ -378,7 +378,7 @@ const channelBindingSchema = z.object({
 const selectedAgentSchema = z.object({
   role: z.string().min(2),
   name: z.string().min(1),
-  adapterType: z.enum(["codex_local", "claude_local", "mock_local"]).optional(),
+  adapterType: z.enum(["codex_qauth", "codex_local", "claude_local", "mock_local"]).optional(),
   model: z.string().optional(),
   persona: z.string().optional(),
   mountedSkills: z.array(z.string()).optional(),
@@ -396,7 +396,7 @@ const bootstrapSchema = z.object({
   starterProjectName: z.string().min(2).default("운영 시작"),
   starterTeamPreset: z.string().min(2).default("academy-core"),
   initialInstruction: z.string().min(2).default("오늘 민원 처리하고 이번 주 이탈 위험 학생 알려줘"),
-  selectedAdapterType: z.enum(["codex_local", "claude_local", "mock_local"]).default("codex_local"),
+  selectedAdapterType: z.enum(["codex_qauth", "codex_local", "claude_local", "mock_local"]).default("codex_qauth"),
   selectedModel: z.string().min(2).default("gpt-5-codex"),
   mode: z.enum(["scratch", "demo"]).default("scratch"),
   setupProjectName: z.string().min(2).default("Academy Setup"),
@@ -1248,6 +1248,7 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
         sampleInboundMessages: input.mode === "demo" ? TANZANIA_PRESET.sampleInboundMessages : null,
         sampleProjectInstruction: input.mode === "demo" ? TANZANIA_PRESET.sampleProjectInstruction : null,
         samplePolicyInstruction: input.mode === "demo" ? TANZANIA_PRESET.samplePolicyInstruction : null,
+        sampleLegalQuestion: input.mode === "demo" ? TANZANIA_PRESET.sampleLegalQuestion : null,
       },
       documents: setupDocuments,
     }

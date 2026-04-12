@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react"
-import { Link, useParams } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useContext, useEffect, useState } from "react"
+import { Link, useNavigate, useParams } from "react-router-dom"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { casesApi } from "@/api/cases"
+import { ApiError } from "@/api/client"
 import { queryKeys } from "@/lib/queryKeys"
-import { Plus, Inbox, LayoutList, LayoutGrid, Search, ChevronDown, ChevronRight } from "lucide-react"
+import { Plus, Inbox, LayoutList, LayoutGrid, Search, ChevronDown, ChevronRight, Sparkles, FolderKanban, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Input } from "@/components/ui/input"
 import { StatusIcon, CaseStatus } from "@/components/StatusIcon"
@@ -15,6 +16,7 @@ import { CaseSeverityBadge } from "@/components/CaseSeverityBadge"
 import { KanbanBoard } from "@/components/KanbanBoard"
 import { NewCaseDialog } from "@/components/NewCaseDialog"
 import { FilterBar, Filters } from "@/components/FilterBar"
+import { ToastContext } from "@/components/ToastContext"
 
 const STATUS_ORDER: CaseStatus[] = ["backlog", "todo", "in_progress", "in_review", "blocked", "done"]
 
@@ -48,20 +50,38 @@ function normalizeCaseStatus(status?: string): CaseStatus {
   }
 }
 
-function CaseRow({ c, orgPrefix }: { c: any; orgPrefix: string }) {
+function outboundLabel(status?: string | null) {
+  if (status === "ready_to_send") return "발송 준비"
+  if (status === "sent") return "발송 완료"
+  if (status === "failed") return "발송 실패"
+  return null
+}
+
+function CaseRow({
+  c,
+  orgPrefix,
+  onDelete,
+  deleting,
+}: {
+  c: any
+  orgPrefix: string
+  onDelete: (caseId: string) => void
+  deleting: boolean
+}) {
   const assigneeName = c.assignee?.name ?? c.agent?.name ?? null
   const assigneeType: "agent" | "user" = c.agent?.name ? "agent" : "user"
   const normalizedStatus = normalizeCaseStatus(c.status)
+  const outbound = outboundLabel(c.outboundStatus)
 
   return (
     <Link
       to={`/${orgPrefix}/cases/${c.id}`}
-      className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--bg-secondary)] transition-colors"
+      className="flex items-start gap-3 px-4 py-3 hover:bg-[var(--bg-secondary)] transition-colors"
       style={{ textDecoration: "none", borderBottom: "1px solid var(--border-default)" }}
     >
       <StatusIcon status={normalizedStatus} size={15} />
 
-      <div className="flex-1 min-w-0">
+      <div className="flex-1 min-w-0 space-y-1.5">
         <div className="flex items-center gap-2">
           {c.identifier && (
             <span className="text-xs font-mono shrink-0" style={{ color: "var(--text-tertiary)" }}>
@@ -72,18 +92,78 @@ function CaseRow({ c, orgPrefix }: { c: any; orgPrefix: string }) {
             {c.title}
           </p>
         </div>
-      </div>
 
-      <div className="flex items-center gap-2 shrink-0">
-        {c.type && <CaseTypeBadge type={c.type} />}
-        {(c.severity || c.urgency) && <CaseSeverityBadge severity={c.severity ?? c.urgency} />}
-      </div>
-
-      {assigneeName && (
-        <div className="shrink-0 hidden sm:block">
-          <Identity name={assigneeName} size="xs" type={assigneeType} showName />
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {c.type && <CaseTypeBadge type={c.type} />}
+          {(c.severity || c.urgency) && <CaseSeverityBadge severity={c.severity ?? c.urgency} />}
+          {c.projectName ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+              style={{ backgroundColor: "rgba(139,92,246,0.12)", color: "#7c3aed" }}
+            >
+              <FolderKanban size={11} />
+              {c.projectName}
+            </span>
+          ) : null}
+          {normalizedStatus === "in_review" && c.reviewReason ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+              style={{ backgroundColor: "rgba(168,85,247,0.12)", color: "#7e22ce" }}
+            >
+              검토
+              {c.reviewReason}
+            </span>
+          ) : null}
+          {outbound ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium"
+              style={{
+                backgroundColor:
+                  c.outboundStatus === "sent"
+                    ? "rgba(34,197,94,0.12)"
+                    : c.outboundStatus === "failed"
+                      ? "rgba(239,68,68,0.12)"
+                      : "rgba(251,191,36,0.12)",
+                color:
+                  c.outboundStatus === "sent"
+                    ? "#15803d"
+                    : c.outboundStatus === "failed"
+                      ? "#dc2626"
+                      : "#b45309",
+              }}
+            >
+              {outbound}
+            </span>
+          ) : null}
         </div>
-      )}
+
+        {c.latestDraftSummary ? (
+          <p className="text-xs line-clamp-2" style={{ color: "var(--text-secondary)" }}>
+            {c.latestDraftSummary}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="shrink-0 flex items-start gap-2">
+        {assigneeName ? (
+          <div className="hidden sm:block">
+            <Identity name={assigneeName} size="xs" type={assigneeType} showName />
+          </div>
+        ) : null}
+        <button
+          type="button"
+          onClick={(event) => {
+            event.preventDefault()
+            event.stopPropagation()
+            onDelete(c.id)
+          }}
+          disabled={deleting}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-[var(--bg-tertiary)]"
+          title="케이스 삭제"
+        >
+          <X size={14} style={{ color: "var(--text-tertiary)" }} />
+        </button>
+      </div>
     </Link>
   )
 }
@@ -93,11 +173,15 @@ function StatusGroup({
   cases,
   orgPrefix,
   defaultOpen = true,
+  onDeleteCase,
+  deletingCaseId,
 }: {
   status: CaseStatus
   cases: any[]
   orgPrefix: string
   defaultOpen?: boolean
+  onDeleteCase: (caseId: string) => void
+  deletingCaseId: string | null
 }) {
   const [open, setOpen] = useState(defaultOpen)
   const config = statusGroupConfig[status]
@@ -137,7 +221,13 @@ function StatusGroup({
       {open && (
         <div>
           {cases.map((c) => (
-            <CaseRow key={c.id} c={c} orgPrefix={orgPrefix} />
+            <CaseRow
+              key={c.id}
+              c={c}
+              orgPrefix={orgPrefix}
+              onDelete={onDeleteCase}
+              deleting={deletingCaseId === c.id}
+            />
           ))}
         </div>
       )}
@@ -149,6 +239,9 @@ export function CasesPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const { selectedOrgId } = useOrganization()
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const toast = useContext(ToastContext)
 
   const [viewMode, setViewMode] = useState<"list" | "board">("list")
   const [search, setSearch] = useState("")
@@ -169,6 +262,31 @@ export function CasesPage() {
     queryFn: () => casesApi.list(selectedOrgId!),
     enabled: !!selectedOrgId,
   })
+
+  const deleteCaseMutation = useMutation({
+    mutationFn: (caseId: string) => casesApi.delete(caseId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(selectedOrgId ?? "") })
+      queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") })
+      toast?.success("케이스를 삭제했습니다.")
+    },
+    onError: (error) => {
+      if (error instanceof ApiError) {
+        const body = error.body as Record<string, unknown> | null
+        const message = typeof body?.error === "string" ? body.error : "케이스 삭제에 실패했습니다."
+        toast?.error(message === "Delete child cases first" ? "서브 케이스를 먼저 삭제해야 합니다." : message)
+        return
+      }
+      toast?.error("케이스 삭제에 실패했습니다.")
+    },
+  })
+
+  function handleDeleteCase(caseId: string) {
+    if (!window.confirm("이 케이스를 삭제하시겠습니까? 관련 초안과 승인 기록도 함께 제거됩니다.")) {
+      return
+    }
+    deleteCaseMutation.mutate(caseId)
+  }
 
   const searchFiltered = search.trim()
     ? cases.filter(
@@ -274,6 +392,16 @@ export function CasesPage() {
 
         <button
           type="button"
+          onClick={() => navigate(`/${orgPrefix}/assistant`)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
+          style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)", border: "1px solid var(--border-default)" }}
+        >
+          <Sparkles size={13} />
+          질문하기
+        </button>
+
+        <button
+          type="button"
           onClick={() => setDialogOpen(true)}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors"
           style={{ background: "var(--color-teal-500)", color: "#fff" }}
@@ -352,7 +480,11 @@ export function CasesPage() {
           </p>
         </div>
       ) : viewMode === "board" ? (
-        <KanbanBoard cases={filtered} />
+        <KanbanBoard
+          cases={filtered}
+          onDeleteCase={handleDeleteCase}
+          deletingCaseId={deleteCaseMutation.variables ?? null}
+        />
       ) : (
         <div>
           {STATUS_ORDER.map((status) => (
@@ -362,6 +494,8 @@ export function CasesPage() {
               cases={grouped[status]}
               orgPrefix={orgPrefix ?? ""}
               defaultOpen={status !== "done"}
+              onDeleteCase={handleDeleteCase}
+              deletingCaseId={deleteCaseMutation.variables ?? null}
             />
           ))}
         </div>

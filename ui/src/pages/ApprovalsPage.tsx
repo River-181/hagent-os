@@ -20,6 +20,7 @@ import {
 import { ApprovalCard } from "@/components/ApprovalCard"
 import { EmptyState } from "@/components/EmptyState"
 import { ToastContext } from "@/components/ToastContext"
+import { usePanel } from "@/context/PanelContext"
 import { Loader2, AlertCircle, Clock, CheckCircle, XCircle } from "lucide-react"
 
 type ApprovalStatusTab = "all" | "pending" | "approved" | "rejected"
@@ -46,6 +47,7 @@ export function ApprovalsPage() {
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
+  const { setPanelContent } = usePanel()
 
   const [activeTab, setActiveTab] = useState<ApprovalStatusTab>("pending")
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -71,10 +73,15 @@ export function ApprovalsPage() {
     enabled: !!selectedOrgId,
   })
 
-  const caseTitleMap = useMemo(() => {
-    const map: Record<string, string> = {}
+  const caseMap = useMemo(() => {
+    const map: Record<string, { title: string; source: string | null }> = {}
     for (const c of allCases as any[]) {
-      if (c.id) map[c.id] = c.title ?? c.identifier ?? c.id
+      if (c.id) {
+        map[c.id] = {
+          title: c.title ?? c.identifier ?? c.id,
+          source: typeof c.source === "string" ? c.source : null,
+        }
+      }
     }
     return map
   }, [allCases])
@@ -156,6 +163,31 @@ export function ApprovalsPage() {
     },
   })
 
+  const outboundMutation = useMutation({
+    mutationFn: ({
+      id,
+      mode,
+    }: {
+      id: string
+      mode: "auto" | "confirm_bridge"
+    }) => approvalsApi.send(id, { mode }),
+    onSuccess: (_data, variables) => {
+      const approval = approvals.find((item) => item.id === variables.id)
+      const resolvedCaseId = approval?.caseId ?? approval?.case_id ?? approval?.case?.id
+      const source = resolvedCaseId ? caseMap[resolvedCaseId]?.source : null
+      const channelLabel = source === "telegram" ? "텔레그램" : source === "kakao" ? "카카오톡" : "채널"
+      toast?.success(
+        variables.mode === "confirm_bridge"
+          ? `${channelLabel} 회신을 발송 완료로 처리했습니다.`
+          : `${channelLabel} 회신 발송을 시도했습니다.`,
+      )
+      invalidateAll()
+    },
+    onError: () => {
+      toast?.error("채널 회신 처리에 실패했습니다.")
+    },
+  })
+
   const selectedVisibleIds = selectedIds.filter((id) =>
     filteredApprovals.some((approval) => approval.id === id)
   )
@@ -167,6 +199,51 @@ export function ApprovalsPage() {
   const allPendingSelected =
     pendingVisibleIds.length > 0 &&
     pendingVisibleIds.every((id) => selectedIds.includes(id))
+
+  useEffect(() => {
+    setPanelContent(
+      <div className="space-y-4">
+        <div>
+          <p className="text-sm font-semibold text-slate-900">승인 운영 요약</p>
+          <p className="mt-1 text-sm text-slate-500">
+            승인 대기, 발송 대기, 일괄 처리를 한 패널에서 확인합니다.
+          </p>
+        </div>
+
+        <div className="grid gap-3">
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-xs text-amber-700">승인 대기</p>
+            <p className="mt-1 text-xl font-semibold text-amber-900">{pendingCount}건</p>
+          </div>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4">
+            <p className="text-xs text-slate-500">선택된 항목</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">{selectedVisibleIds.length}건</p>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <p className="text-xs font-semibold text-slate-600">현재 상태</p>
+          <div className="mt-3 space-y-2 text-sm text-slate-700">
+            <div className="flex items-center justify-between gap-3">
+              <span>현재 탭</span>
+              <span className="font-medium text-slate-900">
+                {activeTab === "pending" ? "대기중" : activeTab === "approved" ? "승인됨" : activeTab === "rejected" ? "거절됨" : "전체"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>승인 완료</span>
+              <span className="font-medium text-slate-900">{approvedCount}건</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>거절 완료</span>
+              <span className="font-medium text-slate-900">{rejectedCount}건</span>
+            </div>
+          </div>
+        </div>
+      </div>,
+    )
+    return () => setPanelContent(null)
+  }, [activeTab, approvedCount, pendingCount, rejectedCount, selectedVisibleIds.length, setPanelContent])
 
   const toggleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -337,7 +414,13 @@ export function ApprovalsPage() {
                     const resolvedCaseTitle =
                       approval.case?.title ??
                       approval.caseTitle ??
-                      (resolvedCaseId ? caseTitleMap[resolvedCaseId] : undefined)
+                      (resolvedCaseId ? caseMap[resolvedCaseId]?.title : undefined)
+                    const channelLabel =
+                      resolvedCaseId && caseMap[resolvedCaseId]?.source === "telegram"
+                        ? "텔레그램"
+                        : resolvedCaseId && caseMap[resolvedCaseId]?.source === "kakao"
+                          ? "카카오톡"
+                          : "채널"
 
                     return (
                       <ApprovalCard
@@ -346,6 +429,7 @@ export function ApprovalsPage() {
                           ...approval,
                           caseTitle: resolvedCaseTitle,
                         }}
+                        channelLabel={channelLabel}
                         selected={selectedIds.includes(approval.id)}
                         onSelectedChange={(checked) => toggleSelected(approval.id, checked)}
                         caseHref={
@@ -365,11 +449,23 @@ export function ApprovalsPage() {
                             reason: approval.reason ?? "",
                           })
                         }
+                        onSend={(_approvalId, mode) =>
+                          outboundMutation.mutate({
+                            id: approval.id,
+                            mode: mode ?? "auto",
+                          })
+                        }
                         isPending={isPending}
                         pendingAction={
                           updateApprovalMutation.variables?.status === "rejected"
                             ? "reject"
                             : "approve"
+                        }
+                        sending={outboundMutation.isPending && outboundMutation.variables?.id === approval.id}
+                        sendingMode={
+                          outboundMutation.variables?.id === approval.id
+                            ? outboundMutation.variables?.mode
+                            : null
                         }
                       />
                     )

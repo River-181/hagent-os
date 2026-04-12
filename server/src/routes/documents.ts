@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm"
 import mammoth from "mammoth"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
+import { enrichDocuments } from "../services/document-links.js"
 
 interface ImportFilePayload {
   fileName: string
@@ -104,9 +105,12 @@ export function documentRoutes(db: Db): Router {
   // List documents for org
   router.get("/organizations/:orgId/documents", async (req, res) => {
     try {
-      const docs = await db.select().from(schema.documents)
-        .where(eq(schema.documents.organizationId, req.params.orgId))
-      res.json(docs)
+      const [docs, cases, projects] = await Promise.all([
+        db.select().from(schema.documents).where(eq(schema.documents.organizationId, req.params.orgId)),
+        db.select().from(schema.cases).where(eq(schema.cases.organizationId, req.params.orgId)),
+        db.select().from(schema.opsGroups).where(eq(schema.opsGroups.organizationId, req.params.orgId)),
+      ])
+      res.json(enrichDocuments(docs, { cases, projects }))
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch documents" })
     }
@@ -122,7 +126,10 @@ export function documentRoutes(db: Db): Router {
 
       const docs = (await db.select().from(schema.documents).where(eq(schema.documents.organizationId, caseRecord.organizationId)))
         .filter((doc: typeof schema.documents.$inferSelect) => Array.isArray(doc.tags) && doc.tags.includes(`case:${caseRecord.id}`))
-      res.json(docs)
+      const projects = caseRecord.opsGroupId
+        ? await db.select().from(schema.opsGroups).where(eq(schema.opsGroups.id, caseRecord.opsGroupId))
+        : []
+      res.json(enrichDocuments(docs, { cases: [caseRecord], projects }))
     } catch {
       res.status(500).json({ error: "Failed to fetch case documents" })
     }
@@ -134,7 +141,28 @@ export function documentRoutes(db: Db): Router {
       const [doc] = await db.select().from(schema.documents)
         .where(eq(schema.documents.id, req.params.id))
       if (!doc) { res.status(404).json({ error: "Not found" }); return }
-      res.json(doc)
+      const [linkedCase, linkedProject] = await Promise.all([
+        Array.isArray(doc.tags)
+          ? (async () => {
+              const caseTag = doc.tags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("case:"))
+              return caseTag
+                ? (await db.select().from(schema.cases).where(eq(schema.cases.id, caseTag.slice(5))))[0] ?? null
+                : null
+            })()
+          : Promise.resolve(null),
+        Array.isArray(doc.tags)
+          ? (async () => {
+              const projectTag = doc.tags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("project:"))
+              return projectTag
+                ? (await db.select().from(schema.opsGroups).where(eq(schema.opsGroups.id, projectTag.slice(8))))[0] ?? null
+                : null
+            })()
+          : Promise.resolve(null),
+      ])
+      res.json(enrichDocuments([doc], {
+        cases: linkedCase ? [linkedCase] : [],
+        projects: linkedProject ? [linkedProject] : [],
+      })[0])
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch document" })
     }
@@ -157,7 +185,7 @@ export function documentRoutes(db: Db): Router {
         body: body ?? "",
         tags: tags ?? [],
       }).returning()
-      res.status(201).json(doc)
+      res.status(201).json(enrichDocuments([doc])[0])
     } catch (err) {
       res.status(500).json({ error: "Failed to create document" })
     }
@@ -225,7 +253,10 @@ export function documentRoutes(db: Db): Router {
         } as Record<string, unknown>,
       })
 
-      res.status(201).json(doc)
+      const projects = caseRecord.opsGroupId
+        ? await db.select().from(schema.opsGroups).where(eq(schema.opsGroups.id, caseRecord.opsGroupId))
+        : []
+      res.status(201).json(enrichDocuments([doc], { cases: [caseRecord], projects })[0])
     } catch {
       res.status(500).json({ error: "Failed to create case document" })
     }
@@ -244,7 +275,28 @@ export function documentRoutes(db: Db): Router {
         .where(eq(schema.documents.id, req.params.id))
         .returning()
       if (!updated) { res.status(404).json({ error: "Not found" }); return }
-      res.json(updated)
+      const [linkedCase, linkedProject] = await Promise.all([
+        Array.isArray(updated.tags)
+          ? (async () => {
+              const caseTag = updated.tags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("case:"))
+              return caseTag
+                ? (await db.select().from(schema.cases).where(eq(schema.cases.id, caseTag.slice(5))))[0] ?? null
+                : null
+            })()
+          : Promise.resolve(null),
+        Array.isArray(updated.tags)
+          ? (async () => {
+              const projectTag = updated.tags.find((tag: unknown) => typeof tag === "string" && tag.startsWith("project:"))
+              return projectTag
+                ? (await db.select().from(schema.opsGroups).where(eq(schema.opsGroups.id, projectTag.slice(8))))[0] ?? null
+                : null
+            })()
+          : Promise.resolve(null),
+      ])
+      res.json(enrichDocuments([updated], {
+        cases: linkedCase ? [linkedCase] : [],
+        projects: linkedProject ? [linkedProject] : [],
+      })[0])
     } catch (err) {
       res.status(500).json({ error: "Failed to update document" })
     }

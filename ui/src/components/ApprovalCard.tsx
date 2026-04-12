@@ -47,11 +47,12 @@ interface ApprovalCardProps {
   sending?: boolean
   sendingMode?: "auto" | "confirm_bridge" | null
   isPending?: boolean
-  pendingAction?: "approve" | "reject"
+  pendingAction?: "approve" | "reject" | "revision"
   className?: string
   selected?: boolean
   onSelectedChange?: (checked: boolean) => void
   caseHref?: string
+  channelLabel?: string
 }
 
 const levelConfig: Record<string, { label: string; bg: string; text: string }> = {
@@ -65,6 +66,7 @@ const runStatusMap: Record<ApprovalItem["status"], RunStatus | null> = {
   pending: null,
   approved: "completed",
   rejected: "failed",
+  revision_requested: null,
 }
 
 export function ApprovalCard({
@@ -82,6 +84,7 @@ export function ApprovalCard({
   selected = false,
   onSelectedChange,
   caseHref,
+  channelLabel = "회신",
 }: ApprovalCardProps) {
   const level = approval.level ?? "medium"
   const levelCfg = levelConfig[level] ?? levelConfig.medium
@@ -93,20 +96,23 @@ export function ApprovalCard({
 
   const isApprovePending = approving || (isPending && pendingAction === "approve")
   const isRejectPending = rejecting || (isPending && pendingAction === "reject")
-  const anyPending = isApprovePending || isRejectPending
+  const isRevisionPending = isPending && pendingAction === "revision"
+  const anyPending = isApprovePending || isRejectPending || isRevisionPending
   const decision = approval.decision ?? {}
   const sideEffects =
     typeof decision.sideEffects === "object" && decision.sideEffects && !Array.isArray(decision.sideEffects)
       ? (decision.sideEffects as Record<string, unknown>)
       : {}
-  const kakaoMessage =
-    typeof sideEffects.kakaoMessage === "object" && sideEffects.kakaoMessage && !Array.isArray(sideEffects.kakaoMessage)
-      ? (sideEffects.kakaoMessage as Record<string, any>)
-      : null
-  const kakaoStatus = typeof kakaoMessage?.status === "string" ? kakaoMessage.status : null
-  const bridge = typeof kakaoMessage?.bridge === "object" && kakaoMessage.bridge ? kakaoMessage.bridge : null
+  const deliveryMessage =
+    typeof sideEffects.telegramMessage === "object" && sideEffects.telegramMessage && !Array.isArray(sideEffects.telegramMessage)
+      ? (sideEffects.telegramMessage as Record<string, any>)
+      : typeof sideEffects.kakaoMessage === "object" && sideEffects.kakaoMessage && !Array.isArray(sideEffects.kakaoMessage)
+        ? (sideEffects.kakaoMessage as Record<string, any>)
+        : null
+  const deliveryStatus = typeof deliveryMessage?.status === "string" ? deliveryMessage.status : null
+  const bridge = typeof deliveryMessage?.bridge === "object" && deliveryMessage.bridge ? deliveryMessage.bridge : null
   const replyDraft =
-    (typeof kakaoMessage?.draft === "string" && kakaoMessage.draft) ||
+    (typeof deliveryMessage?.draft === "string" && deliveryMessage.draft) ||
     (typeof approval.payload?.draft === "string" && approval.payload.draft) ||
     (typeof approval.payload?.suggestedReply === "string" && approval.payload.suggestedReply) ||
     ""
@@ -124,11 +130,11 @@ export function ApprovalCard({
   }
 
   const outboundTone =
-    kakaoStatus === "sent"
+    deliveryStatus === "sent"
       ? { bg: "rgba(34,197,94,0.12)", text: "var(--color-success)", label: "발송 완료" }
-      : kakaoStatus === "failed"
+      : deliveryStatus === "failed"
         ? { bg: "rgba(239,68,68,0.12)", text: "var(--color-danger)", label: "발송 실패" }
-        : kakaoStatus === "ready_to_send"
+        : deliveryStatus === "ready_to_send"
           ? { bg: "rgba(245,158,11,0.12)", text: "#d97706", label: "발송 준비" }
           : null
 
@@ -216,7 +222,7 @@ export function ApprovalCard({
                 ) : null}
                 {runStatus && <StatusBadge status={runStatus} />}
               </div>
-              {kakaoStatus && onSend ? (
+              {deliveryStatus && onSend ? (
                 <div className="flex flex-wrap justify-end gap-2">
                   {replyDraft ? (
                     <Button
@@ -240,7 +246,7 @@ export function ApprovalCard({
                       채널 열기
                     </Button>
                   ) : null}
-                  {kakaoStatus !== "sent" ? (
+                  {deliveryStatus !== "sent" ? (
                     <Button
                       size="sm"
                       variant="outline"
@@ -249,10 +255,10 @@ export function ApprovalCard({
                       onClick={() => onSend(approval.id, "auto")}
                     >
                       {sending && sendingMode === "auto" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                      자동 발송
+                      {channelLabel} 자동 발송
                     </Button>
                   ) : null}
-                  {(kakaoStatus === "ready_to_send" || kakaoStatus === "failed") ? (
+                  {(deliveryStatus === "ready_to_send" || deliveryStatus === "failed") ? (
                     <Button
                       size="sm"
                       className="gap-1.5 text-xs text-white"

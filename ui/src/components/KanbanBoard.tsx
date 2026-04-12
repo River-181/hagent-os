@@ -2,7 +2,7 @@ import { useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import * as LucideIcons from "lucide-react"
-import { Bot, MessageSquare, type LucideIcon } from "lucide-react"
+import { Bot, FolderKanban, MessageSquare, X, type LucideIcon } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { StatusIcon, CaseStatus } from "@/components/StatusIcon"
 import { Identity } from "@/components/Identity"
@@ -16,6 +16,8 @@ import { useOrganization } from "@/context/OrganizationContext"
 
 interface KanbanBoardProps {
   cases: any[]
+  onDeleteCase: (caseId: string) => void
+  deletingCaseId?: string | null
 }
 
 interface ColumnConfig {
@@ -135,14 +137,25 @@ function getAgentIcon(iconName?: string): LucideIcon {
   return typeof candidate === "function" ? (candidate as LucideIcon) : Bot
 }
 
+function outboundLabel(status?: string | null) {
+  if (status === "ready_to_send") return "발송 준비"
+  if (status === "sent") return "발송 완료"
+  if (status === "failed") return "발송 실패"
+  return null
+}
+
 function KanbanCard({
   c,
   orgPrefix,
   onDragStart,
+  onDelete,
+  deleting,
 }: {
   c: any
   orgPrefix: string
   onDragStart: (e: React.DragEvent<HTMLDivElement>, caseId: string) => void
+  onDelete: (caseId: string) => void
+  deleting: boolean
 }) {
   const navigate = useNavigate()
   const [isDragging, setIsDragging] = useState(false)
@@ -151,6 +164,7 @@ function KanbanCard({
   const AgentIcon = getAgentIcon(c.agent?.icon ?? c.assigneeAgent?.icon)
   const lastActivityLabel = timeAgoLocal(getLastActivityAt(c))
   const commentCount = getCommentCount(c)
+  const outbound = outboundLabel(c.outboundStatus)
 
   return (
     <Card
@@ -171,7 +185,8 @@ function KanbanCard({
       onDragEnd={() => setIsDragging(false)}
     >
       <CardContent className="px-3 pt-3 pb-2.5 space-y-2.5">
-        <div>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
           {c.identifier && (
             <span
               className="block text-xs font-mono mb-0.5"
@@ -186,6 +201,20 @@ function KanbanCard({
           >
             {c.title}
           </p>
+          </div>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              onDelete(c.id)
+            }}
+            disabled={deleting}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-[var(--bg-tertiary)]"
+            title="케이스 삭제"
+          >
+            <X size={13} style={{ color: "var(--text-tertiary)" }} />
+          </button>
         </div>
 
         <div className="flex items-center gap-1.5 flex-wrap">
@@ -203,7 +232,52 @@ function KanbanCard({
               {c.source === "kakao" ? "카카오" : "SMS"}
             </span>
           )}
+          {c.projectName ? (
+            <span
+              className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+              style={{ backgroundColor: "rgba(139,92,246,0.12)", color: "#7c3aed" }}
+            >
+              <FolderKanban size={10} />
+              {c.projectName}
+            </span>
+          ) : null}
+          {outbound ? (
+            <span
+              className="rounded-full px-1.5 py-0.5 text-[10px] font-medium"
+              style={{
+                backgroundColor:
+                  c.outboundStatus === "sent"
+                    ? "rgba(34,197,94,0.12)"
+                    : c.outboundStatus === "failed"
+                      ? "rgba(239,68,68,0.12)"
+                      : "rgba(251,191,36,0.12)",
+                color:
+                  c.outboundStatus === "sent"
+                    ? "#15803d"
+                    : c.outboundStatus === "failed"
+                      ? "#dc2626"
+                      : "#b45309",
+              }}
+            >
+              {outbound}
+            </span>
+          ) : null}
         </div>
+
+        {c.reviewReason ? (
+          <div
+            className="rounded-md px-2 py-1 text-[11px]"
+            style={{ backgroundColor: "rgba(168,85,247,0.08)", color: "#6b21a8" }}
+          >
+            {c.reviewReason}
+          </div>
+        ) : null}
+
+        {c.latestDraftSummary ? (
+          <p className="text-[11px] leading-relaxed line-clamp-3" style={{ color: "var(--text-secondary)" }}>
+            {c.latestDraftSummary}
+          </p>
+        ) : null}
 
         <div className="flex items-center justify-between gap-3">
           {assigneeName ? (
@@ -252,6 +326,8 @@ function KanbanColumn({
   onDragLeave,
   onDrop,
   onCardDragStart,
+  onDeleteCase,
+  deletingCaseId,
 }: {
   config: ColumnConfig
   cards: any[]
@@ -261,6 +337,8 @@ function KanbanColumn({
   onDragLeave: () => void
   onDrop: (e: React.DragEvent<HTMLDivElement>, status: CaseStatus) => void
   onCardDragStart: (e: React.DragEvent<HTMLDivElement>, caseId: string) => void
+  onDeleteCase: (caseId: string) => void
+  deletingCaseId: string | null
 }) {
   return (
     <div
@@ -317,6 +395,8 @@ function KanbanColumn({
               c={c}
               orgPrefix={orgPrefix}
               onDragStart={onCardDragStart}
+              onDelete={onDeleteCase}
+              deleting={deletingCaseId === c.id}
             />
           ))
         )}
@@ -325,7 +405,7 @@ function KanbanColumn({
   )
 }
 
-export function KanbanBoard({ cases }: KanbanBoardProps) {
+export function KanbanBoard({ cases, onDeleteCase, deletingCaseId = null }: KanbanBoardProps) {
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
   const { selectedOrgId } = useOrganization()
   const queryClient = useQueryClient()
@@ -408,6 +488,8 @@ export function KanbanBoard({ cases }: KanbanBoardProps) {
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
             onCardDragStart={handleCardDragStart}
+            onDeleteCase={onDeleteCase}
+            deletingCaseId={deletingCaseId}
           />
         ))}
       </div>

@@ -17,6 +17,59 @@ function maskEmail(email: string | null | undefined): string {
   return local.slice(0, 3) + "***@" + domain
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+}
+
+function maskAccountNumber(value: string | null | undefined): string {
+  if (!value) return ""
+  const digits = value.replace(/\D/g, "")
+  if (digits.length <= 4) return digits
+  return `${digits.slice(0, 3)}-${"*".repeat(Math.max(2, digits.length - 7))}-${digits.slice(-4)}`
+}
+
+function readStudentMetadata(student: typeof schema.students.$inferSelect) {
+  return isPlainObject(student.metadata) ? student.metadata : {}
+}
+
+function buildBillingSummary(student: typeof schema.students.$inferSelect) {
+  const metadata = readStudentMetadata(student)
+  const billing = isPlainObject(metadata.billing) ? metadata.billing : {}
+  return {
+    payerName: typeof billing.payerName === "string" ? billing.payerName : null,
+    paymentMethod: typeof billing.paymentMethod === "string" ? billing.paymentMethod : null,
+    bankName: typeof billing.bankName === "string" ? billing.bankName : null,
+    accountHolder: typeof billing.accountHolder === "string" ? billing.accountHolder : null,
+    accountNumberMasked: maskAccountNumber(typeof billing.accountNumber === "string" ? billing.accountNumber : null),
+    cardLabel: typeof billing.cardLabel === "string" ? billing.cardLabel : null,
+    cardLast4: typeof billing.cardLast4 === "string" ? billing.cardLast4 : null,
+    billingMemo: typeof billing.memo === "string" ? billing.memo : null,
+  }
+}
+
+function buildStudentPayload(student: typeof schema.students.$inferSelect, parents: typeof schema.parents.$inferSelect[]) {
+  return {
+    ...student,
+    phone: maskPhone((student as any).phone),
+    email: maskEmail((student as any).email),
+    parent: parents[0]
+      ? {
+          id: parents[0].id,
+          name: parents[0].name,
+          relation: parents[0].relation,
+          phone: maskPhone(parents[0].phone),
+          email: maskEmail(parents[0].email),
+        }
+      : null,
+    parents: parents.map((parent) => ({
+      ...parent,
+      phone: maskPhone(parent.phone),
+      email: maskEmail(parent.email),
+    })),
+    billing: buildBillingSummary(student),
+  }
+}
+
 export function studentRoutes(db: Db): Router {
   const router = Router()
 
@@ -28,21 +81,12 @@ export function studentRoutes(db: Db): Router {
       const parents = await db.select().from(schema.parents)
         .where(eq(schema.parents.organizationId, req.params.orgId))
 
-      const enriched = students.map(s => {
-        const parent = parents.find(p => p.studentId === s.id)
-        return {
-          ...s,
-          phone: maskPhone((s as any).phone),
-          email: maskEmail((s as any).email),
-          parent: parent ? {
-            id: parent.id,
-            name: parent.name,
-            relation: parent.relation,
-            phone: maskPhone(parent.phone),
-            email: maskEmail(parent.email),
-          } : null,
-        }
-      })
+      const enriched = students.map((student) =>
+        buildStudentPayload(
+          student,
+          parents.filter((parent) => parent.studentId === student.id),
+        ),
+      )
       res.json(enriched)
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch students" })
@@ -63,14 +107,7 @@ export function studentRoutes(db: Db): Router {
         .where(eq(schema.attendance.studentId, req.params.id))
 
       res.json({
-        ...student,
-        phone: maskPhone((student as any).phone),
-        email: maskEmail((student as any).email),
-        parents: parents.map(p => ({
-          ...p,
-          phone: maskPhone(p.phone),
-          email: maskEmail(p.email),
-        })),
+        ...buildStudentPayload(student, parents),
         attendance: attendanceRecords,
       })
     } catch (err) {
@@ -82,7 +119,17 @@ export function studentRoutes(db: Db): Router {
   router.post("/organizations/:orgId/students", async (req, res) => {
     try {
       const { orgId } = req.params
-      const { name, grade, classGroup, parentName, parentPhone, parentEmail, shuttle } = req.body
+      const {
+        name,
+        grade,
+        classGroup,
+        parentName,
+        parentPhone,
+        parentEmail,
+        parentRelation,
+        shuttle,
+        billing,
+      } = req.body
 
       if (!name) {
         res.status(400).json({ error: "name required" })
@@ -99,6 +146,7 @@ export function studentRoutes(db: Db): Router {
           shuttle: shuttle === true || shuttle === "true",
           status: "active",
           enrolledAt: new Date().toISOString().split("T")[0],
+          metadata: isPlainObject(billing) ? { billing } : {},
         })
         .returning()
 
@@ -107,13 +155,14 @@ export function studentRoutes(db: Db): Router {
           organizationId: orgId,
           studentId: student.id,
           name: parentName,
-          relation: "부모",
+          relation: parentRelation ?? "부모",
           phone: parentPhone ?? "",
           email: parentEmail ?? "",
         })
       }
 
-      res.status(201).json(student)
+      const studentParents = await db.select().from(schema.parents).where(eq(schema.parents.studentId, student.id))
+      res.status(201).json(buildStudentPayload(student, studentParents))
     } catch (err) {
       res.status(500).json({ error: "Failed to create student" })
     }
@@ -133,13 +182,36 @@ export function studentRoutes(db: Db): Router {
   // PATCH /students/:id
   router.patch("/students/:id", async (req, res) => {
     try {
-      const { classGroup, shuttle, grade, status, name } = req.body
+      const {
+        classGroup,
+        shuttle,
+        grade,
+        status,
+        name,
+        parentName,
+        parentPhone,
+        parentEmail,
+        parentRelation,
+        billing,
+      } = req.body
+      const [existing] = await db.select().from(schema.students).where(eq(schema.students.id, req.params.id))
+      if (!existing) {
+        res.status(404).json({ error: "Student not found" })
+        return
+      }
       const updateData: Record<string, unknown> = {}
       if (name !== undefined) updateData.name = name
       if (grade !== undefined) updateData.grade = grade
       if (status !== undefined) updateData.status = status
       if (classGroup !== undefined) updateData.classGroup = classGroup
       if (shuttle !== undefined) updateData.shuttle = shuttle === true || shuttle === "true"
+      if (billing !== undefined) {
+        const metadata = readStudentMetadata(existing)
+        updateData.metadata = {
+          ...metadata,
+          billing: isPlainObject(billing) ? billing : {},
+        }
+      }
 
       const [student] = await db
         .update(schema.students)
@@ -147,11 +219,37 @@ export function studentRoutes(db: Db): Router {
         .where(eq(schema.students.id, req.params.id))
         .returning()
 
-      if (!student) {
-        res.status(404).json({ error: "Student not found" })
-        return
+      const [existingParent] = await db
+        .select()
+        .from(schema.parents)
+        .where(eq(schema.parents.studentId, req.params.id))
+
+      if (parentName || parentPhone || parentEmail || parentRelation) {
+        if (existingParent) {
+          await db
+            .update(schema.parents)
+            .set({
+              name: parentName ?? existingParent.name,
+              relation: parentRelation ?? existingParent.relation,
+              phone: parentPhone ?? existingParent.phone,
+              email: parentEmail ?? existingParent.email,
+              updatedAt: new Date(),
+            })
+            .where(eq(schema.parents.id, existingParent.id))
+        } else if (parentName) {
+          await db.insert(schema.parents).values({
+            organizationId: student.organizationId,
+            studentId: student.id,
+            name: parentName,
+            relation: parentRelation ?? "부모",
+            phone: parentPhone ?? "",
+            email: parentEmail ?? "",
+          })
+        }
       }
-      res.json(student)
+
+      const studentParents = await db.select().from(schema.parents).where(eq(schema.parents.studentId, student.id))
+      res.json(buildStudentPayload(student, studentParents))
     } catch (err) {
       res.status(500).json({ error: "Failed to update student" })
     }

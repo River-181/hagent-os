@@ -1,14 +1,16 @@
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 
-function renderComplaintBody(output: Record<string, unknown>) {
+function renderComplaintBody(output: Record<string, unknown>, mode: "complaint" | "inquiry" = "complaint") {
   const actions = Array.isArray(output.suggestedActions)
     ? output.suggestedActions.map((item) => `- ${String(item)}`).join("\n")
     : ""
 
   return [
     output.summary ? `## 요약\n${String(output.summary)}` : null,
-    output.suggestedReply ? `## 응답 초안\n${String(output.suggestedReply)}` : null,
+    output.suggestedReply
+      ? `${mode === "inquiry" ? "## 운영자 답변" : "## 응답 초안"}\n${String(output.suggestedReply)}`
+      : null,
     output.legalBasis && typeof output.legalBasis === "object"
       ? `## 법령 근거\n${String((output.legalBasis as Record<string, unknown>).summary ?? "관련 규정 없음")}`
       : null,
@@ -16,6 +18,10 @@ function renderComplaintBody(output: Record<string, unknown>) {
   ]
     .filter(Boolean)
     .join("\n\n")
+}
+
+function isInquiryCaseKind(caseKind?: string) {
+  return caseKind === "legal-inquiry" || caseKind === "quick-ask" || caseKind === "inquiry"
 }
 
 function renderSchedulerBody(output: Record<string, unknown>) {
@@ -78,12 +84,29 @@ function renderOrchestratorBody(output: Record<string, unknown>) {
     .join("\n\n")
 }
 
-function buildArtifact(agentType: string, caseIdentifier: string, output: Record<string, unknown>) {
+function buildArtifact(
+  agentType: string,
+  caseIdentifier: string,
+  output: Record<string, unknown>,
+  options: {
+    caseType?: string
+    caseKind?: string
+  } = {},
+) {
+  const inquiryMode = options.caseType === "inquiry" || isInquiryCaseKind(options.caseKind)
+  const legalInquiryMode = options.caseKind === "legal-inquiry" || String(output.category ?? "") === "법률질문"
+
   if (agentType === "complaint") {
     return {
-      title: `${caseIdentifier} 민원 응답 초안`,
-      body: renderComplaintBody(output),
-      documentType: "complaint-reply",
+      title: inquiryMode
+        ? `${caseIdentifier} ${legalInquiryMode ? "법률 질문 브리프" : "운영 질문 브리프"}`
+        : `${caseIdentifier} 민원 응답 초안`,
+      body: renderComplaintBody(output, inquiryMode ? "inquiry" : "complaint"),
+      documentType: inquiryMode
+        ? legalInquiryMode
+          ? "legal-question-brief"
+          : "inquiry-brief"
+        : "complaint-reply",
     }
   }
   if (agentType === "scheduler") {
@@ -119,11 +142,16 @@ export async function createCaseDocumentArtifact(
     opsGroupId?: string | null
     runId: string
     agentType: string
+    caseType?: string
+    caseKind?: string
     output: Record<string, unknown>
     status: "draft" | "approved" | "sent" | "failed"
   },
 ) {
-  const artifact = buildArtifact(input.agentType, input.caseIdentifier, input.output)
+  const artifact = buildArtifact(input.agentType, input.caseIdentifier, input.output, {
+    caseType: input.caseType,
+    caseKind: input.caseKind,
+  })
   if (!artifact || !artifact.body.trim()) return null
 
   const [document] = await db

@@ -7,6 +7,7 @@ import * as schema from "@hagent/db"
 import { publishEvent } from "../services/live-events.js"
 import { syncGoogleCalendarEvent } from "../services/integrations/google-calendar.js"
 import { processKakaoApprovalDelivery } from "../services/kakao-approval-delivery.js"
+import { processTelegramApprovalDelivery } from "../services/telegram-approval-delivery.js"
 
 const AGENT_DATA_DIR = join(import.meta.dirname, "../../data/agents")
 
@@ -121,7 +122,7 @@ export function approvalRoutes(db: Db): Router {
 
     let requiresOutboundDelivery = false
     if (decision === "approved" && existing.caseId) {
-      if (caseRecord?.source === "kakao") {
+      if (caseRecord?.source === "kakao" || caseRecord?.source === "telegram") {
         requiresOutboundDelivery = true
       }
 
@@ -243,6 +244,11 @@ export function approvalRoutes(db: Db): Router {
         mode: "auto",
         actor: "system",
       })
+    } else if (decision === "approved" && caseRecord?.source === "telegram") {
+      latest = await processTelegramApprovalDelivery(db, approvalId, {
+        mode: "auto",
+        actor: "system",
+      })
     }
 
     return latest
@@ -349,10 +355,35 @@ export function approvalRoutes(db: Db): Router {
       const normalizedMode =
         mode === "bridge" || mode === "confirm_bridge" || mode === "auto" ? mode : "auto"
 
-      const approval = await processKakaoApprovalDelivery(db, req.params.id, {
-        mode: normalizedMode,
-        actor: normalizedMode === "confirm_bridge" ? "user" : "system",
-      })
+      const [approvalRecord] = await db
+        .select()
+        .from(schema.approvals)
+        .where(eq(schema.approvals.id, req.params.id))
+
+      if (!approvalRecord?.caseId) {
+        throw new Error("Approval is not linked to a case")
+      }
+
+      const [caseRecord] = await db
+        .select()
+        .from(schema.cases)
+        .where(eq(schema.cases.id, approvalRecord.caseId))
+
+      if (!caseRecord) {
+        throw new Error("Case not found")
+      }
+
+      const actor = normalizedMode === "confirm_bridge" ? "user" : "system"
+      const approval =
+        caseRecord.source === "telegram"
+          ? await processTelegramApprovalDelivery(db, req.params.id, {
+              mode: normalizedMode,
+              actor,
+            })
+          : await processKakaoApprovalDelivery(db, req.params.id, {
+              mode: normalizedMode,
+              actor,
+            })
 
       res.json(approval)
     } catch (err) {

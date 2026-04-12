@@ -9,6 +9,7 @@ import { runRetentionAgent } from "../lib/agents/retention.js"
 import { runSchedulerAgent } from "../lib/agents/scheduler.js"
 import { buildAgentSkillRuntimeContext } from "./skill-runtime.js"
 import { createCaseDocumentArtifact } from "./case-artifacts.js"
+import { recordRunUsage } from "./costs.js"
 
 const logger = pino({ level: "info" })
 
@@ -18,6 +19,14 @@ export interface ExecuteAgentRunOpts {
   caseId: string
   agentType: string
   approvalLevel: number
+}
+
+function isInquiryCase(caseType: string, caseKind?: string | null) {
+  return caseType === "inquiry" || caseKind === "legal-inquiry" || caseKind === "quick-ask"
+}
+
+function getInquiryLabel(caseType: string, caseKind?: string | null) {
+  return caseKind === "legal-inquiry" ? "법률질문" : isInquiryCase(caseType, caseKind) ? "운영질문" : "민원"
 }
 
 export async function executeAgentRun(
@@ -216,6 +225,8 @@ export async function executeAgentRun(
         organizationId,
         title: caseRecord.title,
         description: caseRecord.description ?? "",
+        caseType: caseRecord.type,
+        caseKind: String((caseRecord.metadata as Record<string, unknown> | null)?.caseKind ?? caseRecord.type),
         reporterId: caseRecord.reporterId ?? undefined,
         studentId: caseRecord.studentId ?? undefined,
         followUpContext: followUpContext || undefined,
@@ -303,6 +314,8 @@ export async function executeAgentRun(
 
     const completedAt = new Date()
     const artifactStatus = approvalLevel >= 1 ? "draft" : "approved"
+    const caseKind = String((caseRecord.metadata as Record<string, unknown> | null)?.caseKind ?? caseRecord.type)
+    const inquiryMode = isInquiryCase(caseRecord.type, caseKind)
     await createCaseDocumentArtifact(db, {
       organizationId,
       caseId: caseRecord.id,
@@ -310,6 +323,8 @@ export async function executeAgentRun(
       opsGroupId: caseRecord.opsGroupId ?? null,
       runId,
       agentType,
+      caseType: caseRecord.type,
+      caseKind,
       output: agentOutput,
       status: artifactStatus,
     })
@@ -375,7 +390,9 @@ export async function executeAgentRun(
           severity?: string
           suggestedReply?: string
         }
-        pendingCommentContent = `[민원분석] 카테고리: ${output.category ?? "-"}, 심각도: ${output.severity ?? "-"}\n\n초안: ${output.suggestedReply ?? ""}`
+        pendingCommentContent = inquiryMode
+          ? `[${getInquiryLabel(caseRecord.type, caseKind)}] 분류: ${output.category ?? "-"}\n\n답변: ${output.suggestedReply ?? ""}`
+          : `[민원분석] 카테고리: ${output.category ?? "-"}, 심각도: ${output.severity ?? "-"}\n\n초안: ${output.suggestedReply ?? ""}`
       } else if (agentType === "orchestrator") {
         const output = agentOutput as {
           plan?: string
@@ -415,6 +432,18 @@ export async function executeAgentRun(
         agentType,
         output: agentOutput,
       })
+
+      if (tokensUsed > 0) {
+        await recordRunUsage(db, {
+          organizationId,
+          agentId,
+          runId,
+          model: selectedModel ?? "gpt-5-codex",
+          inputTokens,
+          outputTokens,
+          totalTokens: tokensUsed,
+        })
+      }
     } else {
       // Auto-complete
       await db
@@ -465,9 +494,11 @@ export async function executeAgentRun(
         const output = agentOutput as {
           category?: string
           severity?: string
-          draft?: string
+          suggestedReply?: string
         }
-        commentContent = `[민원분석] 카테고리: ${output.category ?? "-"}, 심각도: ${output.severity ?? "-"}\n\n${output.draft ?? ""}`
+        commentContent = inquiryMode
+          ? `[${getInquiryLabel(caseRecord.type, caseKind)}] 분류: ${output.category ?? "-"}\n\n${output.suggestedReply ?? ""}`
+          : `[민원분석] 카테고리: ${output.category ?? "-"}, 심각도: ${output.severity ?? "-"}\n\n${output.suggestedReply ?? ""}`
       } else if (agentType === "orchestrator") {
         const output = agentOutput as {
           plan?: string
@@ -508,6 +539,18 @@ export async function executeAgentRun(
         agentType,
         output: agentOutput,
       })
+
+      if (tokensUsed > 0) {
+        await recordRunUsage(db, {
+          organizationId,
+          agentId,
+          runId,
+          model: selectedModel ?? "gpt-5-codex",
+          inputTokens,
+          outputTokens,
+          totalTokens: tokensUsed,
+        })
+      }
     }
 
     // 8. Create ActivityEvent records

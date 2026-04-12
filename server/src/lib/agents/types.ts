@@ -45,6 +45,8 @@ export interface ComplaintAgentInput extends RuntimeBinding {
   organizationId: string
   title: string
   description: string
+  caseType?: string
+  caseKind?: string
   reporterId?: string
   studentId?: string
   followUpContext?: string

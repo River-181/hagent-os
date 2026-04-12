@@ -27,12 +27,20 @@ const organizationPatchSchema = z.object({
         .optional(),
       aiPolicy: z
         .object({
-          primaryAdapterType: z.enum(["codex_local", "claude_local", "mock_local"]).optional(),
+          primaryAdapterType: z.enum(["codex_qauth", "codex_local", "claude_local", "mock_local"]).optional(),
           primaryModel: z.string().optional(),
-          fallbackAdapterType: z.enum(["codex_local", "claude_local", "mock_local"]).optional(),
+          fallbackAdapterType: z.enum(["codex_qauth", "codex_local", "claude_local", "mock_local"]).optional(),
           autoRun: z.boolean().optional(),
           allowDegradedMode: z.boolean().optional(),
           applyToExistingAgents: z.boolean().optional(),
+          monthlyBudgetKrw: z.number().optional(),
+          modelPricing: z.record(
+            z.string(),
+            z.object({
+              inputPer1kKrw: z.number().optional(),
+              outputPer1kKrw: z.number().optional(),
+            }).partial(),
+          ).optional(),
         })
         .partial()
         .optional(),
