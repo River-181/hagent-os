@@ -6,7 +6,6 @@ import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { useToast } from "@/context/ToastContext"
 import { documentsApi } from "@/api/documents"
-import { orchestratorApi } from "@/api/orchestrator"
 import { queryKeys } from "@/lib/queryKeys"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -16,7 +15,7 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { EmptyState } from "@/components/EmptyState"
-import { Download, FileText, Loader2, Pencil, Plus, Search, Trash2, Upload, Wand2 } from "lucide-react"
+import { Download, FileText, Loader2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react"
 
 interface Document {
   id: string
@@ -410,7 +409,6 @@ export function DocumentsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [dispatchingDocId, setDispatchingDocId] = useState<string | null>(null)
   const [previewImportDocs, setPreviewImportDocs] = useState<Document[]>([])
   const [showImportPreview, setShowImportPreview] = useState(false)
   const [pendingImportName, setPendingImportName] = useState("")
@@ -690,24 +688,6 @@ export function DocumentsPage() {
     }
   }
 
-  const handleDispatch = async (doc: Document) => {
-    if (!selectedOrgId) return
-
-    setDispatchingDocId(doc.id)
-    try {
-      await orchestratorApi.dispatch({
-        instruction: `다음 문서를 검토하고 보완해줘: ${doc.title}`,
-        organizationId: selectedOrgId,
-      })
-      addToast("에이전트 보완 요청을 보냈습니다.", "success")
-    } catch {
-      await delay(500)
-      addToast("에이전트 보완 요청을 mock 상태로 처리했습니다.", "info")
-    } finally {
-      setDispatchingDocId(null)
-    }
-  }
-
   const caseId = displayDoc ? getCaseId(displayDoc) : null
 
   return (
@@ -848,20 +828,6 @@ export function DocumentsPage() {
                       )}
                     </button>
 
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full mt-3 text-xs gap-1.5"
-                      disabled={dispatchingDocId === doc.id}
-                      onClick={() => void handleDispatch(doc)}
-                    >
-                      {dispatchingDocId === doc.id ? (
-                        <Loader2 size={12} className="animate-spin" />
-                      ) : (
-                        <Wand2 size={12} />
-                      )}
-                      에이전트에게 보완 요청
-                    </Button>
                   </div>
                 )
               })}
