@@ -13,7 +13,6 @@ import {
 } from "lucide-react"
 import { organizationsApi } from "@/api/organizations"
 import { useOrganization } from "@/context/OrganizationContext"
-import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { queryKeys } from "@/lib/queryKeys"
 
 const STEPS = [
@@ -153,7 +152,6 @@ export function OnboardingPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const { setSelectedOrgId } = useOrganization()
-  const { setBreadcrumbs } = useBreadcrumbs()
 
   const [stepIndex, setStepIndex] = useState(0)
   const [mode, setMode] = useState<Mode>("scratch")
@@ -217,12 +215,6 @@ export function OnboardingPage() {
     [selectedAdapterType, selectedModel, teamSelections],
   )
 
-  useEffect(() => {
-    setBreadcrumbs([
-      { label: "온보딩", href: "#" },
-      { label: currentStep.label, href: "#" },
-    ])
-  }, [currentStep.label, setBreadcrumbs])
 
   const bootstrapMutation = useMutation({
     mutationFn: () =>
@@ -315,6 +307,7 @@ export function OnboardingPage() {
   }
 
   return (
+    <div style={{ height: "100dvh", overflow: "auto", backgroundColor: "var(--bg-secondary)" }}>
     <div className="mx-auto grid w-full max-w-7xl gap-6 px-6 py-8 lg:grid-cols-[280px_minmax(0,1fr)_360px]">
       <aside className="rounded-3xl border p-4" style={{ borderColor: "var(--border-default)", background: "var(--bg-elevated)" }}>
         <div className="text-xs font-semibold uppercase tracking-[0.2em]" style={{ color: "var(--text-tertiary)" }}>
@@ -693,6 +686,7 @@ export function OnboardingPage() {
           </div>
         </div>
       </aside>
+    </div>
     </div>
   )
 }

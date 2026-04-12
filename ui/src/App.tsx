@@ -68,7 +68,6 @@ export function App() {
         <Route path="plugins" element={<PluginsPage />} />
         <Route path="adapters" element={<AdaptersPage />} />
         <Route path="settings" element={<SettingsPage />} />
-        <Route path="onboarding" element={<OnboardingPage />} />
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="documents/:id" element={<DocumentsPage />} />
         <Route path="routines" element={<RoutinesPage />} />
@@ -80,6 +79,7 @@ export function App() {
         <Route path="students/:id" element={<StudentsPage />} />
         <Route path="instructors" element={<InstructorsPage />} />
       </Route>
+      <Route path="/:orgPrefix/onboarding" element={<OnboardingPage />} />
       <Route path="/design-guide" element={<DesignGuidePage />} />
       <Route path="/" element={<RootRedirect />} />
     </Routes>
