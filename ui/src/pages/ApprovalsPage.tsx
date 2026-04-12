@@ -37,6 +37,14 @@ function filterApprovals(approvals: any[], tab: ApprovalStatusTab) {
   return approvals
 }
 
+function resolveDeliveryStatus(approval: any): string | null {
+  return (
+    approval?.decision?.sideEffects?.telegramMessage?.status ??
+    approval?.decision?.sideEffects?.kakaoMessage?.status ??
+    null
+  )
+}
+
 async function decideApproval(id: string, decision: "approved" | "rejected", comment?: string) {
   return approvalsApi.decide(id, decision, comment)
 }
@@ -95,6 +103,9 @@ export function ApprovalsPage() {
   const pendingCount = approvals.filter((approval) => approval.status === "pending").length
   const approvedCount = approvals.filter((approval) => approval.status === "approved").length
   const rejectedCount = approvals.filter((approval) => approval.status === "rejected").length
+  const readyToSendCount = approvals.filter((approval) => resolveDeliveryStatus(approval) === "ready_to_send").length
+  const sentCount = approvals.filter((approval) => resolveDeliveryStatus(approval) === "sent").length
+  const failedCount = approvals.filter((approval) => resolveDeliveryStatus(approval) === "failed").length
 
   function invalidateAll() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") })
@@ -171,15 +182,18 @@ export function ApprovalsPage() {
       id: string
       mode: "auto" | "confirm_bridge"
     }) => approvalsApi.send(id, { mode }),
-    onSuccess: (_data, variables) => {
+    onSuccess: (result, variables) => {
       const approval = approvals.find((item) => item.id === variables.id)
       const resolvedCaseId = approval?.caseId ?? approval?.case_id ?? approval?.case?.id
       const source = resolvedCaseId ? caseMap[resolvedCaseId]?.source : null
       const channelLabel = source === "telegram" ? "텔레그램" : source === "kakao" ? "카카오톡" : "채널"
+      const deliveryStatus = result?.deliveryStatus ?? result?.approval?.decision?.sideEffects?.kakaoMessage?.status ?? result?.approval?.decision?.sideEffects?.telegramMessage?.status
       toast?.success(
         variables.mode === "confirm_bridge"
           ? `${channelLabel} 회신을 발송 완료로 처리했습니다.`
-          : `${channelLabel} 회신 발송을 시도했습니다.`,
+          : deliveryStatus === "ready_to_send"
+            ? `${channelLabel} 회신을 발송 준비 상태로 올렸습니다.`
+            : `${channelLabel} 회신 발송을 시도했습니다.`,
       )
       invalidateAll()
     },
@@ -210,16 +224,20 @@ export function ApprovalsPage() {
           </p>
         </div>
 
-        <div className="grid gap-3">
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
-            <p className="text-xs text-amber-700">승인 대기</p>
-            <p className="mt-1 text-xl font-semibold text-amber-900">{pendingCount}건</p>
+          <div className="grid gap-3">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+              <p className="text-xs text-amber-700">승인 대기</p>
+              <p className="mt-1 text-xl font-semibold text-amber-900">{pendingCount}건</p>
+            </div>
+            <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4">
+              <p className="text-xs text-sky-700">발송 준비</p>
+              <p className="mt-1 text-xl font-semibold text-sky-900">{readyToSendCount}건</p>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-white p-4">
+              <p className="text-xs text-slate-500">선택된 항목</p>
+              <p className="mt-1 text-xl font-semibold text-slate-900">{selectedVisibleIds.length}건</p>
+            </div>
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-4">
-            <p className="text-xs text-slate-500">선택된 항목</p>
-            <p className="mt-1 text-xl font-semibold text-slate-900">{selectedVisibleIds.length}건</p>
-          </div>
-        </div>
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
           <p className="text-xs font-semibold text-slate-600">현재 상태</p>
@@ -235,6 +253,14 @@ export function ApprovalsPage() {
               <span className="font-medium text-slate-900">{approvedCount}건</span>
             </div>
             <div className="flex items-center justify-between gap-3">
+              <span>발송 완료</span>
+              <span className="font-medium text-slate-900">{sentCount}건</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>발송 실패</span>
+              <span className="font-medium text-slate-900">{failedCount}건</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
               <span>거절 완료</span>
               <span className="font-medium text-slate-900">{rejectedCount}건</span>
             </div>
@@ -243,7 +269,7 @@ export function ApprovalsPage() {
       </div>,
     )
     return () => setPanelContent(null)
-  }, [activeTab, approvedCount, pendingCount, rejectedCount, selectedVisibleIds.length, setPanelContent])
+  }, [activeTab, approvedCount, failedCount, pendingCount, readyToSendCount, rejectedCount, selectedVisibleIds.length, sentCount, setPanelContent])
 
   const toggleSelectAll = (checked: boolean) => {
     if (checked) {

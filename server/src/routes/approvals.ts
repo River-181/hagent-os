@@ -241,12 +241,12 @@ export function approvalRoutes(db: Db): Router {
 
     if (decision === "approved" && caseRecord?.source === "kakao") {
       latest = await processKakaoApprovalDelivery(db, approvalId, {
-        mode: "auto",
+        mode: "bridge",
         actor: "system",
       })
     } else if (decision === "approved" && caseRecord?.source === "telegram") {
       latest = await processTelegramApprovalDelivery(db, approvalId, {
-        mode: "auto",
+        mode: "bridge",
         actor: "system",
       })
     }
@@ -384,8 +384,27 @@ export function approvalRoutes(db: Db): Router {
               mode: normalizedMode,
               actor,
             })
+      const decision = approval?.decision as Record<string, any> | undefined
+      const sideEffects =
+        decision && typeof decision.sideEffects === "object" && decision.sideEffects
+          ? (decision.sideEffects as Record<string, any>)
+          : {}
+      const delivery =
+        caseRecord.source === "telegram"
+          ? sideEffects.telegramMessage
+          : sideEffects.kakaoMessage
 
-      res.json(approval)
+      res.json({
+        approval,
+        deliveryStatus: typeof delivery?.status === "string" ? delivery.status : null,
+        provider: typeof delivery?.provider === "string" ? delivery.provider : null,
+        nextAction:
+          delivery?.status === "ready_to_send"
+            ? "confirm_bridge"
+            : delivery?.status === "failed"
+              ? "retry_send"
+              : null,
+      })
     } catch (err) {
       res.status(400).json({
         error: err instanceof Error ? err.message : "Failed to send approval message",

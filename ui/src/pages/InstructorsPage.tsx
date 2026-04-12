@@ -1,6 +1,7 @@
 // v0.3.1
 import { useContext, useEffect, useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { api } from "@/api/client"
 import { instructorsApi } from "@/api/students"
 import { casesApi } from "@/api/cases"
@@ -139,6 +140,13 @@ function statusBadgeClass(status: InstructorStatus): string {
     default:
       return "bg-amber-50 text-amber-700 border-amber-200"
   }
+}
+
+function classifyWorkRole(subject: string) {
+  if (["영어", "수학", "국어", "과학", "사회"].includes(subject)) return "강의"
+  if (["상담", "입학상담", "학생관리"].includes(subject)) return "상담/학생관리"
+  if (["운영", "행정", "원무", "마케팅", "차량"].includes(subject)) return "운영"
+  return "직원/강사"
 }
 
 const SUBJECT_OPTIONS = [
@@ -484,14 +492,21 @@ function InstructorDetailSheet({
   onOpenChange,
   onEdit,
   onDelete,
+  stats,
 }: {
   instructor: Instructor | null
   open: boolean
   onOpenChange: (open: boolean) => void
   onEdit: (instructor: Instructor) => void
   onDelete: (instructor: Instructor) => void
+  stats?: {
+    linkedSchedules: number
+    linkedStudents: number
+    linkedCases: number
+  }
 }) {
   if (!instructor) return null
+  const workRole = classifyWorkRole(instructor.subject)
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -508,7 +523,7 @@ function InstructorDetailSheet({
               <div>
                 <SheetTitle style={{ color: "var(--text-primary)" }}>{instructor.name}</SheetTitle>
                 <SheetDescription style={{ color: "var(--text-tertiary)" }}>
-                  {instructor.subject} 담당
+                  {instructor.subject} 담당 · {workRole}
                 </SheetDescription>
               </div>
             </div>
@@ -538,6 +553,19 @@ function InstructorDetailSheet({
                   <div>
                     <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>담당 과목</div>
                     <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{instructor.subject}</div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: "var(--bg-tertiary)" }}
+                  >
+                    <UserCheck size={14} style={{ color: "var(--text-secondary)" }} />
+                  </div>
+                  <div>
+                    <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>업무 역할</div>
+                    <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>{workRole}</div>
                   </div>
                 </div>
 
@@ -591,15 +619,35 @@ function InstructorDetailSheet({
               <h3 className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--text-tertiary)" }}>
                 담당 수업
               </h3>
-              {instructor.classCount > 0 ? (
-                <div
-                  className="rounded-xl px-4 py-3 flex items-center gap-3"
-                  style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
-                >
-                  <BookOpen size={16} style={{ color: "var(--color-teal-500)" }} />
-                  <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-                    담당 수업 <span className="font-bold">{instructor.classCount}</span>개
-                  </span>
+              {instructor.classCount > 0 || (stats?.linkedStudents ?? 0) > 0 || (stats?.linkedCases ?? 0) > 0 ? (
+                <div className="grid gap-3">
+                  <div
+                    className="rounded-xl px-4 py-3 flex items-center gap-3"
+                    style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
+                  >
+                    <BookOpen size={16} style={{ color: "var(--color-teal-500)" }} />
+                    <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                      연결 일정 <span className="font-bold">{stats?.linkedSchedules ?? instructor.classCount}</span>개
+                    </span>
+                  </div>
+                  <div
+                    className="rounded-xl px-4 py-3 flex items-center gap-3"
+                    style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
+                  >
+                    <GraduationCap size={16} style={{ color: "var(--color-teal-500)" }} />
+                    <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                      연결 학생 <span className="font-bold">{stats?.linkedStudents ?? 0}</span>명
+                    </span>
+                  </div>
+                  <div
+                    className="rounded-xl px-4 py-3 flex items-center gap-3"
+                    style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border-default)" }}
+                  >
+                    <BookOpen size={16} style={{ color: "var(--color-teal-500)" }} />
+                    <span className="text-sm" style={{ color: "var(--text-primary)" }}>
+                      관련 케이스 <span className="font-bold">{stats?.linkedCases ?? 0}</span>건
+                    </span>
+                  </div>
                 </div>
               ) : (
                 <div
@@ -682,6 +730,9 @@ export function InstructorsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { selectedOrgId } = useOrganization()
   const { setPanelContent } = usePanel()
+  const navigate = useNavigate()
+  const { orgPrefix } = useParams<{ orgPrefix: string }>()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const [search, setSearch] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
@@ -785,6 +836,15 @@ export function InstructorsPage() {
     })
   }, [instructors, search, statusFilter])
 
+  useEffect(() => {
+    const detailId = searchParams.get("detail")
+    if (!detailId) return
+    const target = instructors.find((item) => item.id === detailId)
+    if (!target) return
+    setDetailTarget(target)
+    setShowDetail(true)
+  }, [instructors, searchParams])
+
   function openEdit(instructor: Instructor) {
     setEditTarget(instructor)
     setShowDetail(false)
@@ -800,10 +860,34 @@ export function InstructorsPage() {
   function openDetail(instructor: Instructor) {
     setDetailTarget(instructor)
     setShowDetail(true)
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current)
+      next.set("detail", instructor.id)
+      return next
+    })
   }
 
   const activeCount = instructors.filter((i) => i.status === "active").length
   const inactiveCount = instructors.filter((i) => i.status !== "active").length
+  const detailStats = useMemo(() => {
+    if (!detailTarget) return { linkedSchedules: 0, linkedStudents: 0, linkedCases: 0 }
+    const linkedScheduleIds = new Set(
+      (schedulesQuery.data ?? [])
+        .filter((schedule) => schedule.instructorId === detailTarget.id)
+        .map((schedule) => schedule.id)
+    )
+    const linkedStudentIds = new Set(
+      (studentSchedulesQuery.data ?? [])
+        .filter((item) => linkedScheduleIds.has(item.scheduleId))
+        .map((item) => item.studentId)
+    )
+    const linkedCases = (casesQuery.data ?? []).filter((item: any) => linkedStudentIds.has(String(item.studentId ?? "")))
+    return {
+      linkedSchedules: linkedScheduleIds.size,
+      linkedStudents: linkedStudentIds.size,
+      linkedCases: linkedCases.length,
+    }
+  }, [casesQuery.data, detailTarget, schedulesQuery.data, studentSchedulesQuery.data])
 
   const panelContent = useMemo(() => {
     if (!detailTarget) {
@@ -839,35 +923,23 @@ export function InstructorsPage() {
       )
     }
 
-    const linkedScheduleIds = new Set(
-      (schedulesQuery.data ?? [])
-        .filter((schedule) => schedule.instructorId === detailTarget.id)
-        .map((schedule) => schedule.id)
-    )
-    const linkedStudentIds = new Set(
-      (studentSchedulesQuery.data ?? [])
-        .filter((item) => linkedScheduleIds.has(item.scheduleId))
-        .map((item) => item.studentId)
-    )
-    const linkedCases = (casesQuery.data ?? []).filter((item: any) => linkedStudentIds.has(String(item.studentId ?? "")))
-
     return (
       <div className="space-y-4">
         <div>
           <p className="text-lg font-semibold text-slate-900">{detailTarget.name}</p>
           <p className="mt-1 text-sm text-slate-500">
-            {detailTarget.subject} · {statusLabel(detailTarget.status)}
+            {detailTarget.subject} · {classifyWorkRole(detailTarget.subject)} · {statusLabel(detailTarget.status)}
           </p>
         </div>
 
         <div className="grid gap-3">
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <p className="text-xs text-slate-500">담당 수업</p>
-            <p className="mt-1 text-xl font-semibold text-slate-900">{linkedScheduleIds.size}개</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">{detailStats.linkedSchedules}개</p>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <p className="text-xs text-slate-500">연결 학생</p>
-            <p className="mt-1 text-xl font-semibold text-slate-900">{linkedStudentIds.size}명</p>
+            <p className="mt-1 text-xl font-semibold text-slate-900">{detailStats.linkedStudents}명</p>
           </div>
         </div>
 
@@ -884,7 +956,7 @@ export function InstructorsPage() {
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>관련 케이스</span>
-              <span className="font-medium text-slate-900">{linkedCases.length}건</span>
+              <span className="font-medium text-slate-900">{detailStats.linkedCases}건</span>
             </div>
           </div>
         </div>
@@ -904,8 +976,21 @@ export function InstructorsPage() {
             >
               정보 수정
             </Button>
-            <Button size="sm" variant="outline" className="justify-start" onClick={() => setShowDetail(true)}>
-              상세 열기
+            <Button
+              size="sm"
+              variant="outline"
+              className="justify-start"
+              onClick={() => orgPrefix && navigate(`/${orgPrefix}/schedule`)}
+            >
+              연결 일정 보기
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              className="justify-start"
+              onClick={() => orgPrefix && navigate(`/${orgPrefix}/cases`)}
+            >
+              관련 케이스 보기
             </Button>
           </div>
         </div>
@@ -915,6 +1000,9 @@ export function InstructorsPage() {
     activeCount,
     casesQuery.data,
     detailTarget,
+    detailStats.linkedCases,
+    detailStats.linkedSchedules,
+    detailStats.linkedStudents,
     instructors.length,
     schedulesQuery.data,
     studentSchedulesQuery.data,
@@ -1084,10 +1172,18 @@ export function InstructorsPage() {
         open={showDetail}
         onOpenChange={(open) => {
           setShowDetail(open)
-          if (!open) setDetailTarget(null)
+          if (!open) {
+            setDetailTarget(null)
+            setSearchParams((current) => {
+              const next = new URLSearchParams(current)
+              next.delete("detail")
+              return next
+            })
+          }
         }}
         onEdit={openEdit}
         onDelete={openDelete}
+        stats={detailStats}
       />
     </div>
   )
@@ -1129,8 +1225,13 @@ function InstructorCard({
               <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                 {instructor.name}
               </div>
-              <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                {instructor.subject}
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  {instructor.subject}
+                </span>
+                <Badge variant="outline" className="text-[10px]">
+                  {classifyWorkRole(instructor.subject)}
+                </Badge>
               </div>
             </div>
           </div>

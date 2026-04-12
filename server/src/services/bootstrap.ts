@@ -887,7 +887,7 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
 
     const createdStudents = []
     const createdParents = []
-    for (const item of studentSeeds) {
+    for (const [index, item] of studentSeeds.entries()) {
       const [createdStudent] = await db
         .insert(schema.students)
         .values({
@@ -898,6 +898,18 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
           enrolledAt: new Date().toISOString().split("T")[0],
           riskScore: item.riskScore,
           status: "active",
+          metadata: {
+            billing: {
+              payerName: item.parent.name,
+              paymentMethod: index % 2 === 0 ? "bank_transfer" : "card",
+              bankName: index % 2 === 0 ? "국민은행" : "",
+              accountHolder: index % 2 === 0 ? item.parent.name : "",
+              accountNumber: index % 2 === 0 ? `11012345${String(6700 + index).padStart(4, "0")}` : "",
+              cardLabel: index % 2 === 1 ? "학부모 등록카드" : "",
+              cardLast4: index % 2 === 1 ? String(4800 + index) : "",
+              memo: item.grade === "성인" ? "본인 결제" : "매월 자동 청구",
+            },
+          },
         })
         .returning()
       createdStudents.push(createdStudent)

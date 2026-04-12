@@ -250,6 +250,16 @@ function paymentMethodLabel(value: string): string {
   return PAYMENT_METHOD_OPTIONS.find((option) => option.value === value)?.label ?? (value || "-")
 }
 
+function billingSummary(billing: BillingProfile): string {
+  if (billing.bankName || billing.accountNumberMasked) {
+    return `${billing.bankName || "계좌"} ${billing.accountNumberMasked}`.trim()
+  }
+  if (billing.cardLabel || billing.cardLast4) {
+    return `${billing.cardLabel || "카드"}${billing.cardLast4 ? ` · **** ${billing.cardLast4}` : ""}`.trim()
+  }
+  return "-"
+}
+
 function riskTone(score: number) {
   if (score > 70) {
     return {
@@ -949,14 +959,19 @@ function StudentDetailSheet({
   onOpenChange,
   student,
   orgId,
+  orgPrefix,
+  relatedCases,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   student: StudentRecord | null
   orgId: string | null
+  orgPrefix?: string
+  relatedCases: any[]
 }) {
   const toast = useContext(ToastContext)
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [showEditDialog, setShowEditDialog] = useState(false)
   const [shuttleEnabled, setShuttleEnabled] = useState(student?.shuttle ?? false)
 
@@ -1034,6 +1049,19 @@ function StudentDetailSheet({
 
   const mergedStudent = studentDetailQuery.data ?? student
   const schedules = scheduleQuery.data ?? []
+  const relatedProjects = Array.from(
+    new Map(
+      relatedCases
+        .filter((item: any) => item.projectId || item.project?.id || item.opsGroupId)
+        .map((item: any) => [
+          String(item.projectId ?? item.project?.id ?? item.opsGroupId),
+          {
+            id: String(item.projectId ?? item.project?.id ?? item.opsGroupId),
+            name: String(item.projectName ?? item.project?.name ?? "연결 프로젝트"),
+          },
+        ]),
+    ).values(),
+  )
 
   return (
     <>
@@ -1114,6 +1142,20 @@ function StudentDetailSheet({
                           <p className="text-xs text-slate-500">보호자 연락처</p>
                           <p className="mt-1 text-sm font-medium text-slate-900">{formatPhone(mergedStudent.parent?.phone ?? "")}</p>
                         </div>
+                        <div className="sm:col-span-2">
+                          <p className="text-xs text-slate-500">등록된 보호자</p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {mergedStudent.parents.length > 0 ? (
+                              mergedStudent.parents.map((parent) => (
+                                <Badge key={parent.id} variant="outline">
+                                  {parent.name} · {parent.relation || "보호자"}
+                                </Badge>
+                              ))
+                            ) : (
+                              <span className="text-sm font-medium text-slate-900">미등록</span>
+                            )}
+                          </div>
+                        </div>
                         <div>
                           <p className="text-xs text-slate-500">납부자</p>
                           <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.billing.payerName || "-"}</p>
@@ -1141,6 +1183,10 @@ function StudentDetailSheet({
                         <div>
                           <p className="text-xs text-slate-500">메모</p>
                           <p className="mt-1 text-sm font-medium text-slate-900">{mergedStudent.billing.billingMemo || "-"}</p>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <p className="text-xs text-slate-500">결제 요약</p>
+                          <p className="mt-1 text-sm font-medium text-slate-900">{billingSummary(mergedStudent.billing)}</p>
                         </div>
                       </div>
                     </div>
@@ -1173,7 +1219,7 @@ function StudentDetailSheet({
                                     {dayLabel(schedule.dayOfWeek)}요일 / {schedule.startTime} - {schedule.endTime}
                                   </p>
                                 </div>
-                                <Badge variant="outline">강사 {schedule.instructorName}</Badge>
+                                <Badge variant="outline">담당 {schedule.instructorName}</Badge>
                               </div>
                             </div>
                           ))}
@@ -1222,6 +1268,36 @@ function StudentDetailSheet({
                           onCheckedChange={(checked) => shuttleMutation.mutate(checked)}
                           disabled={shuttleMutation.isPending}
                         />
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card className="gap-4 border-slate-200 bg-white py-5">
+                    <div className="space-y-4 px-5">
+                      <div className="flex items-center gap-2">
+                        <BookOpen className="h-4 w-4 text-slate-500" />
+                        <h3 className="text-sm font-semibold text-slate-900">운영 바로가기</h3>
+                      </div>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <Button variant="outline" onClick={() => orgPrefix && navigate(`/${orgPrefix}/cases`)}>
+                          관련 케이스 보기
+                        </Button>
+                        <Button variant="outline" onClick={() => orgPrefix && navigate(`/${orgPrefix}/schedule`)}>
+                          연결 일정 보기
+                        </Button>
+                        <Button
+                          variant="outline"
+                          disabled={relatedProjects.length === 0}
+                          onClick={() => {
+                            const firstProject = relatedProjects[0]
+                            if (orgPrefix && firstProject) navigate(`/${orgPrefix}/projects/${firstProject.id}`)
+                          }}
+                        >
+                          연결 프로젝트 보기
+                        </Button>
+                        <Button variant="outline" onClick={() => setShowEditDialog(true)}>
+                          학생 정보 수정
+                        </Button>
                       </div>
                     </div>
                   </Card>
@@ -1472,6 +1548,19 @@ export function StudentsPage() {
     }
 
     const primaryGuardian = selectedStudent.parent ?? selectedStudent.parents[0] ?? null
+    const relatedProjects = Array.from(
+      new Map(
+        selectedStudentCases
+          .filter((item: any) => item.projectName || item.project?.name || item.opsGroupId)
+          .map((item: any) => [
+            String(item.projectId ?? item.project?.id ?? item.opsGroupId),
+            {
+              id: String(item.projectId ?? item.project?.id ?? item.opsGroupId),
+              name: String(item.projectName ?? item.project?.name ?? "연결 프로젝트"),
+            },
+          ]),
+      ).values(),
+    )
 
     return (
       <div className="space-y-4">
@@ -1498,11 +1587,18 @@ export function StudentsPage() {
           <div className="mt-3 space-y-2 text-sm text-slate-700">
             <div className="flex items-center justify-between gap-3">
               <span>보호자</span>
-              <span className="font-medium text-slate-900">{primaryGuardian?.name ?? "미등록"}</span>
+              <span className="font-medium text-slate-900">
+                {primaryGuardian?.name ?? "미등록"}
+                {selectedStudent.parents.length > 1 ? ` 외 ${selectedStudent.parents.length - 1}명` : ""}
+              </span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>결제 방식</span>
               <span className="font-medium text-slate-900">{paymentMethodLabel(selectedStudent.billing.paymentMethod)}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>결제 수단</span>
+              <span className="font-medium text-slate-900">{billingSummary(selectedStudent.billing)}</span>
             </div>
             <div className="flex items-center justify-between gap-3">
               <span>연결 수업</span>
@@ -1515,6 +1611,10 @@ export function StudentsPage() {
             <div className="flex items-center justify-between gap-3">
               <span>관련 케이스</span>
               <span className="font-medium text-slate-900">{selectedStudentCases.length}건</span>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span>연결 프로젝트</span>
+              <span className="font-medium text-slate-900">{relatedProjects.length}건</span>
             </div>
           </div>
         </div>
@@ -1531,6 +1631,26 @@ export function StudentsPage() {
               </div>
             )) : (
               <p className="text-sm text-slate-500">아직 연결된 수업이 없습니다.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+          <p className="text-xs font-semibold text-slate-600">연결 프로젝트</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {relatedProjects.length > 0 ? relatedProjects.slice(0, 4).map((project) => (
+              <button
+                key={project.id}
+                type="button"
+                onClick={() => orgPrefix && navigate(`/${orgPrefix}/projects/${project.id}`)}
+                className="rounded-full"
+              >
+                <Badge variant="outline">
+                  {project.name}
+                </Badge>
+              </button>
+            )) : (
+              <p className="text-sm text-slate-500">아직 연결된 프로젝트가 없습니다.</p>
             )}
           </div>
         </div>
@@ -1884,6 +2004,8 @@ export function StudentsPage() {
         }}
         student={selectedStudent}
         orgId={selectedOrgId}
+        orgPrefix={orgPrefix}
+        relatedCases={selectedStudentCases}
       />
     </>
   )

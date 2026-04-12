@@ -137,6 +137,14 @@ export function ApprovalCard({
         : deliveryStatus === "ready_to_send"
           ? { bg: "rgba(245,158,11,0.12)", text: "#d97706", label: "발송 준비" }
           : null
+  const deliveryGuide =
+    deliveryStatus === "ready_to_send"
+      ? `${channelLabel} 회신 문안이 준비됐습니다. 복사 후 채널에서 보내거나 자동 발송을 시도할 수 있습니다.`
+      : deliveryStatus === "failed"
+        ? `${channelLabel} 자동 발송이 실패했습니다. 채널에서 직접 보낸 뒤 전송 완료 처리로 마감하세요.`
+        : deliveryStatus === "sent"
+          ? `${channelLabel} 회신 처리가 완료되었습니다.`
+          : null
 
   return (
     <Card
@@ -192,6 +200,51 @@ export function ApprovalCard({
 
       <CardContent className="px-4 pb-3">
         <ApprovalPayloadRenderer payload={approval.payload} type={approval.level} />
+        {deliveryStatus ? (
+          <div
+            className="mt-3 rounded-2xl border px-3 py-3"
+            style={{
+              borderColor:
+                deliveryStatus === "failed"
+                  ? "rgba(239,68,68,0.2)"
+                  : deliveryStatus === "sent"
+                    ? "rgba(34,197,94,0.2)"
+                    : "rgba(245,158,11,0.2)",
+              backgroundColor:
+                deliveryStatus === "failed"
+                  ? "rgba(239,68,68,0.04)"
+                  : deliveryStatus === "sent"
+                    ? "rgba(34,197,94,0.04)"
+                    : "rgba(245,158,11,0.06)",
+            }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs font-semibold" style={{ color: "var(--text-primary)" }}>
+                {channelLabel} 회신 상태
+              </div>
+              {outboundTone ? (
+                <Badge
+                  className="text-[11px] font-medium border-0 px-2 py-0.5"
+                  style={{ backgroundColor: outboundTone.bg, color: outboundTone.text }}
+                >
+                  {outboundTone.label}
+                </Badge>
+              ) : null}
+            </div>
+            {deliveryGuide ? (
+              <p className="mt-2 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                {deliveryGuide}
+              </p>
+            ) : null}
+            {(bridge?.channelName || deliveryMessage?.provider || bridge?.chatUrl || bridge?.channelUrl) ? (
+              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                {bridge?.channelName ? <span>채널: {bridge.channelName}</span> : null}
+                {deliveryMessage?.provider ? <span>경로: {deliveryMessage.provider}</span> : null}
+                {bridge?.chatUrl || bridge?.channelUrl ? <span>운영자 브리지 사용 가능</span> : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </CardContent>
 
       <CardFooter className="px-4 pb-4 pt-0">
@@ -247,28 +300,28 @@ export function ApprovalCard({
                     </Button>
                   ) : null}
                   {deliveryStatus !== "sent" ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="gap-1.5 text-xs"
-                      disabled={sending}
-                      onClick={() => onSend(approval.id, "auto")}
-                    >
-                      {sending && sendingMode === "auto" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
-                      {channelLabel} 자동 발송
-                    </Button>
-                  ) : null}
-                  {(deliveryStatus === "ready_to_send" || deliveryStatus === "failed") ? (
-                    <Button
-                      size="sm"
-                      className="gap-1.5 text-xs text-white"
-                      style={{ backgroundColor: "var(--color-teal-500)" }}
-                      disabled={sending}
-                      onClick={() => onSend(approval.id, "confirm_bridge")}
-                    >
-                      {sending && sendingMode === "confirm_bridge" ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
-                      전송 완료 처리
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        className="gap-1.5 text-xs text-white"
+                        style={{ backgroundColor: "var(--color-teal-500)" }}
+                        disabled={sending}
+                        onClick={() => onSend(approval.id, "confirm_bridge")}
+                      >
+                        {sending && sendingMode === "confirm_bridge" ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
+                        전송 완료 처리
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-xs"
+                        disabled={sending}
+                        onClick={() => onSend(approval.id, "auto")}
+                      >
+                        {sending && sendingMode === "auto" ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                        {channelLabel} 자동 발송
+                      </Button>
+                    </>
                   ) : null}
                 </div>
               ) : null}

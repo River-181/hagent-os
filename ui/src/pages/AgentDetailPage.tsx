@@ -370,6 +370,14 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [assignInstruction, setAssignInstruction] = useState("")
   const isRunning = agent.status === "running" || !!currentRun
+  const adapterModel = agent.adapterConfig?.model ?? agent.model ?? "gpt-5-codex"
+  const allowedChannels = Array.isArray(agent.adapterConfig?.allowedChannels)
+    ? agent.adapterConfig.allowedChannels.filter((item: unknown): item is string => typeof item === "string")
+    : []
+  const allowedEntityScopes = Array.isArray(agent.adapterConfig?.allowedEntityScopes)
+    ? agent.adapterConfig.allowedEntityScopes.filter((item: unknown): item is string => typeof item === "string")
+    : []
+  const recentEstimatedCost = sortedRuns.reduce((sum: number, run: any) => sum + Number(run.estimatedCostKrw ?? run.usage?.estimatedCost ?? 0), 0)
 
   // Stats
   const totalRuns = runs.length
@@ -481,7 +489,20 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
             style={{ color: "var(--text-tertiary)" }}
           >
             {agent.role && <span>역할: {agent.role}</span>}
+            <span>어댑터: {agent.adapterType ?? "codex_qauth"}</span>
+            <span>모델: {adapterModel}</span>
             {agent.createdAt && <span>생성: {formatDate(agent.createdAt)}</span>}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+              스킬 {runtimeSkills.length}개
+            </Badge>
+            <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+              채널 {allowedChannels.length > 0 ? allowedChannels.join(", ") : "제한 없음"}
+            </Badge>
+            <Badge className="border-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}>
+              엔터티 {allowedEntityScopes.length > 0 ? allowedEntityScopes.join(", ") : "제한 없음"}
+            </Badge>
           </div>
         </div>
 
@@ -580,13 +601,14 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
       </Dialog>
 
       {/* Stats cards */}
-      {totalRuns > 0 && (
-        <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2">
           {[
             { label: "총 실행", value: totalRuns },
             { label: "성공률", value: `${successRate}%` },
             { label: "총 토큰", value: totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : totalTokens },
             { label: "마지막 실행", value: lastRun ? timeAgo(lastRun.startedAt ?? lastRun.createdAt ?? "") : "-" },
+            { label: "최근 비용", value: `${Math.round(recentEstimatedCost).toLocaleString("ko-KR")}원` },
+            { label: "연결 케이스", value: runs.filter((run: any) => Boolean(run.case?.id ?? run.caseId)).length },
           ].map(({ label, value }) => (
             <div
               key={label}
@@ -597,8 +619,7 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
               <p className="text-base font-bold tabular-nums" style={{ color: "var(--text-primary)" }}>{String(value)}</p>
             </div>
           ))}
-        </div>
-      )}
+      </div>
 
       <div
         className="rounded-xl p-4"
@@ -633,6 +654,17 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
                   <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                     {skill.displayName ?? skill.name ?? skill.slug}
                   </p>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {skill.requiredIntegrations?.slice?.(0, 3)?.map?.((integration: string) => (
+                      <Badge
+                        key={`${skill.slug ?? skill.name}-${integration}`}
+                        className="border-0 text-[11px]"
+                        style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-tertiary)" }}
+                      >
+                        {integration}
+                      </Badge>
+                    )) ?? null}
+                  </div>
                   <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
                     {skill.summary ?? "실행 시 output requirement와 integration requirement를 함께 주입합니다."}
                   </p>

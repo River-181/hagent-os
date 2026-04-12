@@ -13,10 +13,16 @@ export function scheduleRoutes(db: Db): Router {
         .where(eq(schema.schedules.organizationId, req.params.orgId))
       const instructors = await db.select().from(schema.instructors)
         .where(eq(schema.instructors.organizationId, req.params.orgId))
+      const studentSchedules = await db.select().from(schema.studentSchedules)
+        .where(eq(schema.studentSchedules.organizationId, req.params.orgId))
 
       const enriched = schedules.map(s => ({
         ...s,
         instructor: instructors.find(i => i.id === s.instructorId) ?? null,
+        instructorName: instructors.find(i => i.id === s.instructorId)?.name ?? null,
+        instructorStatus: instructors.find(i => i.id === s.instructorId)?.status ?? null,
+        instructorSubject: instructors.find(i => i.id === s.instructorId)?.subject ?? null,
+        studentCount: studentSchedules.filter(item => item.scheduleId === s.id).length,
       }))
       res.json(enriched)
     } catch (err) {

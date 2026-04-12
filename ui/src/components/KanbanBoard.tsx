@@ -144,6 +144,15 @@ function outboundLabel(status?: string | null) {
   return null
 }
 
+function reviewSummary(caseItem: any) {
+  if (caseItem.outboundStatus === "ready_to_send") return "운영자 발송 확인 필요"
+  if (caseItem.outboundStatus === "failed") return "발송 실패로 재검토 필요"
+  if (typeof caseItem.reviewReason === "string" && caseItem.reviewReason.trim()) return caseItem.reviewReason.trim()
+  if (caseItem.source === "kakao" || caseItem.source === "telegram") return "채널 회신 초안 검토 필요"
+  if (caseItem.type === "inquiry") return "질문 답변 브리프 검토 필요"
+  return "AI 실행 결과 검토 필요"
+}
+
 function KanbanCard({
   c,
   orgPrefix,
@@ -264,12 +273,12 @@ function KanbanCard({
           ) : null}
         </div>
 
-        {c.reviewReason ? (
+        {normalizeCaseStatus(c.status) === "in_review" ? (
           <div
             className="rounded-md px-2 py-1 text-[11px]"
             style={{ backgroundColor: "rgba(168,85,247,0.08)", color: "#6b21a8" }}
           >
-            {c.reviewReason}
+            검토 대기 · {reviewSummary(c)}
           </div>
         ) : null}
 

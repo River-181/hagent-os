@@ -37,6 +37,10 @@ interface ScheduleItem {
     name: string
     subject: string
   } | null
+  instructorName?: string | null
+  instructorStatus?: string | null
+  instructorSubject?: string | null
+  studentCount?: number
 }
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
@@ -716,6 +720,9 @@ function WeeklyView({
                           {block.instructor && (
                             <div className="mt-0.5 opacity-80">{block.instructor.name}</div>
                           )}
+                          {typeof block.studentCount === "number" && block.studentCount > 0 ? (
+                            <div className="opacity-60">학생 {block.studentCount}명</div>
+                          ) : null}
                           {block.room && <div className="opacity-60">{block.room}</div>}
                           {spanHours > 1 && (
                             <div className="opacity-60 mt-0.5">
@@ -909,6 +916,7 @@ function DayScheduleDialog({
                       <div className="text-xs opacity-70 mt-0.5 flex items-center gap-1.5">
                         <span>{formatTimeRange(s.startTime, s.endTime)}</span>
                         {s.instructor && <span>· {s.instructor.name}</span>}
+                        {typeof s.studentCount === "number" && s.studentCount > 0 ? <span>· 학생 {s.studentCount}명</span> : null}
                         {s.room && <span>· {s.room}</span>}
                       </div>
                     </div>
@@ -1081,6 +1089,7 @@ export function SchedulePage() {
   const panelContent = useMemo(() => {
     if (!selectedSchedule) {
       const counselingCount = (schedules as ScheduleItem[]).filter((item) => item.type === "counseling").length
+      const unassignedCount = (schedules as ScheduleItem[]).filter((item) => !item.instructor?.id && !item.instructorName).length
       return (
         <div className="space-y-4">
           <div>
@@ -1098,6 +1107,10 @@ export function SchedulePage() {
             <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
               <p className="text-xs text-amber-700">상담 일정</p>
               <p className="mt-1 text-xl font-semibold text-amber-900">{counselingCount}개</p>
+            </div>
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4">
+              <p className="text-xs text-rose-700">담당 미지정</p>
+              <p className="mt-1 text-xl font-semibold text-rose-900">{unassignedCount}개</p>
             </div>
           </div>
 
@@ -1138,11 +1151,28 @@ export function SchedulePage() {
         <div className="grid gap-3">
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <p className="text-xs text-slate-500">담당 직원/강사</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">{selectedSchedule.instructor?.name ?? "미지정"}</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">{selectedSchedule.instructor?.name ?? selectedSchedule.instructorName ?? "미지정"}</p>
+            {selectedSchedule.instructorSubject || selectedSchedule.instructorStatus ? (
+              <p className="mt-1 text-xs text-slate-500">
+                {selectedSchedule.instructorSubject ?? "역할 미지정"} · {selectedSchedule.instructorStatus ?? "상태 미지정"}
+              </p>
+            ) : null}
+            {selectedSchedule.instructor?.id ? (
+              <button
+                type="button"
+                className="mt-2 text-xs font-medium"
+                style={{ color: "var(--color-teal-500)" }}
+                onClick={() => orgPrefix && navigate(`/${orgPrefix}/instructors?detail=${selectedSchedule.instructor?.id}`)}
+              >
+                직원/강사 상세로 이동
+              </button>
+            ) : (
+              <p className="mt-2 text-xs font-medium text-rose-600">담당 직원/강사를 지정해야 실제 운영 일정으로 쓰기 쉽습니다.</p>
+            )}
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-4">
             <p className="text-xs text-slate-500">연결 학생</p>
-            <p className="mt-1 text-base font-semibold text-slate-900">{selectedStudentIds.length}명</p>
+            <p className="mt-1 text-base font-semibold text-slate-900">{selectedSchedule.studentCount ?? selectedStudentIds.length}명</p>
           </div>
         </div>
 

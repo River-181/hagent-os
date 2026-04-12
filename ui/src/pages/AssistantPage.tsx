@@ -180,6 +180,20 @@ export function AssistantPage() {
         }),
     },
     {
+      key: "schedule",
+      title: "보강·결석 질문",
+      description: "보강 가능 시간과 학부모 안내 초안을 일정 관점으로 정리합니다.",
+      icon: Send,
+      onClick: () =>
+        submitMutation.mutate({
+          question: "결석한 학생의 보강 가능 시간을 제안하고, 학부모에게 보낼 안내 문안도 같이 정리해줘.",
+          title: "운영 질문 · 보강/결석",
+          origin: "assistant_shortcut",
+          scenarioKey: "schedule-question",
+          forceNewThread: true,
+        }),
+    },
+    {
       key: "promotion",
       title: "프로모션 프로젝트",
       description: "상반기 프로모션을 프로젝트와 하위 케이스로 바로 생성합니다.",

@@ -331,6 +331,14 @@ export function SettingsPage() {
   const installedSkills = skills.filter((item: any) => item.installed)
   const actionRequiredSkills = skills.filter((item: any) => !item.ready)
   const connectedIntegrations = integrations.filter((item: any) => item.connected)
+  const connectionTestEntries = Object.entries(adapterTestResult)
+    .filter(([, value]) => isObjectRecord(value))
+    .sort(([, left], [, right]) => {
+      const leftTime = typeof left.testedAt === "string" ? left.testedAt : ""
+      const rightTime = typeof right.testedAt === "string" ? right.testedAt : ""
+      return rightTime.localeCompare(leftTime)
+    })
+    .slice(0, 4)
 
   const saveMutation = useMutation({
     mutationFn: async ({
@@ -488,6 +496,57 @@ export function SettingsPage() {
               저장 중
             </div>
           ) : null}
+        </div>
+
+        <div className="grid gap-3 xl:grid-cols-4">
+          {[
+            {
+              label: "기본 실행",
+              value: selectedAdapter?.label ?? primaryAdapterType,
+              detail: selectedAdapter?.connected ? "실행 준비됨" : "degraded 또는 연결 확인 필요",
+            },
+            {
+              label: "연동 준비",
+              value: `${connectedIntegrations.length}/${integrations.length}`,
+              detail: connectedIntegrations.length > 0 ? "실제 연결된 외부 연동 기준" : "연결 테스트가 더 필요합니다.",
+            },
+            {
+              label: "월 예산",
+              value: `${Number(monthlyBudgetKrw || 0).toLocaleString("ko-KR")}원`,
+              detail: autoRun ? "자동 실행 허용" : "수동 승인 중심",
+            },
+            {
+              label: "최근 테스트",
+              value:
+                connectionTestEntries.length > 0
+                  ? `${connectionTestEntries.filter(([, value]) => Boolean(value.connected)).length}건 통과`
+                  : "기록 없음",
+              detail:
+                connectionTestEntries.length > 0
+                  ? new Date(String(connectionTestEntries[0][1].testedAt)).toLocaleString("ko-KR")
+                  : "아직 연결 테스트를 저장하지 않았습니다.",
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              className="rounded-3xl border px-4 py-4"
+              style={{
+                backgroundColor: "var(--bg-elevated)",
+                borderColor: "var(--border-default)",
+                boxShadow: "var(--shadow-sm)",
+              }}
+            >
+              <div className="text-xs uppercase tracking-[0.16em]" style={{ color: "var(--text-tertiary)" }}>
+                {item.label}
+              </div>
+              <div className="mt-2 text-lg font-semibold" style={{ color: "var(--text-primary)" }}>
+                {item.value}
+              </div>
+              <div className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+                {item.detail}
+              </div>
+            </div>
+          ))}
         </div>
 
         <SectionCard
@@ -659,6 +718,53 @@ export function SettingsPage() {
             checked={applyToExistingAgents}
             onCheckedChange={setApplyToExistingAgents}
           />
+
+          {connectionTestEntries.length > 0 ? (
+            <div
+              className="rounded-2xl border px-4 py-4"
+              style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                    최근 연결 테스트
+                  </div>
+                  <div className="mt-1 text-xs" style={{ color: "var(--text-secondary)" }}>
+                    Codex, 법령 조회, 채널 브리지 테스트 결과를 최근 순서대로 보여줍니다.
+                  </div>
+                </div>
+                <StatusPill tone="muted">{connectionTestEntries.length}건</StatusPill>
+              </div>
+              <div className="mt-3 grid gap-2">
+                {connectionTestEntries.map(([key, value]) => (
+                  <div
+                    key={key}
+                    className="flex items-center justify-between gap-3 rounded-2xl px-3 py-2"
+                    style={{ backgroundColor: "var(--bg-base)" }}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                        {key}
+                      </div>
+                      <div className="truncate text-xs" style={{ color: "var(--text-secondary)" }}>
+                        {typeof value.preview === "string" && value.preview ? value.preview : "최근 미리보기 없음"}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <StatusPill tone={value.connected ? "good" : "warn"}>
+                        {value.connected ? "connected" : "degraded"}
+                      </StatusPill>
+                      {typeof value.testedAt === "string" ? (
+                        <div className="mt-1 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                          {new Date(value.testedAt).toLocaleString("ko-KR")}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid gap-4 lg:grid-cols-3">
             <Field label="월 예산 (KRW)" hint="조직 전체 AI 실행 예산 경고 기준입니다.">
