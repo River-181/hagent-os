@@ -12,7 +12,7 @@
 
 ## 🔴 라이브 데모
 
-> **라이브 URL**: 심사 전 업데이트 예정
+> **라이브 URL**: https://divine-simplicity-production.up.railway.app
 
 **심사위원 가이드** → [`JUDGE_DEMO.md`](./JUDGE_DEMO.md)
 

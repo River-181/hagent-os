@@ -6,7 +6,7 @@
 
 ## 1. 라이브 데모 접속
 
-> **라이브 URL**: 준비 중 — 심사 전 업데이트 예정
+> **라이브 URL**: https://divine-simplicity-production.up.railway.app
 
 라이브 URL 접속 시 별도 로그인 없이 **탄자니아 영어학원 데모 7** 조직이 사전 로드됩니다.
 
