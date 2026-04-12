@@ -59,7 +59,7 @@ export function Layout() {
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <BreadcrumbBar />
         <main
-          className="flex-1 overflow-y-auto"
+          className="flex-1 overflow-x-hidden overflow-y-auto"
           style={{
             backgroundColor: "var(--bg-canvas)",
             paddingBottom: isMobile ? 60 : 0,

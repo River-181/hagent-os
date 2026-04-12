@@ -18,6 +18,8 @@ RUN pnpm install --frozen-lockfile
 COPY packages/ ./packages/
 COPY server/ ./server/
 COPY ui/ ./ui/
+# k-skill 레지스트리 (서버 런타임이 스캔함)
+COPY skills/ ./skills/
 
 # 빌드 (의존 순서 보장)
 RUN pnpm --filter @hagent/shared build

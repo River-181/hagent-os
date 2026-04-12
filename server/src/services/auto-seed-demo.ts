@@ -3,8 +3,26 @@ import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import pino from "pino"
 import { bootstrapOrganization } from "./bootstrap.js"
+import { installSkillForOrganization, updateAgentSkillMounts } from "./skills.js"
 
 const logger = pino({ level: "info" })
+
+// 심사위원이 "자동화"·"스킬" 탭에서 바로 볼 수 있는 기본 루틴
+const DEMO_ROUTINES: Array<{ agentRole: string | null; name: string; schedule: string }> = [
+  { agentRole: "orchestrator", name: "매일 오전 9시 브리핑", schedule: "0 9 * * *" },
+  { agentRole: "complaint", name: "민원 답변 초안 자동 생성", schedule: "*/15 * * * *" },
+  { agentRole: "retention", name: "주 1회 이탈 위험 학생 리포트", schedule: "0 10 * * MON" },
+  { agentRole: "scheduler", name: "내일 수업 리마인더 발송", schedule: "0 20 * * *" },
+  { agentRole: null, name: "월 1회 수강료 미납 알림", schedule: "0 9 1 * *" },
+]
+
+// 시드 후 설치할 k-skill 팩 (파일시스템의 skills/hagent/... 을 DB 레지스트리로)
+const DEMO_SKILL_SLUGS_BY_ROLE: Record<string, string[]> = {
+  orchestrator: ["complaint-classifier", "schedule-manager", "student-data-import", "academy-bootstrap-pack"],
+  complaint: ["complaint-classifier", "korean-tone-guide", "message-template-pack", "compliance-refund-pack"],
+  retention: ["churn-risk-calculator", "student-360-view", "re-enrollment-playbook"],
+  scheduler: ["schedule-manager", "schedule-optimizer", "substitute-matcher"],
+}
 
 /**
  * 심사위원/첫 방문자용 "완성된 학원 OS" 자동 시드.
@@ -69,13 +87,90 @@ export async function autoSeedDemoOrganization(db: Db): Promise<void> {
       .where(eq(schema.organizations.prefix, DEMO_PREFIX))
 
     if (existing) {
-      logger.info({ orgId: existing.id, name: existing.name }, "Demo organization already seeded — skipping")
+      // 이전 배포에서 skills/routines 없이 시드된 경우 보충
+      const [skillCount] = await db
+        .select({ n: schema.organizationSkills.organizationId })
+        .from(schema.organizationSkills)
+        .where(eq(schema.organizationSkills.organizationId, existing.id))
+        .limit(1)
+      if (skillCount) {
+        logger.info({ orgId: existing.id }, "Demo organization fully seeded — skipping")
+        return
+      }
+
+      logger.info({ orgId: existing.id }, "Existing demo org missing skills — backfilling skills + routines")
+      const agents = await db.select().from(schema.agents).where(eq(schema.agents.organizationId, existing.id))
+      const allSlugs = Array.from(new Set(Object.values(DEMO_SKILL_SLUGS_BY_ROLE).flat()))
+      for (const slug of allSlugs) {
+        await installSkillForOrganization(db, existing.id, slug).catch(() => null)
+      }
+      for (const agent of agents) {
+        const slugs = DEMO_SKILL_SLUGS_BY_ROLE[agent.agentType] ?? []
+        if (slugs.length > 0) {
+          await updateAgentSkillMounts(
+            db,
+            agent.id,
+            slugs.map((slug, i) => ({ slug, enabled: true, mountOrder: i })),
+          ).catch(() => null)
+        }
+      }
+      // 루틴은 중복 방지 — 없을 때만 삽입
+      const existingRoutines = await db
+        .select({ n: schema.routines.organizationId })
+        .from(schema.routines)
+        .where(eq(schema.routines.organizationId, existing.id))
+        .limit(1)
+      if (existingRoutines.length === 0) {
+        for (const routine of DEMO_ROUTINES) {
+          const agent = routine.agentRole ? agents.find((a) => a.agentType === routine.agentRole) : null
+          await db.insert(schema.routines).values({
+            organizationId: existing.id,
+            agentId: agent?.id ?? null,
+            name: routine.name,
+            schedule: routine.schedule,
+            enabled: true,
+          }).catch(() => null)
+        }
+      }
+      logger.info({ orgId: existing.id }, "Backfill complete")
       return
     }
 
     logger.info("Auto-seeding demo organization (탄자니아 영어학원)")
     const result = await bootstrapOrganization(db, DEMO_PAYLOAD)
-    logger.info({ orgId: result.organization.id }, "Demo organization seeded successfully")
+    const orgId = result.organization.id
+    logger.info({ orgId }, "Demo organization seeded — now seeding skills + routines")
+
+    // 1) k-skill 팩 설치 + 에이전트 마운트
+    const agents = await db.select().from(schema.agents).where(eq(schema.agents.organizationId, orgId))
+    const allSlugs = Array.from(new Set(Object.values(DEMO_SKILL_SLUGS_BY_ROLE).flat()))
+    for (const slug of allSlugs) {
+      await installSkillForOrganization(db, orgId, slug).catch(() => null)
+    }
+    for (const agent of agents) {
+      const slugs = DEMO_SKILL_SLUGS_BY_ROLE[agent.agentType] ?? []
+      if (slugs.length > 0) {
+        await updateAgentSkillMounts(
+          db,
+          agent.id,
+          slugs.map((slug, i) => ({ slug, enabled: true, mountOrder: i })),
+        ).catch(() => null)
+      }
+    }
+
+    // 2) 자동화(루틴) 시드
+    for (const routine of DEMO_ROUTINES) {
+      const agent = routine.agentRole ? agents.find((a) => a.agentType === routine.agentRole) : null
+      await db.insert(schema.routines).values({
+        organizationId: orgId,
+        agentId: agent?.id ?? null,
+        name: routine.name,
+        schedule: routine.schedule,
+        enabled: true,
+      }).catch((err) => logger.warn({ err: String(err), name: routine.name }, "routine insert failed"))
+    }
+
+    logger.info({ orgId, skills: allSlugs.length, routines: DEMO_ROUTINES.length }, "Demo skills + routines seeded")
   } catch (error) {
     logger.warn(
       { err: error instanceof Error ? { message: error.message, stack: error.stack?.split("\n").slice(0, 3).join(" | ") } : String(error) },
