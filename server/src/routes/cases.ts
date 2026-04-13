@@ -548,72 +548,64 @@ export function caseRoutes(db: Db): Router {
         return
       }
 
-      const runs = await db
-        .select()
-        .from(schema.agentRuns)
-        .where(eq(schema.agentRuns.caseId, req.params.id))
-        .orderBy(desc(schema.agentRuns.createdAt))
+      const [runs, approvals, comments, allCasesInOrg, allDocumentsInOrg, orgAgents, orgProjects] = await Promise.all([
+        db
+          .select()
+          .from(schema.agentRuns)
+          .where(eq(schema.agentRuns.caseId, req.params.id))
+          .orderBy(desc(schema.agentRuns.createdAt)),
+        db
+          .select()
+          .from(schema.approvals)
+          .where(eq(schema.approvals.caseId, req.params.id))
+          .orderBy(desc(schema.approvals.createdAt)),
+        db
+          .select()
+          .from(schema.caseComments)
+          .where(eq(schema.caseComments.caseId, req.params.id))
+          .orderBy(desc(schema.caseComments.createdAt)),
+        db
+          .select()
+          .from(schema.cases)
+          .where(eq(schema.cases.organizationId, caseRecord.organizationId))
+          .orderBy(desc(schema.cases.createdAt)),
+        db
+          .select()
+          .from(schema.documents)
+          .where(eq(schema.documents.organizationId, caseRecord.organizationId))
+          .orderBy(desc(schema.documents.updatedAt)),
+        db.select().from(schema.agents).where(eq(schema.agents.organizationId, caseRecord.organizationId)),
+        db.select().from(schema.opsGroups).where(eq(schema.opsGroups.organizationId, caseRecord.organizationId)),
+      ])
 
-      const approvals = await db
-        .select()
-        .from(schema.approvals)
-        .where(eq(schema.approvals.caseId, req.params.id))
-        .orderBy(desc(schema.approvals.createdAt))
+      const agentMap = new Map(orgAgents.map((agent) => [agent.id, agent]))
+      const projectMap = new Map(orgProjects.map((project) => [project.id, project]))
+      const assignee = caseRecord.assigneeAgentId ? agentMap.get(caseRecord.assigneeAgentId) ?? null : null
+      const project = caseRecord.opsGroupId ? projectMap.get(caseRecord.opsGroupId) ?? null : null
 
-      const assignee = caseRecord.assigneeAgentId
-        ? (await db
-            .select()
-            .from(schema.agents)
-            .where(eq(schema.agents.id, caseRecord.assigneeAgentId)))[0] ?? null
-        : null
-      const project = caseRecord.opsGroupId
-        ? (await db
-            .select()
-            .from(schema.opsGroups)
-            .where(eq(schema.opsGroups.id, caseRecord.opsGroupId)))[0] ?? null
-        : null
+      const childCases = allCasesInOrg.filter((item: typeof schema.cases.$inferSelect) =>
+        !item.archivedAt && String(getCaseMetadata(item).parentCaseId ?? "") === caseRecord.id)
 
-      const runAgentMap = new Map<string, typeof schema.agents.$inferSelect>()
-      for (const run of runs) {
-        if (!runAgentMap.has(run.agentId)) {
-          const [agent] = await db
-            .select()
-            .from(schema.agents)
-            .where(eq(schema.agents.id, run.agentId))
-          if (agent) runAgentMap.set(run.agentId, agent)
-        }
-      }
-
-      const comments = await db
-        .select()
-        .from(schema.caseComments)
-        .where(eq(schema.caseComments.caseId, req.params.id))
-        .orderBy(desc(schema.caseComments.createdAt))
-
-      const childCases = (await db
-        .select()
-        .from(schema.cases)
-        .where(eq(schema.cases.organizationId, caseRecord.organizationId))
-        .orderBy(desc(schema.cases.createdAt)))
-        .filter((item: typeof schema.cases.$inferSelect) =>
-          !item.archivedAt && String(getCaseMetadata(item).parentCaseId ?? "") === caseRecord.id)
-
-      const documents = (await db
-        .select()
-        .from(schema.documents)
-        .where(eq(schema.documents.organizationId, caseRecord.organizationId))
-        .orderBy(desc(schema.documents.updatedAt)))
-        .filter((item: typeof schema.documents.$inferSelect) => Array.isArray(item.tags) && item.tags.includes(`case:${caseRecord.id}`))
+      const documents = allDocumentsInOrg.filter((item: typeof schema.documents.$inferSelect) =>
+        Array.isArray(item.tags) && item.tags.includes(`case:${caseRecord.id}`))
       const enrichedDocuments = enrichDocuments(documents, {
         cases: [caseRecord],
         projects: project ? [project] : [],
       })
 
-      const assigneeSkillRuntime = assignee ? await buildAgentSkillRuntimeContext(db, assignee.id) : { bundles: [], text: "" }
+      const runtimeSkillCache = new Map<string, Promise<{ bundles: any[]; text: string }>>()
+      const getRuntimeSkillContext = (agentId: string) => {
+        if (!runtimeSkillCache.has(agentId)) {
+          runtimeSkillCache.set(agentId, buildAgentSkillRuntimeContext(db, agentId))
+        }
+        return runtimeSkillCache.get(agentId)!
+      }
+
+      const assigneeSkillRuntime = assignee ? await getRuntimeSkillContext(assignee.id) : { bundles: [], text: "" }
       const runsWithContext = await Promise.all(
         runs.map(async (run: typeof schema.agentRuns.$inferSelect) => {
-          const runAgent = runAgentMap.get(run.agentId) ?? null
-          const runtimeSkills = runAgent ? await buildAgentSkillRuntimeContext(db, runAgent.id) : { bundles: [], text: "" }
+          const runAgent = agentMap.get(run.agentId) ?? null
+          const runtimeSkills = runAgent ? await getRuntimeSkillContext(runAgent.id) : { bundles: [], text: "" }
           const usage = await buildRunUsageSummary(db, {
             organizationId: caseRecord.organizationId,
             runId: run.id,

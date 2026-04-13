@@ -1,11 +1,4 @@
 import { Badge } from "@/components/ui/badge"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { cn, timeAgo } from "@/lib/utils"
 import { StatusIcon } from "./StatusIcon"
 import { PriorityIcon, priorityLabel } from "./PriorityIcon"
@@ -128,8 +121,8 @@ export function CaseProperties({
   }
 
   const canEdit = !!(onStatusChange ?? onUpdate)
-  const editableTriggerClassName =
-    "h-9 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-base)] px-3 text-xs text-[var(--text-primary)] shadow-none transition-colors hover:bg-[var(--bg-tertiary)] focus:ring-0"
+  const editableControlClassName =
+    "h-9 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-base)] px-3 text-xs text-[var(--text-primary)] shadow-none transition-colors hover:bg-[var(--bg-tertiary)] focus:outline-none"
   const staticBadgeClassName = "border-0 px-2 py-1 text-xs font-medium"
 
   return (
@@ -142,81 +135,65 @@ export function CaseProperties({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <PropertyField label="상태">
-          <Select value={status} onValueChange={handleStatusChange} disabled={!canEdit}>
-            <SelectTrigger className={editableTriggerClassName}>
-              <SelectValue>
-                <span className="flex items-center gap-1.5">
-                  <StatusIcon status={status} size={12} />
-                  {statusOptions.find((s) => s.value === status)?.label ?? status}
-                </span>
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {statusOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  <span className="flex items-center gap-1.5">
-                    <StatusIcon status={opt.value} size={12} />
-                    {opt.label}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <select
+            value={status}
+            onChange={(e) => handleStatusChange(e.target.value)}
+            disabled={!canEdit}
+            className={editableControlClassName}
+          >
+            {statusOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </PropertyField>
 
         <PropertyField label="우선순위">
-          <Select value={String(priority)} onValueChange={handlePriorityChange} disabled={!onUpdate}>
-            <SelectTrigger className={editableTriggerClassName}>
-              <SelectValue>
-                <span className="flex items-center gap-1.5">
-                  <PriorityIcon priority={priority as 0 | 1 | 2 | 3 | 4} size={12} />
-                  {priorityLabel(priority)}
-                </span>
-              </SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {priorityOptions.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  <span className="flex items-center gap-1.5">
-                    <PriorityIcon priority={opt.priority as 0 | 1 | 2 | 3 | 4} size={12} />
-                    {opt.label}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <select
+            value={String(priority)}
+            onChange={(e) => handlePriorityChange(e.target.value)}
+            disabled={!onUpdate}
+            className={editableControlClassName}
+          >
+            {priorityOptions.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
         </PropertyField>
 
         <PropertyField label="담당 에이전트">
-          <Select value={assigneeAgentId ?? "__none__"} onValueChange={handleAssigneeChange} disabled={!onUpdate}>
-            <SelectTrigger className={editableTriggerClassName}>
-              <SelectValue placeholder="미배정" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">미배정</SelectItem>
-              {agents.map((agent) => (
-                <SelectItem key={agent.id} value={agent.id}>
-                  {agent.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <select
+            value={assigneeAgentId ?? "__none__"}
+            onChange={(e) => handleAssigneeChange(e.target.value)}
+            disabled={!onUpdate}
+            className={editableControlClassName}
+          >
+            <option value="__none__">미배정</option>
+            {agents.map((agent) => (
+              <option key={agent.id} value={agent.id}>
+                {agent.name}
+              </option>
+            ))}
+          </select>
         </PropertyField>
 
         <PropertyField label="프로젝트">
-          <Select value={projectId ?? "__none__"} onValueChange={handleProjectChange} disabled={!onUpdate}>
-            <SelectTrigger className={editableTriggerClassName}>
-              <SelectValue placeholder="미연결" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="__none__">미연결</SelectItem>
-              {projects.map((projectOption) => (
-                <SelectItem key={projectOption.id} value={projectOption.id}>
-                  {projectOption.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <select
+            value={projectId ?? "__none__"}
+            onChange={(e) => handleProjectChange(e.target.value)}
+            disabled={!onUpdate}
+            className={editableControlClassName}
+          >
+            <option value="__none__">미연결</option>
+            {projects.map((projectOption) => (
+              <option key={projectOption.id} value={projectOption.id}>
+                {projectOption.name}
+              </option>
+            ))}
+          </select>
         </PropertyField>
       </div>
 
