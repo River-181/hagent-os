@@ -596,7 +596,11 @@ export function SettingsPage() {
     const hash = location.hash
     if (!hash || !pageRef.current) return
     const id = hash.replace(/^#/, "")
-    const target = pageRef.current.querySelector<HTMLElement>(`#${CSS.escape(id)}`)
+    const safeId =
+      typeof CSS !== "undefined" && typeof CSS.escape === "function"
+        ? CSS.escape(id)
+        : id.replace(/[^a-zA-Z0-9_-]/g, "\\$&")
+    const target = pageRef.current.querySelector<HTMLElement>(`#${safeId}`)
     if (target) {
       target.scrollIntoView({ behavior: "smooth", block: "start" })
     }

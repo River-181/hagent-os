@@ -34,6 +34,32 @@ function getOrganizationConfig(organization: typeof schema.organizations.$inferS
   return isPlainObject(organization.agentTeamConfig) ? organization.agentTeamConfig : {}
 }
 
+function buildImmediateTelegramCustomerReply(message: string) {
+  const normalized = message.trim()
+  if (!normalized) return null
+
+  if (/등록|입학|상담 가능|상담가능|체험|레벨테스트/.test(normalized)) {
+    return [
+      '문의 감사합니다. 등록/상담 가능합니다.',
+      '학생 이름, 학년, 희망 과목, 가능한 시간대를 보내주시면 담당자가 확인 후 상담 일정을 안내드리겠습니다.',
+    ].join(' ')
+  }
+
+  if (/일정|보강|시간표|변경|예약/.test(normalized)) {
+    return '일정 조율 요청을 접수했습니다. 학생 이름과 가능한 시간대를 보내주시면 담당자가 확인 후 안내드리겠습니다.'
+  }
+
+  if (/환불|교습비|수강료|정책|법령/.test(normalized)) {
+    return '정책/환불 관련 문의를 접수했습니다. 정확한 안내를 위해 담당자가 확인 후 답변드리겠습니다.'
+  }
+
+  if (/운영시간|영업시간|위치|주소|연락처/.test(normalized)) {
+    return '문의 감사합니다. 필요한 기본 정보를 확인해 안내드리겠습니다. 조금만 기다려 주세요.'
+  }
+
+  return '문의 감사합니다. 내용을 접수했고 담당자가 확인 후 안내드리겠습니다.'
+}
+
 async function getTelegramApiJson(botToken: string, method: string, init?: RequestInit) {
   const response = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, init)
   const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>
@@ -120,28 +146,44 @@ export function telegramRoutes(db: Db): Router {
       const telegramConfig = isPlainObject(channels.telegram) ? channels.telegram : {}
       const autoReplyEnabled = telegramConfig.autoReply === true
 
-      if (autoReplyEnabled && result.caseId) {
-        void (async () => {
-          try {
-            const [updatedCase] = await db
-              .select()
-              .from(schema.cases)
-              .where(eq(schema.cases.id, result.caseId))
-            const draft = updatedCase?.agentDraft
-            if (draft) {
-              await sendTelegramMessage(db, {
-                organizationId: result.organizationId,
-                caseRecord: updatedCase,
-                approvalId: `telegram-auto-${result.caseId}`,
-                draft,
-                mode: "auto",
-              })
-            }
-          } catch {
-            // 발송 실패해도 케이스 접수는 성공으로 처리
+      void (async () => {
+        try {
+          const [updatedCase] = await db
+            .select()
+            .from(schema.cases)
+            .where(eq(schema.cases.id, result.caseId))
+          if (!updatedCase) return
+
+          const immediateReply = buildImmediateTelegramCustomerReply(normalized.message)
+          const draft = updatedCase.agentDraft
+
+          if (autoReplyEnabled && draft) {
+            await sendTelegramMessage(db, {
+              organizationId: result.organizationId,
+              caseRecord: updatedCase,
+              approvalId: `telegram-auto-${result.caseId}`,
+              draft,
+              mode: "auto",
+            })
+            return
           }
-        })()
-      }
+
+          const chatId = normalized.threadId || normalized.senderId
+          if (binding.botToken && chatId && immediateReply) {
+            await getTelegramApiJson(binding.botToken, 'sendMessage', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: immediateReply,
+                disable_web_page_preview: true,
+              }),
+            })
+          }
+        } catch {
+          // 발송 실패해도 케이스 접수는 성공으로 처리
+        }
+      })()
       // autoReply === false 면 승인 대기 — approvals.ts 에서 decision="approved" 될 때 발송됨
 
       res.json({ ok: true, result })
