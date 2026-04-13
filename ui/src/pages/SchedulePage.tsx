@@ -160,7 +160,12 @@ function scheduleDurationMinutes(item: Pick<ScheduleItem, "startTime" | "endTime
   return Math.max(SLOT_MINUTES, timeToMinutes(item.endTime) - timeToMinutes(item.startTime))
 }
 
+function isAllDaySchedule(item: Pick<ScheduleItem, "startTime" | "endTime">) {
+  return item.startTime === "00:00" && item.endTime === "23:59"
+}
+
 function isLongSpanSchedule(item: Pick<ScheduleItem, "type" | "startTime" | "endTime">) {
+  if (isAllDaySchedule(item)) return false // all-day items go to the all-day row, not background
   return item.type === "leave" || scheduleDurationMinutes(item) >= 4 * 60
 }
 
@@ -813,11 +818,20 @@ function WeeklyView({
   const currentLineTop = ((currentMinutes - DAY_START_MINUTES) / SLOT_MINUTES) * SLOT_HEIGHT
   const todayRangeVisible = currentMinutes >= DAY_START_MINUTES && currentMinutes <= DAY_END_MINUTES
 
+  const allDayByDay = useMemo(
+    () =>
+      weekDates.map((_, idx) => {
+        const dayOfWeek = idx === 6 ? 0 : idx + 1
+        return schedules.filter((item) => item.dayOfWeek === dayOfWeek && isAllDaySchedule(item))
+      }),
+    [schedules, weekDates],
+  )
+
   const dayLayouts = useMemo(
     () =>
       weekDates.map((_, idx) => {
         const dayOfWeek = idx === 6 ? 0 : idx + 1
-        const dayItems = schedules.filter((item) => item.dayOfWeek === dayOfWeek)
+        const dayItems = schedules.filter((item) => item.dayOfWeek === dayOfWeek && !isAllDaySchedule(item))
         return {
           dayOfWeek,
           backgroundEvents: layoutDaySchedules(dayItems.filter((item) => isLongSpanSchedule(item))),
@@ -853,48 +867,91 @@ function WeeklyView({
       style={{ backgroundColor: "var(--bg-elevated)" }}
     >
       <div className="min-w-[1080px]">
-        <div
-          className="grid"
-          style={{
-            gridTemplateColumns: "84px repeat(7, minmax(150px, 1fr))",
-            backgroundColor: "var(--bg-secondary)",
-            borderBottom: "1px solid var(--border-default)",
-            position: "sticky",
-            top: 0,
-            zIndex: 20,
-          }}
-        >
+        {/* Sticky header + all-day row wrapper */}
+        <div style={{ position: "sticky", top: 0, zIndex: 20 }}>
+          {/* Day headers */}
           <div
-            className="px-3 py-3 text-xs font-medium"
-            style={{ color: "var(--text-tertiary)", borderRight: "1px solid var(--border-default)" }}
+            className="grid"
+            style={{
+              gridTemplateColumns: "84px repeat(7, minmax(150px, 1fr))",
+              backgroundColor: "var(--bg-secondary)",
+              borderBottom: "1px solid var(--border-default)",
+            }}
           >
-            시간
-          </div>
-          {weekDates.map((date, idx) => {
-            const isToday = isSameDay(date, today)
-            return (
-              <div
-                key={idx}
-                className="px-2 py-3 text-center"
-                style={{
-                  borderLeft: idx > 0 ? "1px solid var(--border-default)" : undefined,
-                  backgroundColor: isToday ? "var(--color-primary-soft)" : "var(--bg-secondary)",
-                  color: isToday ? "var(--color-primary)" : "var(--text-secondary)",
-                }}
-              >
-                <div className="text-xs font-semibold">{WEEK_DAYS[idx]}</div>
+            <div
+              className="px-3 py-3 text-xs font-medium"
+              style={{ color: "var(--text-tertiary)", borderRight: "1px solid var(--border-default)" }}
+            >
+              시간
+            </div>
+            {weekDates.map((date, idx) => {
+              const isToday = isSameDay(date, today)
+              return (
                 <div
-                  className="mt-1 inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold"
+                  key={idx}
+                  className="px-2 py-3 text-center"
                   style={{
-                    backgroundColor: isToday ? "var(--color-primary)" : "transparent",
-                    color: isToday ? "var(--text-on-primary)" : "inherit",
+                    borderLeft: idx > 0 ? "1px solid var(--border-default)" : undefined,
+                    backgroundColor: isToday ? "var(--color-primary-soft)" : "var(--bg-secondary)",
+                    color: isToday ? "var(--color-primary)" : "var(--text-secondary)",
                   }}
                 >
-                  {date.getDate()}
+                  <div className="text-xs font-semibold">{WEEK_DAYS[idx]}</div>
+                  <div
+                    className="mt-1 inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold"
+                    style={{
+                      backgroundColor: isToday ? "var(--color-primary)" : "transparent",
+                      color: isToday ? "var(--text-on-primary)" : "inherit",
+                    }}
+                  >
+                    {date.getDate()}
+                  </div>
                 </div>
+              )
+            })}
+          </div>
+
+          {/* All-day row */}
+          {allDayByDay.some((d) => d.length > 0) && (
+            <div
+              className="grid"
+              style={{
+                gridTemplateColumns: "84px repeat(7, minmax(150px, 1fr))",
+                backgroundColor: "var(--bg-secondary)",
+                borderBottom: "2px solid var(--border-default)",
+              }}
+            >
+              <div
+                className="px-3 py-2 text-[11px] font-medium"
+                style={{ color: "var(--text-tertiary)", borderRight: "1px solid var(--border-default)" }}
+              >
+                종일
               </div>
-            )
-          })}
+              {allDayByDay.map((items, idx) => (
+                <div
+                  key={idx}
+                  className="px-1 py-1 min-h-[28px]"
+                  style={{ borderLeft: idx > 0 ? "1px solid var(--border-default)" : undefined }}
+                >
+                  {items.map((item) => {
+                    const colors = getTypeColor(item.type)
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => onSelectSchedule(item)}
+                        className="mb-0.5 flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium transition-opacity hover:opacity-80"
+                        style={{ backgroundColor: colors.bg, color: colors.text }}
+                      >
+                        <span>{colors.icon}</span>
+                        <span className="truncate">{item.title}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         <div
