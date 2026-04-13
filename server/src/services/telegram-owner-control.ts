@@ -2,6 +2,7 @@ import { randomBytes, scryptSync, timingSafeEqual } from "crypto"
 import { and, desc, eq, inArray, isNull } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
+import { resolveCaseRunAgent } from "./case-run-routing.js"
 import { executeAgentRun } from "./execution.js"
 import { publishEvent } from "./live-events.js"
 import { processApprovalDecision } from "./approval-decisions.js"
@@ -748,14 +749,7 @@ async function executeCaseMutation(
     return `${caseRecord.identifier} 프로젝트 연결을 변경했습니다.`
   }
 
-  const agents = await db.select().from(schema.agents).where(eq(schema.agents.organizationId, organization.id))
-  const assignee = caseRecord.assigneeAgentId ? agents.find((item) => item.id === caseRecord.assigneeAgentId) ?? null : null
-  const fallback =
-    assignee
-    ?? agents.find((item) => item.agentType === "complaint" && (caseRecord.type === "refund" || caseRecord.type === "inquiry"))
-    ?? agents.find((item) => inferCaseType(item.agentType) === caseRecord.type)
-    ?? agents.find((item) => item.agentType === "orchestrator")
-    ?? null
+  const fallback = await resolveCaseRunAgent(db, caseRecord)
   if (!fallback) return "실행 가능한 에이전트를 찾지 못했습니다."
   const { runId } = await executeAgentRun(db, {
     organizationId: organization.id,

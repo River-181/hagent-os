@@ -683,10 +683,7 @@ export function CaseDetailPage() {
   // ── dispatch agent mutation ────────────────────────────────────────────────
   const dispatchForCase = useMutation({
     mutationFn: async () => {
-      return api.post("/orchestrator/dispatch", {
-        instruction: `케이스 "${caseData?.title}" (${caseData?.type}) 처리. 설명: ${caseData?.description ?? '없음'}`,
-        organizationId: activeOrgId!,
-      })
+      return casesApi.rerun(id!)
     },
     onSuccess: () => {
       toast?.success("AI 팀을 다시 실행했습니다.")

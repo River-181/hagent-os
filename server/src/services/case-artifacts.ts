@@ -32,18 +32,35 @@ function isInquiryCaseKind(caseKind?: string) {
 function renderSchedulerBody(output: Record<string, unknown>) {
   const schedule = output.suggestedSchedule as Record<string, unknown> | undefined
   const calendarAction = output.calendarAction as Record<string, unknown> | undefined
+  const planOutline = Array.isArray(output.planOutline)
+    ? output.planOutline.map((item) => `- ${String(item)}`).join("\n")
+    : ""
+  const checklist = Array.isArray(output.checklist)
+    ? output.checklist.map((item) => `- ${String(item)}`).join("\n")
+    : ""
+  const communicationPlan = Array.isArray(output.communicationPlan)
+    ? output.communicationPlan.map((item) => `- ${String(item)}`).join("\n")
+    : ""
+  const riskNotes = Array.isArray(output.riskNotes)
+    ? output.riskNotes.map((item) => `- ${String(item)}`).join("\n")
+    : ""
   const actions = Array.isArray(output.suggestedActions)
     ? output.suggestedActions.map((item) => `- ${String(item)}`).join("\n")
     : ""
 
   return [
     output.summary ? `## 일정 제안 요약\n${String(output.summary)}` : null,
+    output.objective ? `## 목표\n${String(output.objective)}` : null,
+    planOutline ? `## 실행 계획\n${planOutline}` : null,
     schedule
       ? `## 제안 일정\n- 제목: ${String(schedule.title ?? "일정")}\n- 유형: ${String(schedule.type ?? "-")}\n- 시간: ${String(schedule.dayOfWeek ?? "-")} / ${String(schedule.startTime ?? "-")} - ${String(schedule.endTime ?? "-")}\n- 장소: ${String(schedule.room ?? "미정")}`
       : null,
+    checklist ? `## 준비 체크리스트\n${checklist}` : null,
+    communicationPlan ? `## 안내 및 커뮤니케이션\n${communicationPlan}` : null,
     calendarAction
       ? `## 캘린더 상태\n- provider: ${String(calendarAction.provider ?? "google-calendar")}\n- status: ${String(calendarAction.status ?? "pending_sync")}`
       : null,
+    riskNotes ? `## 리스크 및 유의사항\n${riskNotes}` : null,
     actions ? `## 후속 조치\n${actions}` : null,
   ]
     .filter(Boolean)

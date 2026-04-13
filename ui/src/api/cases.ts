@@ -20,5 +20,6 @@ export const casesApi = {
   listChildCases: (id: string) => api.get<any[]>(`/cases/${id}/child-cases`),
   createChildCase: (id: string, data: unknown) => api.post<any>(`/cases/${id}/child-cases`, data),
   update: (id: string, data: unknown) => api.patch<any>(`/cases/${id}`, data),
+  rerun: (id: string) => api.post<{ caseId: string; runId: string; agentId: string; agentType: string }>(`/cases/${id}/rerun`, {}),
   delete: (id: string) => api.delete<void>(`/cases/${id}`),
 }

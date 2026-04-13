@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { createCaseWithRetry } from "../lib/case-create.js"
+import { resolveAutoRunAgent, resolveCaseRunAgent } from "../services/case-run-routing.js"
 import { executeAgentRun } from "../services/execution.js"
 import { enrichDocuments } from "../services/document-links.js"
 import { buildAgentSkillRuntimeContext } from "../services/skill-runtime.js"
@@ -112,39 +113,6 @@ async function pickQuickAskAgent(db: Db, organizationId: string, question: strin
     agents.find((agent) => agent.agentType === "complaint")
     ?? agents.find((agent) => agent.agentType === "orchestrator")
     ?? agents[0]
-    ?? null
-  )
-}
-
-function agentAllowsAutoRun(agent: typeof schema.agents.$inferSelect) {
-  const config =
-    agent.adapterConfig && typeof agent.adapterConfig === "object" && !Array.isArray(agent.adapterConfig)
-      ? (agent.adapterConfig as Record<string, unknown>)
-      : {}
-  return config.autoRun !== false
-}
-
-async function resolveAutoRunAgent(
-  db: Db,
-  organizationId: string,
-  caseType: (typeof schema.caseTypeEnum.enumValues)[number],
-  assigneeAgentId?: string,
-) {
-  const agents = await db
-    .select()
-    .from(schema.agents)
-    .where(eq(schema.agents.organizationId, organizationId))
-
-  const byId = assigneeAgentId
-    ? agents.find((agent) => agent.id === assigneeAgentId) ?? null
-    : null
-  if (byId && agentAllowsAutoRun(byId)) {
-    return byId
-  }
-
-  return (
-    agents.find((agent) => agentAllowsAutoRun(agent) && agent.agentType === "complaint" && (caseType === "refund" || caseType === "inquiry"))
-    ?? agents.find((agent) => agentAllowsAutoRun(agent) && inferCaseType(agent.agentType) === caseType)
     ?? null
   )
 }
@@ -491,6 +459,58 @@ export function caseRoutes(db: Db): Router {
     }
   })
 
+  router.post("/cases/:id/rerun", async (req, res) => {
+    try {
+      const [caseRecord] = await db
+        .select()
+        .from(schema.cases)
+        .where(eq(schema.cases.id, req.params.id))
+
+      if (!caseRecord) {
+        res.status(404).json({ error: "Case not found" })
+        return
+      }
+
+      const assigneeAgent = await resolveCaseRunAgent(db, caseRecord)
+      if (!assigneeAgent) {
+        res.status(400).json({ error: "No available agent for rerun" })
+        return
+      }
+
+      const execution = await executeAgentRun(db, {
+        organizationId: caseRecord.organizationId,
+        agentId: assigneeAgent.id,
+        caseId: caseRecord.id,
+        agentType: assigneeAgent.agentType,
+        approvalLevel: getApprovalLevelForAgentType(assigneeAgent.agentType),
+      })
+
+      await db.insert(schema.activityEvents).values({
+        organizationId: caseRecord.organizationId,
+        actorType: "user",
+        actorId: "cases",
+        action: "run.queued",
+        entityType: "case",
+        entityId: caseRecord.id,
+        entityTitle: caseRecord.title,
+        metadata: {
+          trigger: "manual-rerun",
+          runId: execution.runId,
+          agentId: assigneeAgent.id,
+        } as Record<string, unknown>,
+      })
+
+      res.status(201).json({
+        caseId: caseRecord.id,
+        runId: execution.runId,
+        agentId: assigneeAgent.id,
+        agentType: assigneeAgent.agentType,
+      })
+    } catch {
+      res.status(500).json({ error: "Failed to rerun case" })
+    }
+  })
+
   router.delete("/cases/:id", async (req, res) => {
     try {
       const [caseRecord] = await db
@@ -673,29 +693,15 @@ export function caseRoutes(db: Db): Router {
 
       let runId: string | null = null
       if (req.body.triggerRun === true) {
-        let assigneeAgent = null
-        if (caseRecord.assigneeAgentId) {
-          const [agent] = await db.select().from(schema.agents).where(eq(schema.agents.id, caseRecord.assigneeAgentId))
-          assigneeAgent = agent ?? null
-        }
-
-        if (!assigneeAgent) {
-          const agents = await db.select().from(schema.agents).where(eq(schema.agents.organizationId, caseRecord.organizationId))
-          assigneeAgent =
-            agents.find((item) => item.agentType === "orchestrator")
-            ?? agents.find((item) => item.agentType === "complaint")
-            ?? agents[0]
-            ?? null
-        }
+        const assigneeAgent = await resolveCaseRunAgent(db, caseRecord)
 
         if (assigneeAgent) {
-          const approvalLevel = assigneeAgent.agentType === "complaint" || assigneeAgent.agentType === "scheduler" ? 1 : 0
           const execution = await executeAgentRun(db, {
             organizationId: caseRecord.organizationId,
             agentId: assigneeAgent.id,
             caseId: caseRecord.id,
             agentType: assigneeAgent.agentType,
-            approvalLevel,
+            approvalLevel: getApprovalLevelForAgentType(assigneeAgent.agentType),
           })
           runId = execution.runId
 
