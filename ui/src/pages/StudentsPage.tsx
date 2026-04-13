@@ -1160,7 +1160,7 @@ function StudentDetailSheet({
                 const opsAlerts = studentOpsAlerts(mergedStudent, relatedCases.length)
                 const readiness = studentOpsReadiness(mergedStudent)
                 return (
-                  <SheetHeader className={cn("border-b px-6 py-5 text-left", themeClass.surfaceMuted)}>
+                  <SheetHeader className={cn("shrink-0 border-b px-6 py-5 text-left", themeClass.surfaceMuted)}>
                     <div className="flex items-start justify-between gap-4">
                       <div className="space-y-2">
                         <Badge className="border-0" style={{ backgroundColor: "var(--color-primary-bg)", color: "var(--color-teal-500)" }}>학생 상세</Badge>
