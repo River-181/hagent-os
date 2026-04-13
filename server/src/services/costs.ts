@@ -8,7 +8,7 @@ type ModelPricing = {
 }
 
 const DEFAULT_MODEL_PRICING: Record<string, ModelPricing> = {
-  "gpt-5-codex": { inputPer1kKrw: 6, outputPer1kKrw: 18 },
+  "gpt-4o-mini": { inputPer1kKrw: 6, outputPer1kKrw: 18 },
   "gpt-5": { inputPer1kKrw: 6, outputPer1kKrw: 18 },
   "claude-sonnet-4-6": { inputPer1kKrw: 5, outputPer1kKrw: 15 },
 }
@@ -36,7 +36,7 @@ export function resolveModelPricing(
   organization: typeof schema.organizations.$inferSelect | null | undefined,
   model: string | null | undefined,
 ): ModelPricing {
-  const normalizedModel = model ?? "gpt-5-codex"
+  const normalizedModel = model ?? "gpt-4o-mini"
   const { modelPricing } = getOrganizationPricingConfig(organization)
   const custom = modelPricing[normalizedModel]
 
@@ -47,7 +47,7 @@ export function resolveModelPricing(
     }
   }
 
-  return DEFAULT_MODEL_PRICING[normalizedModel] ?? DEFAULT_MODEL_PRICING["gpt-5-codex"]
+  return DEFAULT_MODEL_PRICING[normalizedModel] ?? DEFAULT_MODEL_PRICING["gpt-4o-mini"]
 }
 
 export function estimateRunCostKrw(inputTokens: number, outputTokens: number, pricing: ModelPricing) {
@@ -126,7 +126,7 @@ export async function buildOrganizationCostSummary(db: Db, organizationId: strin
     const agentTokens = agentRuns.reduce((sum, run) => sum + (run.tokensUsed ?? 0), 0)
     const model =
       (isRecord(agent.adapterConfig) ? (agent.adapterConfig.model as string | undefined) : undefined) ??
-      "gpt-5-codex"
+      "gpt-4o-mini"
 
     let estimatedCostKrw = 0
     for (const run of agentRuns) {
@@ -211,6 +211,6 @@ export async function buildRunUsageSummary(
     inputTokens: input.inputTokens,
     outputTokens: input.outputTokens,
     estimatedCostKrw: estimateRunCostKrw(input.inputTokens, input.outputTokens, pricing),
-    model: input.model ?? "gpt-5-codex",
+    model: input.model ?? "gpt-4o-mini",
   }
 }

@@ -119,7 +119,7 @@ export async function updateOrchestratorMemoryOnCaseDone(
     try {
       const response = await runWithAdapter(systemPrompt, userMessage, {
         adapterType: typeof adapterConfig.adapterType === "string" ? adapterConfig.adapterType : (orchestrator.adapterType ?? "mock_local"),
-        model: typeof adapterConfig.model === "string" ? adapterConfig.model : "gpt-5-codex",
+        model: typeof adapterConfig.model === "string" ? adapterConfig.model : "gpt-4o-mini",
         apiKey,
         maxTokens: 400,
       })

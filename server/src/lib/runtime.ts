@@ -141,7 +141,7 @@ async function callCodexCli(
     return {
       ...getMockResponse(systemPrompt, userMessage),
       adapterType: options.adapterType ?? "codex_qauth",
-      model: options.model ?? "gpt-5-codex",
+      model: options.model ?? "gpt-4o-mini",
       degraded: true,
     }
   }
@@ -164,7 +164,7 @@ async function callCodexCli(
     "exec",
     "--json",
     "-m",
-    options.model ?? "gpt-5-codex",
+    options.model ?? "gpt-4o-mini",
     "-s",
     "workspace-write",
     "-C",
@@ -228,7 +228,7 @@ async function callCodexCli(
     return {
       ...getMockResponse(systemPrompt, userMessage),
       adapterType: options.adapterType ?? "codex_qauth",
-      model: options.model ?? "gpt-5-codex",
+      model: options.model ?? "gpt-4o-mini",
       degraded: true,
     }
   }
@@ -259,7 +259,7 @@ async function callCodexCli(
     inputTokens: usage.inputTokens,
     outputTokens: usage.outputTokens,
     adapterType: options.adapterType ?? "codex_qauth",
-    model: options.model ?? "gpt-5-codex",
+    model: options.model ?? "gpt-4o-mini",
   }
 }
 
@@ -465,30 +465,25 @@ async function callCodex(systemPrompt: string, userMessage: string, options: Run
     return {
       ...getMockResponse(systemPrompt, userMessage),
       adapterType: options.adapterType ?? "codex_local",
-      model: options.model ?? "gpt-5-codex",
+      model: options.model ?? "gpt-4o-mini",
       degraded: true,
     }
   }
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const model = (options.model && options.model !== "gpt-4o-mini") ? options.model : "gpt-4o-mini"
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${resolvedKey}`,
     },
     body: JSON.stringify({
-      model: options.model ?? "gpt-5-codex",
-      reasoning: { effort: "medium" },
-      max_output_tokens: options.maxTokens ?? 2048,
-      input: [
-        {
-          role: "system",
-          content: [{ type: "input_text", text: systemPrompt }],
-        },
-        {
-          role: "user",
-          content: [{ type: "input_text", text: userMessage }],
-        },
+      model,
+      max_tokens: options.maxTokens ?? 2048,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userMessage },
       ],
     }),
   })
@@ -497,23 +492,23 @@ async function callCodex(systemPrompt: string, userMessage: string, options: Run
     return {
       ...getMockResponse(systemPrompt, userMessage),
       adapterType: options.adapterType ?? "codex_local",
-      model: options.model ?? "gpt-5-codex",
+      model,
       degraded: true,
     }
   }
 
   const json = (await response.json()) as {
-    output?: Array<{ content?: Array<{ text?: string }> }>
-    usage?: { input_tokens?: number; output_tokens?: number }
+    choices?: Array<{ message?: { content?: string } }>
+    usage?: { prompt_tokens?: number; completion_tokens?: number }
   }
 
-  const content = json.output?.flatMap((item) => item.content ?? []).map((item) => item.text ?? "").join("\n").trim() ?? ""
+  const content = json.choices?.[0]?.message?.content?.trim() ?? getMockResponse(systemPrompt, userMessage).content
   return {
     content,
-    inputTokens: json.usage?.input_tokens ?? 0,
-    outputTokens: json.usage?.output_tokens ?? 0,
+    inputTokens: json.usage?.prompt_tokens ?? 0,
+    outputTokens: json.usage?.completion_tokens ?? 0,
     adapterType: options.adapterType ?? "codex_local",
-    model: options.model ?? "gpt-5-codex",
+    model,
   }
 }
 

@@ -79,7 +79,7 @@ export function adapterRoutes(db: Db): Router {
       const testedAt = new Date().toISOString()
 
       if (key === "codex_local" || key === "codex_qauth" || key === "claude_local") {
-        const defaultModel = key === "claude_local" ? "claude-sonnet-4-6" : "gpt-5-codex"
+        const defaultModel = key === "claude_local" ? "claude-sonnet-4-6" : "gpt-4o-mini"
         const result = await runWithAdapter(
           "당신은 학원 운영 보조 AI입니다. 한 문장으로만 답하세요.",
           "환불 문의를 받았을 때 운영자가 먼저 확인해야 할 항목 1가지만 말해줘.",

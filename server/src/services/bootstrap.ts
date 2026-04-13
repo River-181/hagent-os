@@ -399,7 +399,7 @@ const bootstrapSchema = z.object({
   starterTeamPreset: z.string().min(2).default("academy-core"),
   initialInstruction: z.string().min(2).default("오늘 민원 처리하고 이번 주 이탈 위험 학생 알려줘"),
   selectedAdapterType: z.enum(["codex_qauth", "codex_local", "claude_local", "mock_local"]).default("codex_qauth"),
-  selectedModel: z.string().min(2).default("gpt-5-codex"),
+  selectedModel: z.string().min(2).default("gpt-4o-mini"),
   byoApiKey: z.string().optional(),
   mode: z.enum(["scratch", "demo"]).default("scratch"),
   setupProjectName: z.string().min(2).default("Academy Setup"),
