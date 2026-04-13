@@ -7,6 +7,7 @@ import { executeAgentRun } from "./execution.js"
 import { publishEvent } from "./live-events.js"
 import { processApprovalDecision } from "./approval-decisions.js"
 import { getApprovalLevelForAgentType, inferCaseType } from "./orchestration.js"
+import { dedupePendingApprovals } from "./approval-dedupe.js"
 
 type TelegramBinding = {
   enabled?: boolean
@@ -647,13 +648,22 @@ async function listRecentCasesText(db: Db, organizationId: string) {
 }
 
 async function listPendingApprovalsText(db: Db, organizationId: string) {
+  await dedupePendingApprovals(db, { organizationId })
   const approvals = await db
     .select()
     .from(schema.approvals)
     .where(and(eq(schema.approvals.organizationId, organizationId), eq(schema.approvals.status, "pending")))
     .orderBy(desc(schema.approvals.createdAt))
   if (approvals.length === 0) return "현재 승인 대기 건이 없습니다."
-  const caseIds = approvals.map((item) => item.caseId).filter((value): value is string => typeof value === "string")
+  const latestByCase = new Map<string, typeof schema.approvals.$inferSelect>()
+  for (const approval of approvals) {
+    if (!approval.caseId) continue
+    if (!latestByCase.has(approval.caseId)) {
+      latestByCase.set(approval.caseId, approval)
+    }
+  }
+  const uniqueApprovals = Array.from(latestByCase.values())
+  const caseIds = uniqueApprovals.map((item) => item.caseId).filter((value): value is string => typeof value === "string")
   const cases = caseIds.length
     ? await db.select().from(schema.cases).where(inArray(schema.cases.id, caseIds))
     : []
@@ -661,7 +671,7 @@ async function listPendingApprovalsText(db: Db, organizationId: string) {
   return [
     "승인 대기",
     "",
-    ...approvals.slice(0, 8).map((approval) => {
+    ...uniqueApprovals.slice(0, 8).map((approval) => {
       const caseRecord = approval.caseId ? caseMap.get(approval.caseId) ?? null : null
       return `${caseRecord?.identifier ?? approval.id.slice(0, 8)} · ${caseRecord?.title ?? "approval"}`
     }),
@@ -986,6 +996,7 @@ async function handleIntent(
   }
 
   if (intent.kind === "approval_decision") {
+    await dedupePendingApprovals(db, { organizationId: organization.id, caseId: caseRecord.id })
     const approvals = await db
       .select()
       .from(schema.approvals)

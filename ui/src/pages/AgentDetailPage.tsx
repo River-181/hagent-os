@@ -1490,6 +1490,12 @@ function SettingsTab({ agent }: { agent: any }) {
       : {}
   const adapterTest = connectionTests[adapterType]
   const lawTest = connectionTests["korean-law-mcp"]
+  const effectiveLawMode =
+    lawTest?.source === "korean-law-mcp" && lawTest?.connected
+      ? "live"
+      : lawTest?.source === "cached-excerpt" || lawTest?.degraded || lawIntegration?.connected
+        ? "fallback"
+        : "missing"
 
   return (
     <div className="space-y-5">
@@ -1552,13 +1558,17 @@ function SettingsTab({ agent }: { agent: any }) {
           >
             <p className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>법령 조회 상태</p>
             <div className="mt-2 flex items-center gap-2">
-              {lawIntegration?.connected ? (
+              {effectiveLawMode === "live" ? (
                 <CheckCircle2 size={14} style={{ color: "var(--color-success)" }} />
               ) : (
                 <AlertCircle size={14} style={{ color: "var(--status-warning)" }} />
               )}
               <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                {lawIntegration?.connected ? "법령 조회 사용 가능" : "LAW_OC 필요"}
+                {effectiveLawMode === "live"
+                  ? "실시간 법령 조회 가능"
+                  : effectiveLawMode === "fallback"
+                    ? "fallback 사용 중"
+                    : "LAW_OC 필요"}
               </span>
             </div>
             <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
@@ -1570,7 +1580,7 @@ function SettingsTab({ agent }: { agent: any }) {
                 {lawTest.preview ? ` · ${lawTest.preview}` : ""}
               </p>
             ) : null}
-            {!lawIntegration?.connected ? (
+            {effectiveLawMode === "missing" ? (
               <p className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
                 `{envPath}`에 `LAW_OC`를 넣고 서버를 다시 시작해야 합니다.
               </p>

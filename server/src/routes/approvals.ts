@@ -6,6 +6,7 @@ import { publishEvent } from "../services/live-events.js"
 import { processApprovalDecision } from "../services/approval-decisions.js"
 import { processKakaoApprovalDelivery } from "../services/kakao-approval-delivery.js"
 import { processTelegramApprovalDelivery } from "../services/telegram-approval-delivery.js"
+import { dedupePendingApprovals } from "../services/approval-dedupe.js"
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
@@ -113,6 +114,7 @@ export function approvalRoutes(db: Db): Router {
 
   router.get("/organizations/:orgId/approvals", async (req, res) => {
     try {
+      await dedupePendingApprovals(db, { organizationId: req.params.orgId })
       const { status } = req.query
 
       const conditions = [

@@ -10,6 +10,7 @@ import { runSchedulerAgent } from "../lib/agents/scheduler.js"
 import { buildAgentSkillRuntimeContext } from "./skill-runtime.js"
 import { createCaseDocumentArtifact } from "./case-artifacts.js"
 import { recordRunUsage } from "./costs.js"
+import { dedupePendingApprovals } from "./approval-dedupe.js"
 
 const logger = pino({ level: "info" })
 
@@ -370,6 +371,11 @@ export async function executeAgentRun(
 
     // 6. Store result, create approval or auto-complete
     if (approvalLevel >= 1 && requiresApproval) {
+      await dedupePendingApprovals(db, {
+        organizationId,
+        caseId,
+        agentType,
+      })
       // Create Approval record, status pending_approval
       await db.insert(schema.approvals).values({
         organizationId,

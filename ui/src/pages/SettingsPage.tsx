@@ -464,6 +464,14 @@ export function SettingsPage() {
   const selectedAdapter = adapters.find((adapter: any) => adapter.key === primaryAdapterType) ?? adapters[0] ?? null
   const selectedCodexAdapterKey = primaryAdapterType === "codex_qauth" ? "codex_qauth" : "codex_local"
   const selectedCodexAdapterTest = adapterTestResult[selectedCodexAdapterKey]
+  const lawIntegration = integrations.find((item: any) => item.key === "korean-law-mcp") ?? null
+  const lawTest = adapterTestResult["korean-law-mcp"]
+  const effectiveLawMode =
+    lawTest?.source === "korean-law-mcp" && lawTest?.connected
+      ? "live"
+      : lawTest?.source === "cached-excerpt" || lawTest?.degraded || lawIntegration?.connected
+        ? "fallback"
+        : "missing"
   const effectiveCodexConnected = Boolean(
     primaryAdapterType === "codex_local" ? selectedAdapter?.connected || primaryApiKeyConfigured : selectedAdapter?.connected,
   )
@@ -1092,12 +1100,16 @@ export function SettingsPage() {
                 />
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
-                <StatusPill tone={integrations.find((item: any) => item.key === "korean-law-mcp")?.connected ? "good" : "warn"}>
-                  {integrations.find((item: any) => item.key === "korean-law-mcp")?.connected ? "법령 조회 가능" : "LAW_OC 필요"}
+                <StatusPill tone={effectiveLawMode === "live" ? "good" : effectiveLawMode === "fallback" ? "warn" : "warn"}>
+                  {effectiveLawMode === "live"
+                    ? "실시간 법령 조회 가능"
+                    : effectiveLawMode === "fallback"
+                      ? "fallback 사용 중"
+                      : "LAW_OC 필요"}
                 </StatusPill>
                 {lawApiKeyConfigured ? <StatusPill tone="good">조직 key 사용 가능</StatusPill> : null}
                 {lawApiKey.trim() ? <StatusPill tone="muted">새 key 입력됨</StatusPill> : null}
-                {integrations.find((item: any) => item.key === "korean-law-mcp")?.missingEnv?.map((item: string) => (
+                {lawIntegration?.missingEnv?.map((item: string) => (
                   <button
                     key={item}
                     type="button"
@@ -1120,14 +1132,14 @@ export function SettingsPage() {
                   {adapterTestMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
                   법령 조회 테스트
                 </Button>
-                {adapterTestResult["korean-law-mcp"] ? (
+                {lawTest ? (
                   <span className="text-xs" style={{ color: "var(--text-secondary)" }}>
-                    {adapterTestResult["korean-law-mcp"].connected
-                      ? `조회 가능: ${adapterTestResult["korean-law-mcp"].preview ?? "-"}`
-                      : `degraded: ${adapterTestResult["korean-law-mcp"].preview ?? "-"}`
+                    {lawTest.source === "korean-law-mcp" && lawTest.connected
+                      ? `실시간 조회: ${lawTest.preview ?? "-"}`
+                      : `fallback: ${lawTest.preview ?? "-"}`
                     }
-                    {adapterTestResult["korean-law-mcp"].testedAt
-                      ? ` · ${new Date(adapterTestResult["korean-law-mcp"].testedAt).toLocaleString("ko-KR")}`
+                    {lawTest.testedAt
+                      ? ` · ${new Date(lawTest.testedAt).toLocaleString("ko-KR")}`
                       : ""}
                   </span>
                 ) : null}
