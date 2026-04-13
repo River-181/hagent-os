@@ -192,10 +192,27 @@ export async function executeAgentRun(
       typeof orgAiPolicy?.apiKey === "string" && orgAiPolicy.apiKey.trim().length > 0
         ? (orgAiPolicy.apiKey as string)
         : null
+    const orgIntegrations =
+      org?.agentTeamConfig && typeof org.agentTeamConfig === "object" && !Array.isArray(org.agentTeamConfig)
+        ? ((org.agentTeamConfig as Record<string, unknown>).integrations as Record<string, unknown> | undefined)
+        : undefined
+    const orgProviders =
+      orgIntegrations && typeof orgIntegrations === "object" && !Array.isArray(orgIntegrations)
+        ? ((orgIntegrations as Record<string, unknown>).providers as Record<string, unknown> | undefined)
+        : undefined
+    const orgKoreanLaw =
+      orgProviders && typeof orgProviders === "object" && !Array.isArray(orgProviders)
+        ? ((orgProviders as Record<string, unknown>).koreanLaw as Record<string, unknown> | undefined)
+        : undefined
+    const orgLawApiKey =
+      typeof orgKoreanLaw?.apiKey === "string" && orgKoreanLaw.apiKey.trim().length > 0
+        ? (orgKoreanLaw.apiKey as string)
+        : null
     const runtimeBinding = {
       adapterType: agent.adapterType,
       model: selectedModel,
       apiKey: orgApiKey,
+      lawApiKey: orgLawApiKey,
     }
 
     if (agentType === "orchestrator") {

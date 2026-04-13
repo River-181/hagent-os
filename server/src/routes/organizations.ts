@@ -102,6 +102,18 @@ function sanitizeChannelsForClient(channels: Record<string, unknown>) {
   return next
 }
 
+function sanitizeProvidersForClient(providers: Record<string, unknown>) {
+  const next = JSON.parse(JSON.stringify(providers)) as Record<string, unknown>
+  const koreanLaw = isPlainObject(next.koreanLaw) ? next.koreanLaw : null
+  if (koreanLaw) {
+    if (typeof koreanLaw.apiKey === "string" && koreanLaw.apiKey.trim()) {
+      delete koreanLaw.apiKey
+      koreanLaw.apiKeyConfigured = true
+    }
+  }
+  return next
+}
+
 function getChannelsFromConfig(config: Record<string, unknown>) {
   const integrations = isPlainObject(config.integrations) ? config.integrations : {}
   const integrationChannels = isPlainObject(integrations.channels) ? integrations.channels : {}
@@ -127,6 +139,9 @@ function sanitizeOrganizationForClient(organization: typeof schema.organizations
   const integrations = isPlainObject(nextConfig.integrations) ? nextConfig.integrations : null
   if (integrations && isPlainObject(integrations.channels)) {
     integrations.channels = sanitizeChannelsForClient(integrations.channels)
+  }
+  if (integrations && isPlainObject(integrations.providers)) {
+    integrations.providers = sanitizeProvidersForClient(integrations.providers)
   }
 
   if (isPlainObject(nextConfig.channels)) {

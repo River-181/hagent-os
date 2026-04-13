@@ -67,12 +67,13 @@ function truncate(text: string, max = 700) {
   return text.length > max ? `${text.slice(0, max).trim()}...` : text
 }
 
-function getOC(): string {
+function getOC(override?: string | null): string {
+  if (typeof override === "string" && override.trim()) return override.trim()
   return process.env.LAW_GO_KR_OC || process.env.LAW_OC || ""
 }
 
-export function getKoreanLawEnvStatus() {
-  const oc = getOC()
+export function getKoreanLawEnvStatus(override?: string | null) {
+  const oc = getOC(override)
   return {
     installed: true, // HTTP-based, always "installed"
     connected: Boolean(oc),
@@ -203,8 +204,8 @@ async function fetchLawDetail(oc: string, lawId: string): Promise<string | null>
   return lines.slice(0, 6).join("\n").trim() || lawName || null
 }
 
-export async function lookupKoreanLaw(query: string): Promise<KoreanLawLookupResult> {
-  const oc = getOC()
+export async function lookupKoreanLaw(query: string, override?: string | null): Promise<KoreanLawLookupResult> {
+  const oc = getOC(override)
   const fallback = findLawFallback(query)
 
   if (!oc) {

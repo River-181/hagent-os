@@ -23,10 +23,13 @@ function resolveOrgScopedIntegrationStatuses(
 
   const nestedIntegrations = isPlainObject(config.integrations) ? config.integrations : {}
   const channels = isPlainObject(nestedIntegrations.channels) ? nestedIntegrations.channels : {}
+  const providers = isPlainObject(nestedIntegrations.providers) ? nestedIntegrations.providers : {}
   const telegram = isPlainObject(channels.telegram) ? channels.telegram : {}
+  const koreanLaw = isPlainObject(providers.koreanLaw) ? providers.koreanLaw : {}
   const telegramBotToken = typeof telegram.botToken === "string" ? telegram.botToken.trim() : ""
+  const koreanLawApiKey = typeof koreanLaw.apiKey === "string" ? koreanLaw.apiKey.trim() : ""
 
-  if (!telegramBotToken) {
+  if (!telegramBotToken && !koreanLawApiKey) {
     return integrations.map((integration) => ({
       ...integration,
       statusSource: "process-env",
@@ -34,7 +37,7 @@ function resolveOrgScopedIntegrationStatuses(
   }
 
   return integrations.map((integration) =>
-    integration.key === "telegram-outbound"
+    integration.key === "telegram-outbound" && telegramBotToken
       ? {
           ...integration,
           connected: true,
@@ -42,6 +45,14 @@ function resolveOrgScopedIntegrationStatuses(
           missingEnv: [],
           statusSource: "org-configured",
         }
+      : integration.key === "korean-law-mcp" && koreanLawApiKey
+        ? {
+            ...integration,
+            connected: true,
+            inactive: false,
+            missingEnv: [],
+            statusSource: "org-configured",
+          }
       : {
           ...integration,
           statusSource: "process-env",
@@ -165,7 +176,19 @@ export function adapterRoutes(db: Db): Router {
         const testQuery = typeof req.body?.query === "string" && req.body.query.trim().length > 0
           ? req.body.query.trim()
           : "학원 수강료 환불 기준과 학원법 관련 규정"
-        const result = await lookupKoreanLaw(testQuery)
+        let orgLawApiKey: string | undefined
+        if (!byoApiKey && orgId) {
+          const [organization] = await db
+            .select({ agentTeamConfig: schema.organizations.agentTeamConfig })
+            .from(schema.organizations)
+            .where(eq(schema.organizations.id, orgId))
+          const config = isPlainObject(organization?.agentTeamConfig) ? organization.agentTeamConfig : {}
+          const integrations = isPlainObject(config.integrations) ? config.integrations : {}
+          const providers = isPlainObject(integrations.providers) ? integrations.providers : {}
+          const koreanLaw = isPlainObject(providers.koreanLaw) ? providers.koreanLaw : {}
+          orgLawApiKey = typeof koreanLaw.apiKey === "string" && koreanLaw.apiKey.trim().length > 0 ? koreanLaw.apiKey.trim() : undefined
+        }
+        const result = await lookupKoreanLaw(testQuery, byoApiKey ?? orgLawApiKey)
         res.json({
           key,
           ok: true,

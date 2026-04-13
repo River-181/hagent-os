@@ -82,7 +82,7 @@ export async function runComplaintAgent(input: ComplaintAgentInput): Promise<Com
     : "민원인 정보 없음"
 
   const legalQuery = buildComplaintLawQuery(input.title, input.description || "")
-  const legalContext = legalQuery ? await lookupKoreanLaw(legalQuery) : null
+  const legalContext = legalQuery ? await lookupKoreanLaw(legalQuery, input.lawApiKey ?? undefined) : null
   const legalContextBlock = legalContext
     ? `
 법령 참고:

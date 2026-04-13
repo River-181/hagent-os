@@ -9,6 +9,8 @@ export interface RuntimeBinding {
   model?: string | null
   /** 조직별 BYO API 키 — env var 보다 우선 */
   apiKey?: string | null
+  /** 조직별 국가법령정보센터 Open API 키 — env var 보다 우선 */
+  lawApiKey?: string | null
   skillContext?: string
   runtimeSkills?: Array<{
     slug: string

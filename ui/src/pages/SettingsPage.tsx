@@ -316,6 +316,7 @@ export function SettingsPage() {
   const [primaryOutputUnitCost, setPrimaryOutputUnitCost] = useState("18")
   const [fallbackInputUnitCost, setFallbackInputUnitCost] = useState("5")
   const [fallbackOutputUnitCost, setFallbackOutputUnitCost] = useState("15")
+  const [lawApiKey, setLawApiKey] = useState("")
 
   const [integrationPrefs, setIntegrationPrefs] = useState<Record<string, IntegrationPreference>>({})
   const [censorLogs, setCensorLogs] = useState(false)
@@ -346,6 +347,16 @@ export function SettingsPage() {
     ? (selectedOrgConfig.aiPolicy as Record<string, any>)
     : {}
   const primaryApiKeyConfigured = Boolean(selectedOrgAiPolicy.apiKeyConfigured)
+  const selectedOrgIntegrations = isObjectRecord(selectedOrgConfig.integrations)
+    ? (selectedOrgConfig.integrations as Record<string, any>)
+    : {}
+  const selectedOrgProviders = isObjectRecord(selectedOrgIntegrations.providers)
+    ? (selectedOrgIntegrations.providers as Record<string, any>)
+    : {}
+  const selectedOrgKoreanLaw = isObjectRecord(selectedOrgProviders.koreanLaw)
+    ? (selectedOrgProviders.koreanLaw as Record<string, any>)
+    : {}
+  const lawApiKeyConfigured = Boolean(selectedOrgKoreanLaw.apiKeyConfigured)
 
   const adaptersQuery = useQuery({
     queryKey: [...queryKeys.adapters.all, activeOrgId ?? "global"],
@@ -421,6 +432,7 @@ export function SettingsPage() {
     setPrimaryOutputUnitCost(String(primaryPricing.outputPer1kKrw ?? primaryPricing.output ?? 18))
     setFallbackInputUnitCost(String(fallbackPricing.inputPer1kKrw ?? fallbackPricing.input ?? 5))
     setFallbackOutputUnitCost(String(fallbackPricing.outputPer1kKrw ?? fallbackPricing.output ?? 15))
+    setLawApiKey("")
 
     const nextIntegrationPrefs: Record<string, IntegrationPreference> = {}
     for (const item of integrations) {
@@ -1068,12 +1080,23 @@ export function SettingsPage() {
                 환불, 근로, 학원법 이슈는 `LAW_OC`가 있어야 실제 법령 근거를 붙일 수 있습니다.
               </p>
               <p className="mt-2 text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
-                연결 방법: `{SETTINGS_ENV_PATH}`에 `LAW_OC=...`를 넣고 서버를 다시 시작하면 됩니다.
+                가장 빠른 방법은 이 기관에 `LAW_OC`를 저장하는 것입니다. 서버 공용 key를 쓸 경우에는 `{SETTINGS_ENV_PATH}`에 `LAW_OC=...`를 넣고 서버를 다시 시작해야 합니다.
               </p>
+              <div className="mt-3">
+                <Input
+                  type="password"
+                  value={lawApiKey}
+                  onChange={(e) => setLawApiKey(e.target.value)}
+                  placeholder={lawApiKeyConfigured ? "기존 기관 법령 API key가 저장되어 있습니다" : "LAW_OC"}
+                  autoComplete="off"
+                />
+              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <StatusPill tone={integrations.find((item: any) => item.key === "korean-law-mcp")?.connected ? "good" : "warn"}>
                   {integrations.find((item: any) => item.key === "korean-law-mcp")?.connected ? "법령 조회 가능" : "LAW_OC 필요"}
                 </StatusPill>
+                {lawApiKeyConfigured ? <StatusPill tone="good">조직 key 사용 가능</StatusPill> : null}
+                {lawApiKey.trim() ? <StatusPill tone="muted">새 key 입력됨</StatusPill> : null}
                 {integrations.find((item: any) => item.key === "korean-law-mcp")?.missingEnv?.map((item: string) => (
                   <button
                     key={item}
@@ -1092,7 +1115,7 @@ export function SettingsPage() {
                   size="sm"
                   variant="outline"
                   disabled={adapterTestMutation.isPending}
-                  onClick={() => adapterTestMutation.mutate({ key: "korean-law-mcp" })}
+                  onClick={() => adapterTestMutation.mutate({ key: "korean-law-mcp", apiKey: lawApiKey.trim() || undefined })}
                 >
                   {adapterTestMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
                   법령 조회 테스트
@@ -1139,6 +1162,15 @@ export function SettingsPage() {
                           },
                         },
                       },
+                      integrations: lawApiKey.trim()
+                        ? {
+                            providers: {
+                              koreanLaw: {
+                                apiKey: lawApiKey.trim(),
+                              },
+                            },
+                          }
+                        : undefined,
                     },
                   },
                 })
