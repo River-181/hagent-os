@@ -10,6 +10,7 @@
 1. `var(--토큰명)` 인라인 스타일만 쓴다. Tailwind `bg-teal-*`, `text-slate-*` 색상 유틸 금지.
 2. 페이지는 `p-6 space-y-6` 래퍼 + `WorkspaceHeader` + `WorkspacePanel` 조합으로 시작한다.
 3. 같은 정보를 두 곳에 쓰지 않는다. Primary 버튼은 한 영역에 1개.
+심사용 핵심 화면은 `Dashboard -> Case Detail -> Approval Queue` 흐름이 즉시 읽히도록 유지한다.
 
 ---
 
