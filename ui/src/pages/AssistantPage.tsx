@@ -9,12 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
-import {
-  WorkspaceEmptyState,
-  WorkspaceHeader,
-  WorkspacePanel,
-  WorkspaceSubtle,
-} from "@/components/ui/workspace-surface"
+import { WorkspaceEmptyState, WorkspaceHeader, WorkspacePanel, WorkspaceSubtle } from "@/components/ui/workspace-surface"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
 import { useOrganization } from "@/context/OrganizationContext"
 import { queryKeys } from "@/lib/queryKeys"
@@ -62,25 +57,6 @@ function getSessionKindLabel(caseItem: any) {
   return meta.caseKind === "legal-inquiry" ? "법률 질문" : "운영 질문"
 }
 
-function AssistantMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div
-      className="rounded-xl px-3 py-3"
-      style={{
-        border: "1px solid var(--border-default)",
-        backgroundColor: "var(--bg-elevated)",
-      }}
-    >
-      <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-        {label}
-      </div>
-      <div className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-        {value}
-      </div>
-    </div>
-  )
-}
-
 export function AssistantPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
@@ -126,7 +102,11 @@ export function AssistantPage() {
 
   const selectedCaseParam = searchParams.get("case")
   const isDraftingNewThread = Boolean(newThreadSeed) && !selectedCaseParam
-  const selectedCaseId = selectedCaseParam ?? (isDraftingNewThread ? null : sessions[0]?.id ?? null)
+  const selectedCaseId = isDraftingNewThread
+    ? null
+    : selectedCaseParam && sessions.some((caseItem: any) => caseItem.id === selectedCaseParam)
+      ? selectedCaseParam
+      : sessions[0]?.id ?? null
   const selectedSession = useMemo(
     () => sessions.find((caseItem: any) => caseItem.id === selectedCaseId) ?? null,
     [selectedCaseId, sessions],
@@ -281,9 +261,11 @@ export function AssistantPage() {
     ]
   }, [selectedCase?.legalBasis])
 
-  const panelTitle = selectedCase?.title ?? (isDraftingNewThread ? "새 질문 초안" : "질문을 선택하세요")
-  const panelDescription = selectedCase
-    ? latestAnswerSummary || "세부 답변과 질문 흐름을 이 화면에서 이어갈 수 있습니다."
+  const panelTitle = selectedCase?.title ?? selectedSession?.title ?? (isDraftingNewThread ? "새 질문 초안" : "질문을 선택하세요")
+  const panelDescription = selectedCaseLoading && selectedSession
+    ? "세션 답변을 불러오는 중입니다."
+    : selectedCase
+      ? latestAnswerSummary || "세부 답변과 질문 흐름을 이 화면에서 이어갈 수 있습니다."
     : isDraftingNewThread
       ? "새 세션을 준비했습니다. 아래 입력창에서 질문을 다듬고 바로 보내면 됩니다."
       : "왼쪽에서 세션을 선택하거나 새 질문 초안을 불러와 바로 이어서 작업하세요."
@@ -301,7 +283,7 @@ export function AssistantPage() {
         }
       />
 
-      <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
         <WorkspacePanel className="flex min-h-0 flex-col overflow-hidden">
           <div className="border-b px-5 py-5" style={{ borderColor: "var(--border-default)" }}>
             <div className="space-y-1">
@@ -380,10 +362,6 @@ export function AssistantPage() {
               ) : (
                 sessions.map((session: any) => {
                   const selected = selectedCaseId === session.id && !isDraftingNewThread
-                  const preview = summarizeText(
-                    session.latestDraftSummary ?? session.description ?? session.agentDraft ?? "",
-                    96,
-                  ) || "질문 내용을 열어 확인하세요."
                   return (
                     <button
                       key={session.id}
@@ -404,18 +382,20 @@ export function AssistantPage() {
                           <div className="truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                             {session.title}
                           </div>
-                          <div className="mt-1 text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
-                            {preview}
-                          </div>
                         </div>
                         <div className="shrink-0 text-xs" style={{ color: "var(--text-tertiary)" }}>
                           {formatDate(session.updatedAt ?? session.createdAt)}
                         </div>
                       </div>
-                      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
                         <Badge className="border-0">{getSessionKindLabel(session)}</Badge>
                         <span>{session.identifier}</span>
                       </div>
+                      {session.latestDraftSummary ? (
+                        <div className="mt-2 text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
+                          {summarizeText(session.latestDraftSummary, 68)}
+                        </div>
+                      ) : null}
                     </button>
                   )
                 })
@@ -425,11 +405,11 @@ export function AssistantPage() {
         </WorkspacePanel>
 
         <WorkspacePanel className="flex min-h-0 flex-col overflow-hidden">
-          <div className="border-b px-6 py-5" style={{ borderColor: "var(--border-default)" }}>
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0 flex-1 space-y-3">
+          <div className="border-b px-6 py-4" style={{ borderColor: "var(--border-default)" }}>
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                  {selectedCase?.identifier ? <span>{selectedCase.identifier}</span> : null}
+                  {selectedCase?.identifier ?? selectedSession?.identifier ? <span>{selectedCase?.identifier ?? selectedSession?.identifier}</span> : null}
                   {reviewStatus ? <Badge className="border-0">{reviewStatus}</Badge> : null}
                   {isDraftingNewThread ? <Badge className="border-0">새 세션</Badge> : null}
                 </div>
@@ -439,16 +419,11 @@ export function AssistantPage() {
                 <p className="max-w-3xl text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
                   {panelDescription}
                 </p>
-                {selectedCase && usedSkills.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {usedSkills.slice(0, 4).map((skill: any) => (
-                      <Badge key={skill.slug ?? skill.name} className="border-0">
-                        {skill.displayName ?? skill.name ?? skill.slug}
-                      </Badge>
-                    ))}
-                    {usedSkills.length > 4 ? (
-                      <Badge className="border-0">+{usedSkills.length - 4}</Badge>
-                    ) : null}
+                {selectedCase ? (
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                    <span>연결 문서 {selectedCase.documents?.length ?? 0}건</span>
+                    <span>후속 케이스 {selectedCase.childCases?.length ?? 0}건</span>
+                    <span>실행 스킬 {usedSkills.length}개</span>
                   </div>
                 ) : null}
               </div>
@@ -496,25 +471,6 @@ export function AssistantPage() {
                 </>
               ) : (
                 <>
-                  <WorkspaceSubtle className="p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                          핵심 맥락
-                        </div>
-                        <p className="mt-1 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-                          {latestAnswerSummary || "최신 답변이 아직 없습니다. 질문 기록을 이어서 남기면 이 영역에 최신 결과가 표시됩니다."}
-                        </p>
-                      </div>
-                      <div className="grid min-w-[220px] gap-2 sm:grid-cols-2">
-                        <AssistantMetric label="연결 문서" value={`${selectedCase.documents?.length ?? 0}건`} />
-                        <AssistantMetric label="실행 스킬" value={`${usedSkills.length}개`} />
-                        <AssistantMetric label="후속 케이스" value={`${selectedCase.childCases?.length ?? 0}건`} />
-                        <AssistantMetric label="법령 근거" value={legalSummary ? "있음" : "없음"} />
-                      </div>
-                    </div>
-                  </WorkspaceSubtle>
-
                   {latestDocument ? (
                     <article
                       className="rounded-xl border px-5 py-5"
@@ -539,6 +495,15 @@ export function AssistantPage() {
                       <div className="mt-4 whitespace-pre-wrap text-sm leading-7" style={{ color: "var(--text-primary)" }}>
                         {latestAnswer || "아직 생성된 문서가 없습니다."}
                       </div>
+                      {legalSummary ? (
+                        <div
+                          className="mt-4 border-t pt-4 text-sm leading-6"
+                          style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}
+                        >
+                          <span className="font-medium" style={{ color: "var(--text-primary)" }}>법령 근거 요약.</span>{" "}
+                          {legalSummary}
+                        </div>
+                      ) : null}
                     </article>
                   ) : (
                     <WorkspaceSubtle className="p-4">
@@ -550,18 +515,6 @@ export function AssistantPage() {
                       </p>
                     </WorkspaceSubtle>
                   )}
-
-                  {legalSummary ? (
-                    <WorkspaceSubtle className="p-4">
-                      <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                        <Scale size={14} style={{ color: "var(--accent-primary)" }} />
-                        법령 근거 메모
-                      </div>
-                      <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-                        {legalSummary}
-                      </p>
-                    </WorkspaceSubtle>
-                  ) : null}
 
                   {sortedComments.length > 0 ? (
                     <div className="space-y-3">
@@ -597,73 +550,69 @@ export function AssistantPage() {
             </div>
           </ScrollArea>
 
-          <div className="border-t px-6 py-5" style={{ borderColor: "var(--border-default)" }}>
-            <div
-              className="rounded-xl border p-4"
+          <div className="border-t px-6 py-4" style={{ borderColor: "var(--border-default)" }}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  후속 질문
+                </div>
+                <div className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  {selectedSession ? "현재 세션에 이어서 질문합니다." : "새 세션으로 질문합니다."}
+                </div>
+              </div>
+              {selectedCaseId ? (
+                <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  마지막 업데이트 {formatDate(selectedCase?.updatedAt ?? selectedCase?.createdAt, true)}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              {followUpSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  className="rounded-full border px-3 py-1.5 text-xs transition-colors"
+                  style={{
+                    borderColor: "var(--border-default)",
+                    backgroundColor: "var(--bg-elevated)",
+                    color: "var(--text-secondary)",
+                  }}
+                  onClick={() => {
+                    setQuestion((previous) => (previous.trim() ? `${previous}\n${suggestion}` : suggestion))
+                  }}
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+
+            <Textarea
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              rows={3}
+              placeholder="예: 위 답변을 학부모 안내 문안으로 바꿔줘"
+              className="mt-3 rounded-lg border px-3 py-2 shadow-none focus-visible:ring-0"
               style={{
                 borderColor: "var(--border-default)",
-                backgroundColor: "var(--bg-subtle)",
+                backgroundColor: "var(--bg-elevated)",
               }}
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                    후속 질문
-                  </div>
-                  <div className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                    {selectedSession ? "현재 세션에 이어서 질문합니다." : "새 세션으로 질문합니다."}
-                  </div>
-                </div>
-                {selectedCaseId ? (
-                  <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                    마지막 업데이트 {formatDate(selectedCase?.updatedAt ?? selectedCase?.createdAt, true)}
-                  </div>
-                ) : null}
-              </div>
+            />
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                {followUpSuggestions.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    className="rounded-full border px-3 py-1.5 text-xs transition-colors"
-                    style={{
-                      borderColor: "var(--border-default)",
-                      backgroundColor: "var(--bg-elevated)",
-                      color: "var(--text-secondary)",
-                    }}
-                    onClick={() => {
-                      setQuestion((previous) => (previous.trim() ? `${previous}\n${suggestion}` : suggestion))
-                    }}
-                  >
-                    {suggestion}
-                  </button>
-                ))}
+            <div className="mt-3 flex items-center justify-between gap-3">
+              <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                질문을 보내면 새 문서와 질문 기록이 이 화면에 바로 이어집니다.
               </div>
-
-              <Textarea
-                value={question}
-                onChange={(event) => setQuestion(event.target.value)}
-                rows={4}
-                placeholder="예: 위 답변을 학부모 안내 문안으로 바꿔줘"
-                className="mt-3 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
-              />
-
-              <div className="mt-3 flex items-center justify-between gap-3">
-                <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                  질문을 보내면 새 문서와 질문 기록이 이 화면에 바로 이어집니다.
-                </div>
-                <Button
-                  size="sm"
-                  className="gap-1.5 border-0 text-white"
-                  style={{ backgroundColor: "var(--accent-primary)" }}
-                  disabled={!question.trim() || submitMutation.isPending || !activeOrgId}
-                  onClick={() => submitMutation.mutate(undefined)}
-                >
-                  {submitMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                  보내기
-                </Button>
-              </div>
+              <Button
+                size="sm"
+                className="gap-1.5 border-0 text-white"
+                style={{ backgroundColor: "var(--accent-primary)" }}
+                disabled={!question.trim() || submitMutation.isPending || !activeOrgId}
+                onClick={() => submitMutation.mutate(undefined)}
+              >
+                {submitMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                보내기
+              </Button>
             </div>
           </div>
         </WorkspacePanel>
