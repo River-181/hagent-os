@@ -1043,7 +1043,11 @@ async function handleCallback(
 
   await updateOwnerControlConfig(db, organization, (current) => ({
     ...current,
-    pendingConfirmations: cleanupExpiredConfirmations((current.pendingConfirmations ?? []).filter((item) => item.token !== token)),
+    pendingConfirmations: cleanupExpiredConfirmations(
+      (current.pendingConfirmations ?? []).filter(
+        (item) => !(item.chatId === update.chatId && isSameConfirmationScope(item, pending)),
+      ),
+    ),
   }))
 
   if (action === "cancel") {
