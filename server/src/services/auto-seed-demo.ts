@@ -48,8 +48,8 @@ const DEMO_PAYLOAD = {
   starterTeamPreset: "academy-core",
   setupProjectName: "Academy Setup",
   initialInstruction: "오늘 들어온 민원과 상담 요청, 이번 주 일정 이슈를 우선순위대로 정리해줘.",
-  selectedAdapterType: "codex_local" as const,
-  selectedModel: "gpt-5-codex",
+  selectedAdapterType: "claude_local" as const,
+  selectedModel: "claude-sonnet-4-6",
   mode: "demo" as const,
   channels: {
     kakao: { enabled: true, channelId: "tanzania-channel", readiness: "inactive" as const },
@@ -64,10 +64,10 @@ const DEMO_PAYLOAD = {
     schedules: { mode: "preset" as const },
   },
   selectedAgents: [
-    { role: "orchestrator", name: "원장", mountedSkills: ["complaint-classifier", "schedule-manager"], allowedChannels: ["kakao"], adapterType: "codex_local", model: "gpt-5-codex", autoRun: true },
-    { role: "complaint", name: "민원담당", mountedSkills: ["complaint-classifier", "korean-tone-guide"], allowedChannels: ["kakao"], adapterType: "codex_local", model: "gpt-5-codex", autoRun: true },
-    { role: "retention", name: "이탈방어", mountedSkills: ["churn-risk-calculator", "student-360-view"], allowedChannels: ["kakao"], adapterType: "codex_local", model: "gpt-5-codex", autoRun: true },
-    { role: "scheduler", name: "스케줄러", mountedSkills: ["schedule-manager", "schedule-optimizer"], allowedChannels: ["kakao"], adapterType: "codex_local", model: "gpt-5-codex", autoRun: true },
+    { role: "orchestrator", name: "원장", mountedSkills: ["complaint-classifier", "schedule-manager"], allowedChannels: ["kakao"], adapterType: "claude_local", model: "claude-sonnet-4-6", autoRun: true },
+    { role: "complaint", name: "민원담당", mountedSkills: ["complaint-classifier", "korean-tone-guide"], allowedChannels: ["kakao"], adapterType: "claude_local", model: "claude-sonnet-4-6", autoRun: true },
+    { role: "retention", name: "이탈방어", mountedSkills: ["churn-risk-calculator", "student-360-view"], allowedChannels: ["kakao"], adapterType: "claude_local", model: "claude-sonnet-4-6", autoRun: true },
+    { role: "scheduler", name: "스케줄러", mountedSkills: ["schedule-manager", "schedule-optimizer"], allowedChannels: ["kakao"], adapterType: "claude_local", model: "claude-sonnet-4-6", autoRun: true },
   ],
 }
 
