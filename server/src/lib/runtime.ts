@@ -489,8 +489,11 @@ async function callCodex(systemPrompt: string, userMessage: string, options: Run
   })
 
   if (!response.ok) {
+    let errSnippet = ""
+    try { const t = await response.text(); errSnippet = t.slice(0, 120) } catch { /* ignore */ }
     return {
       ...getMockResponse(systemPrompt, userMessage),
+      content: `[OpenAI ${response.status}] ${errSnippet}`,
       adapterType: options.adapterType ?? "codex_local",
       model,
       degraded: true,
