@@ -25,7 +25,8 @@
 <p align="center">
   <a href="https://t.me/TANZANIA_ENGLISH_ACADEMY_bot"><strong>고객 텔레그램 봇</strong></a>
   &middot;
-  <span><strong>운영 텔레그램 봇</strong> 비밀번호 <code>hagent2026</code></span>
+  <a href="https://t.me/hagent_os_ops_bot"><strong>운영 텔레그램 봇</strong></a>
+  <span>비밀번호 <code>hagent2026</code></span>
   &middot;
   <a href="http://pf.kakao.com/_raDdX"><strong>카카오 채널</strong></a>
 </p>
@@ -52,7 +53,7 @@
    `https://t.me/TANZANIA_ENGLISH_ACADEMY_bot`
    보내기: `이번 주 보강 필요한 학생 정리해줘`
 3. 운영 봇 체험
-   `@hagent_os_ops_bot`
+   `https://t.me/hagent_os_ops_bot`
    먼저 보내기: `/login hagent2026`
    그 다음 보내기: `미승인 보여줘`
 4. 전체 시연 순서가 필요하면
@@ -278,12 +279,14 @@ flowchart LR
 - 개인정보 안내: [PRIVACY.md](./PRIVACY.md)
 - 라이선스: [LICENSE](./LICENSE)
 - 카카오 채널: `pf.kakao.com/_raDdX`
+- 운영 텔레그램 봇 링크: `https://t.me/hagent_os_ops_bot`
 
 텔레그램은 두 역할로 나뉩니다.
 
 - 고객 응대 봇: `@TANZANIA_ENGLISH_ACADEMY_bot`
   학부모 문의 수신, inbound 생성, case 시작
 - 운영·원장 제어 봇: `@hagent_os_ops_bot`
+  링크: `https://t.me/hagent_os_ops_bot`
   `/login hagent2026` 인증 후 `미승인 보여줘`, `케이스 승인`, `Confirm / Cancel` 같은 운영 명령 처리
 
 위 두 계정 구조는 제출 직전 라이브 검증 메모 기준으로 정리했습니다. 즉, HagentOS는 "고객 채널" 과 "운영 제어 채널" 을 분리해 설계한 점도 중요한 포인트입니다.

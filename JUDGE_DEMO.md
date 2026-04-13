@@ -7,7 +7,7 @@
 - 심사 진입 URL: `https://hagent-os.up.railway.app/tanzania-english-academy/dashboard`
 - 서비스 기본 URL: `https://hagent-os.up.railway.app`
 - 고객 응대 텔레그램 봇: [@TANZANIA_ENGLISH_ACADEMY_bot](https://t.me/TANZANIA_ENGLISH_ACADEMY_bot)
-- 운영·원장 제어 텔레그램 봇: `@hagent_os_ops_bot` (`/login hagent2026`)
+- 운영·원장 제어 텔레그램 봇: [@hagent_os_ops_bot](https://t.me/hagent_os_ops_bot) (`/login hagent2026`)
 - 카카오 채널: `pf.kakao.com/_raDdX`
 - 데모 조직: 탄자니아 영어학원 데모 조직 사전 로드
 - 구현 및 증빙: [docs/JUDGE_EVIDENCE.md](./docs/JUDGE_EVIDENCE.md)
@@ -26,7 +26,7 @@
 3. 고객 봇에 보내기
    `이번 주 보강 필요한 학생 정리해줘`
 4. 운영 봇 열기
-   `@hagent_os_ops_bot`
+   `https://t.me/hagent_os_ops_bot`
 5. 운영 봇에 먼저 보내기
    `/login hagent2026`
 6. 로그인 뒤 운영 봇에 보내기
