@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useMemo } from "react"
+import React, { useEffect, useState, useContext, useMemo, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
@@ -675,6 +675,11 @@ export function CaseDetailPage() {
     onError: () => toast?.error("변경에 실패했습니다."),
   })
 
+  const handlePanelUpdate = useCallback(
+    (field: string, value: unknown) => updateCase.mutate({ [field]: value }),
+    [updateCase.mutate],
+  )
+
   // ── dispatch agent mutation ────────────────────────────────────────────────
   const dispatchForCase = useMutation({
     mutationFn: async () => {
@@ -953,7 +958,7 @@ export function CaseDetailPage() {
               id: project.id,
               name: project.name,
             }))}
-            onUpdate={(field, value) => updateCase.mutate({ [field]: value })}
+            onUpdate={handlePanelUpdate}
           />
 
           <WorkspaceSubtle className="p-4">
@@ -1041,6 +1046,9 @@ export function CaseDetailPage() {
     setPanelContent,
     status,
     usedSkills,
+    caseData?.status,
+    caseData?.priority,
+    handlePanelUpdate,
   ])
 
   // ── loading / error states ─────────────────────────────────────────────────
