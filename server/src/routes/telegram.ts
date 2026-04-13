@@ -4,8 +4,9 @@ import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { classifyInboundMessage } from "../lib/channel-message-heuristics.js"
 import { processChannelInbound } from "./webhook.js"
-import { getTelegramBinding, normalizeTelegramUpdate, syncTelegramInbound } from "../services/telegram-inbound-sync.js"
+import { normalizeTelegramUpdate, syncTelegramInbound } from "../services/telegram-inbound-sync.js"
 import { sendTelegramMessage } from "../services/integrations/telegram-outbound.js"
+import { getTelegramCustomerBinding, getTelegramOpsBinding } from "../services/telegram-bindings.js"
 import {
   getTelegramOwnerControlState,
   handleTelegramOwnerControlUpdate,
@@ -32,6 +33,41 @@ function mergeJsonConfig(base: Record<string, unknown>, patch: Record<string, un
 
 function getOrganizationConfig(organization: typeof schema.organizations.$inferSelect) {
   return isPlainObject(organization.agentTeamConfig) ? organization.agentTeamConfig : {}
+}
+
+type TelegramBindingRole = "customer" | "ops"
+
+function bindingMatchesSecret(
+  binding: { enabled?: boolean; botToken?: string; webhookSecret?: string } | null | undefined,
+  secretHeader: string | undefined,
+) {
+  if (!binding?.enabled || !binding.botToken) return false
+  if (binding.webhookSecret) return binding.webhookSecret === secretHeader
+  return !secretHeader
+}
+
+function resolveRequestedBinding(
+  organization: typeof schema.organizations.$inferSelect,
+  role: TelegramBindingRole,
+) {
+  return role === "ops" ? getTelegramOpsBinding(organization) : getTelegramCustomerBinding(organization)
+}
+
+function resolveWebhookBinding(
+  organization: typeof schema.organizations.$inferSelect,
+  secretHeader: string | undefined,
+): { role: TelegramBindingRole; binding: NonNullable<ReturnType<typeof getTelegramCustomerBinding>> } | null {
+  const opsBinding = getTelegramOpsBinding(organization)
+  const customerBinding = getTelegramCustomerBinding(organization)
+
+  if (bindingMatchesSecret(opsBinding, secretHeader)) {
+    return { role: "ops", binding: opsBinding! }
+  }
+  if (bindingMatchesSecret(customerBinding, secretHeader)) {
+    return { role: "customer", binding: customerBinding! }
+  }
+
+  return null
 }
 
 function buildImmediateTelegramCustomerReply(message: string) {
@@ -94,22 +130,22 @@ export function telegramRoutes(db: Db): Router {
         return
       }
 
-      const binding = getTelegramBinding(organization)
-      if (!binding?.enabled || !binding.botToken) {
+      const secretHeader = req.header("x-telegram-bot-api-secret-token") ?? undefined
+      const resolved = resolveWebhookBinding(organization, secretHeader)
+      if (!resolved?.binding?.enabled || !resolved.binding.botToken) {
         res.status(400).json({ error: "Telegram is not configured for this organization" })
         return
       }
-
-      const secretHeader = req.header("x-telegram-bot-api-secret-token")
-      if (binding.webhookSecret && secretHeader !== binding.webhookSecret) {
-        res.status(403).json({ error: "Invalid Telegram webhook secret" })
-        return
-      }
+      const { role, binding } = resolved
 
       const update = isPlainObject(req.body) ? req.body : {}
-      const ownerControlResult = await handleTelegramOwnerControlUpdate(db, organization, update)
-      if (ownerControlResult.handled) {
-        res.json({ ok: true, ownerControl: true })
+      if (role === "ops") {
+        const ownerControlResult = await handleTelegramOwnerControlUpdate(db, organization, update)
+        if (ownerControlResult.handled) {
+          res.json({ ok: true, ownerControl: true })
+          return
+        }
+        res.json({ ok: true, ignored: true, reason: "owner_control_unhandled" })
         return
       }
 
@@ -204,7 +240,8 @@ export function telegramRoutes(db: Db): Router {
         return
       }
 
-      const binding = getTelegramBinding(organization)
+      const role = req.query.role === "ops" ? "ops" : "customer"
+      const binding = resolveRequestedBinding(organization, role)
       if (!binding?.enabled || !binding.botToken) {
         res.status(400).json({ error: "Telegram is not configured for this organization" })
         return
@@ -212,6 +249,7 @@ export function telegramRoutes(db: Db): Router {
 
       const payload = await getTelegramApiJson(binding.botToken, "getWebhookInfo")
       res.json({
+        role,
         transportMode: binding.transportMode ?? "poll",
         webhookInfo: payload.result ?? null,
       })
@@ -232,7 +270,8 @@ export function telegramRoutes(db: Db): Router {
         return
       }
 
-      const binding = getTelegramBinding(organization)
+      const role = req.body?.role === "ops" ? "ops" : "customer"
+      const binding = resolveRequestedBinding(organization, role)
       if (!binding?.enabled || !binding.botToken) {
         res.status(400).json({ error: "Telegram is not configured for this organization" })
         return
@@ -261,9 +300,11 @@ export function telegramRoutes(db: Db): Router {
         integrations: {
           channels: {
             telegram: {
-              transportMode: "webhook",
-              webhookSecret: secretToken || binding.webhookSecret || null,
-              webhookUrl,
+              [role]: {
+                transportMode: "webhook",
+                webhookSecret: secretToken || binding.webhookSecret || null,
+                webhookUrl,
+              },
             },
           },
         },
@@ -279,6 +320,7 @@ export function telegramRoutes(db: Db): Router {
 
       res.json({
         ok: true,
+        role,
         transportMode: "webhook",
         webhookUrl,
         telegram: payload.result ?? true,
@@ -300,7 +342,8 @@ export function telegramRoutes(db: Db): Router {
         return
       }
 
-      const binding = getTelegramBinding(organization)
+      const role = req.body?.role === "ops" ? "ops" : "customer"
+      const binding = resolveRequestedBinding(organization, role)
       if (!binding?.enabled || !binding.botToken) {
         res.status(400).json({ error: "Telegram is not configured for this organization" })
         return
@@ -320,7 +363,9 @@ export function telegramRoutes(db: Db): Router {
         integrations: {
           channels: {
             telegram: {
-              transportMode: "poll",
+              [role]: {
+                transportMode: "poll",
+              },
             },
           },
         },
@@ -336,6 +381,7 @@ export function telegramRoutes(db: Db): Router {
 
       res.json({
         ok: true,
+        role,
         transportMode: "poll",
         telegram: payload.result ?? true,
       })

@@ -281,6 +281,9 @@ type IntegrationPreference = {
   notes?: string
 }
 
+const EMPTY_LIST: any[] = []
+const EMPTY_OBJECT: Record<string, any> = {}
+
 export function SettingsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { organizations } = useOrganization()
@@ -328,6 +331,9 @@ export function SettingsPage() {
   const [telegramOwnerControlSessionTtl, setTelegramOwnerControlSessionTtl] = useState("240")
   const [telegramOwnerControlAllowNaturalLanguage, setTelegramOwnerControlAllowNaturalLanguage] = useState(true)
   const [telegramOwnerControlConfirmDangerous, setTelegramOwnerControlConfirmDangerous] = useState(true)
+  const [telegramOwnerBotToken, setTelegramOwnerBotToken] = useState("")
+  const [telegramOwnerBotUsername, setTelegramOwnerBotUsername] = useState("")
+  const [telegramOwnerWebhookSecret, setTelegramOwnerWebhookSecret] = useState("")
 
   useEffect(() => {
     setBreadcrumbs([{ label: "설정" }])
@@ -382,12 +388,15 @@ export function SettingsPage() {
     enabled: !!activeOrgId,
   })
 
-  const adapters = adaptersQuery.data?.adapters ?? []
-  const integrations = adaptersQuery.data?.integrations ?? []
-  const channels = channelsQuery.data ?? {}
-  const plugins = pluginsQuery.data ?? []
+  const adapters = adaptersQuery.data?.adapters ?? EMPTY_LIST
+  const integrations = adaptersQuery.data?.integrations ?? EMPTY_LIST
+  const channels = channelsQuery.data ?? EMPTY_OBJECT
+  const plugins = pluginsQuery.data ?? EMPTY_LIST
   const telegramOwnerControl = telegramOwnerControlQuery.data ?? null
-  const skills = skillsQuery.data ?? []
+  const skills = skillsQuery.data ?? EMPTY_LIST
+  const telegramChannel = isObjectRecord(channels.telegram) ? channels.telegram : EMPTY_OBJECT
+  const telegramCustomerChannel = isObjectRecord(telegramChannel.customer) ? telegramChannel.customer : telegramChannel
+  const telegramOpsChannel = isObjectRecord(telegramChannel.ops) ? telegramChannel.ops : EMPTY_OBJECT
 
   useEffect(() => {
     if (!selectedOrg) return
@@ -450,7 +459,7 @@ export function SettingsPage() {
     setAdapterTestResult(
       isObjectRecord(instance.connectionTests) ? (instance.connectionTests as Record<string, any>) : {},
     )
-  }, [selectedOrg, integrations])
+  }, [selectedOrg, adaptersQuery.data?.integrations])
 
   useEffect(() => {
     if (!telegramOwnerControl) return
@@ -459,7 +468,10 @@ export function SettingsPage() {
     setTelegramOwnerControlSessionTtl(String(telegramOwnerControl.sessionTtlMinutes ?? 240))
     setTelegramOwnerControlAllowNaturalLanguage(telegramOwnerControl.allowNaturalLanguage !== false)
     setTelegramOwnerControlConfirmDangerous(telegramOwnerControl.confirmDangerousMutations !== false)
-  }, [telegramOwnerControl])
+    setTelegramOwnerBotToken("")
+    setTelegramOwnerBotUsername(String(telegramOwnerControl.botUsername ?? telegramOpsChannel.botUsername ?? ""))
+    setTelegramOwnerWebhookSecret("")
+  }, [telegramOwnerControl, telegramOpsChannel.botUsername])
 
   const selectedAdapter = adapters.find((adapter: any) => adapter.key === primaryAdapterType) ?? adapters[0] ?? null
   const selectedCodexAdapterKey = primaryAdapterType === "codex_qauth" ? "codex_qauth" : "codex_local"
@@ -550,10 +562,15 @@ export function SettingsPage() {
         sessionTtlMinutes: Number(telegramOwnerControlSessionTtl || 240),
         allowNaturalLanguage: telegramOwnerControlAllowNaturalLanguage,
         confirmDangerousMutations: telegramOwnerControlConfirmDangerous,
+        botToken: telegramOwnerBotToken.trim() || undefined,
+        botUsername: telegramOwnerBotUsername.trim() || undefined,
+        webhookSecret: telegramOwnerWebhookSecret.trim() || undefined,
       })
     },
     onSuccess: async () => {
       setTelegramOwnerControlPassword("")
+      setTelegramOwnerBotToken("")
+      setTelegramOwnerWebhookSecret("")
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: [...queryKeys.organizations.detail(activeOrgId ?? ""), "telegram-owner-control"] }),
         queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all }),
@@ -642,7 +659,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div ref={pageRef} className="flex h-full min-h-0 flex-col p-6 md:p-8">
+    <div ref={pageRef} className="flex flex-col p-6 md:p-8">
       <div className="mx-auto flex w-full max-w-6xl min-w-0 items-start gap-6">
       <aside
         className="sticky top-20 hidden h-fit w-64 shrink-0 rounded-lg border p-4 2xl:block"
@@ -1334,10 +1351,10 @@ export function SettingsPage() {
               },
               {
                 key: "telegram",
-                label: "Telegram Bot",
-                description: "운영 요청/상담 인바운드",
-                status: channels.telegram?.enabled ? "활성" : "비활성",
-                detail: channels.telegram?.botUsername ?? "bot not configured",
+                label: "Telegram 상담 Bot",
+                description: "학부모/고객 문의 인바운드",
+                status: telegramCustomerChannel?.enabled ? "활성" : "비활성",
+                detail: telegramCustomerChannel?.botUsername ?? "bot not configured",
               },
               {
                 key: "kakao-outbound",
@@ -1354,12 +1371,12 @@ export function SettingsPage() {
                 label: "Telegram Outbound",
                 description: "승인 후 텔레그램 자동 회신 또는 운영자 브리지",
                 status:
-                  channels.telegram?.enabled && channels.telegram?.botToken
+                  telegramCustomerChannel?.enabled && telegramCustomerChannel?.botTokenConfigured
                     ? "자동 발송 가능"
                     : "operator bridge fallback",
                 detail:
                   adapterTestResult["telegram-outbound"]?.preview ??
-                  channels.telegram?.botUsername ??
+                  telegramCustomerChannel?.botUsername ??
                   "bot not configured",
               },
             ].map((channel) => (
@@ -1427,13 +1444,13 @@ export function SettingsPage() {
           </div>
 
           {/* 자동 응답 설정 — 승인 게이트 우회 (경고 표시) */}
-          {channels.telegram?.enabled ? (
+          {telegramCustomerChannel?.enabled ? (
             <div className="mt-4 space-y-3">
               <div
                 className="rounded-lg border px-4 py-4"
                 style={{
-                  borderColor: channels.telegram?.autoReply ? "var(--status-warning-border, #f59e0b)" : "var(--border-default)",
-                  backgroundColor: channels.telegram?.autoReply ? "var(--status-warning-soft, #fef3c7)" : "var(--bg-subtle)",
+                  borderColor: telegramCustomerChannel?.autoReply ? "var(--status-warning-border, #f59e0b)" : "var(--border-default)",
+                  backgroundColor: telegramCustomerChannel?.autoReply ? "var(--status-warning-soft, #fef3c7)" : "var(--bg-subtle)",
                 }}
               >
                 <div className="flex items-start justify-between gap-4">
@@ -1442,7 +1459,7 @@ export function SettingsPage() {
                       <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                         텔레그램 자동 응답
                       </div>
-                      {channels.telegram?.autoReply ? (
+                      {telegramCustomerChannel?.autoReply ? (
                         <span
                           className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
                           style={{ background: "var(--color-warning, #f59e0b)", color: "#fff" }}
@@ -1455,20 +1472,23 @@ export function SettingsPage() {
                       <b>꺼짐(권장)</b>: 메시지 접수 → AI 초안 → 승인 대기 → 원장 승인 후 발송.<br />
                       <b>켜짐</b>: 메시지 접수 → AI 초안 → <b style={{ color: "var(--color-warning, #d97706)" }}>즉시 자동 발송</b> (승인 생략).
                     </div>
-                    {channels.telegram?.autoReply ? (
+                    {telegramCustomerChannel?.autoReply ? (
                       <div className="mt-2 rounded-md px-3 py-2 text-xs" style={{ background: "var(--bg-elevated)", color: "var(--text-secondary)" }}>
                         ⚠ 자동 응답 중: AI 초안이 사람 확인 없이 발송됩니다. 민감 케이스(환불·법적 이슈)에서 주의하세요.
                       </div>
                     ) : null}
                   </div>
                   <NativeSwitch
-                    checked={Boolean(channels.telegram?.autoReply)}
+                    checked={Boolean(telegramCustomerChannel?.autoReply)}
                     onCheckedChange={async (checked) => {
                       if (!activeOrgId) return
                       try {
                         await organizationsApi.updateChannel(activeOrgId, "telegram", {
-                          ...(channels.telegram ?? {}),
-                          autoReply: checked,
+                          ...(telegramChannel ?? {}),
+                          customer: {
+                            ...(isObjectRecord(telegramChannel.customer) ? telegramChannel.customer : telegramCustomerChannel),
+                            autoReply: checked,
+                          },
                         })
                         await queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all })
                         success(checked ? "자동 응답 켜짐 — 승인 없이 즉시 발송됩니다" : "자동 응답 꺼짐 — 승인 후 발송")
@@ -1517,6 +1537,31 @@ export function SettingsPage() {
                   />
                 </Field>
               </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field label="원장 Bot username" hint="비워두면 현재 값을 유지합니다. 별도 운영 bot을 쓸 때만 입력하세요.">
+                  <Input
+                    value={telegramOwnerBotUsername}
+                    onChange={(event) => setTelegramOwnerBotUsername(event.target.value)}
+                    placeholder={telegramOwnerControl?.botUsername ?? telegramOpsChannel.botUsername ?? "hagent_os_ops_bot"}
+                  />
+                </Field>
+                <Field label="원장 Bot token" hint={telegramOwnerControl?.botTokenConfigured ? "비워두면 기존 token을 유지합니다." : "운영 bot을 별도로 분리할 때만 설정합니다."}>
+                  <Input
+                    type="password"
+                    value={telegramOwnerBotToken}
+                    onChange={(event) => setTelegramOwnerBotToken(event.target.value)}
+                    placeholder={telegramOwnerControl?.botTokenConfigured ? "기존 token 유지" : "separate ops bot token"}
+                  />
+                </Field>
+              </div>
+              <Field label="원장 Bot webhook secret" hint={telegramOwnerControl?.webhookSecretConfigured ? "비워두면 기존 secret을 유지합니다." : "운영 bot webhook을 customer bot과 분리할 때 사용합니다."}>
+                <Input
+                  type="password"
+                  value={telegramOwnerWebhookSecret}
+                  onChange={(event) => setTelegramOwnerWebhookSecret(event.target.value)}
+                  placeholder={telegramOwnerControl?.webhookSecretConfigured ? "기존 secret 유지" : "separate ops webhook secret"}
+                />
+              </Field>
               <ToggleRow
                 title="자연어 해석 허용"
                 description="`케이스 C-101 상태 완료` 같은 자연어 운영 명령을 허용합니다."
@@ -1569,6 +1614,8 @@ export function SettingsPage() {
                 </StatusPill>
               </div>
               <div className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                <div>고객 bot: {telegramCustomerChannel?.botUsername ?? "미설정"}</div>
+                <div>원장 bot: {telegramOwnerControl?.botUsername ?? telegramOpsChannel.botUsername ?? telegramCustomerChannel?.botUsername ?? "미설정"}</div>
                 <div>비밀번호: {telegramOwnerControl?.passwordConfigured ? "설정됨" : "없음"}</div>
                 <div>세션: {telegramOwnerControl?.sessionTtlMinutes ?? 240}분</div>
                 <div>자연어: {telegramOwnerControl?.allowNaturalLanguage !== false ? "허용" : "비활성"}</div>

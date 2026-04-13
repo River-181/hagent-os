@@ -25,8 +25,14 @@ function resolveOrgScopedIntegrationStatuses(
   const channels = isPlainObject(nestedIntegrations.channels) ? nestedIntegrations.channels : {}
   const providers = isPlainObject(nestedIntegrations.providers) ? nestedIntegrations.providers : {}
   const telegram = isPlainObject(channels.telegram) ? channels.telegram : {}
+  const telegramCustomer = isPlainObject(telegram.customer) ? telegram.customer : {}
   const koreanLaw = isPlainObject(providers.koreanLaw) ? providers.koreanLaw : {}
-  const telegramBotToken = typeof telegram.botToken === "string" ? telegram.botToken.trim() : ""
+  const telegramBotToken =
+    typeof telegramCustomer.botToken === "string" && telegramCustomer.botToken.trim()
+      ? telegramCustomer.botToken.trim()
+      : typeof telegram.botToken === "string"
+        ? telegram.botToken.trim()
+        : ""
   const koreanLawApiKey = typeof koreanLaw.apiKey === "string" ? koreanLaw.apiKey.trim() : ""
 
   if (!telegramBotToken && !koreanLawApiKey) {
@@ -250,7 +256,10 @@ export function adapterRoutes(db: Db): Router {
           const integrations = isPlainObject(config.integrations) ? config.integrations : {}
           const channels = isPlainObject(integrations.channels) ? integrations.channels : {}
           const telegram = isPlainObject(channels.telegram) ? channels.telegram : {}
-          if (typeof telegram.botToken === "string" && telegram.botToken) {
+          const telegramCustomer = isPlainObject(telegram.customer) ? telegram.customer : {}
+          if (typeof telegramCustomer.botToken === "string" && telegramCustomer.botToken) {
+            botToken = telegramCustomer.botToken
+          } else if (typeof telegram.botToken === "string" && telegram.botToken) {
             botToken = telegram.botToken
           }
         }

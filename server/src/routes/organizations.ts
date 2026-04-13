@@ -116,19 +116,55 @@ function sanitizeChannelsForClient(channels: Record<string, unknown>) {
   const next = JSON.parse(JSON.stringify(channels)) as Record<string, unknown>
   const telegram = isPlainObject(next.telegram) ? next.telegram : null
   if (telegram) {
-    if (typeof telegram.botToken === "string" && telegram.botToken.trim()) {
-      delete telegram.botToken
-      telegram.botTokenConfigured = true
+    const sanitizeTelegramBinding = (binding: Record<string, unknown> | null) => {
+      if (!binding) return
+      if (typeof binding.botToken === "string" && binding.botToken.trim()) {
+        delete binding.botToken
+        binding.botTokenConfigured = true
+      }
+      if (typeof binding.webhookSecret === "string" && binding.webhookSecret.trim()) {
+        delete binding.webhookSecret
+        binding.webhookSecretConfigured = true
+      }
+      const ownerControl = isPlainObject(binding.ownerControl) ? binding.ownerControl : null
+      if (ownerControl) {
+        if (typeof ownerControl.passwordHash === "string" && ownerControl.passwordHash.trim()) {
+          delete ownerControl.passwordHash
+          ownerControl.passwordConfigured = true
+        }
+        if (typeof ownerControl.botToken === "string" && ownerControl.botToken.trim()) {
+          delete ownerControl.botToken
+          ownerControl.botTokenConfigured = true
+        }
+        if (typeof ownerControl.webhookSecret === "string" && ownerControl.webhookSecret.trim()) {
+          delete ownerControl.webhookSecret
+          ownerControl.webhookSecretConfigured = true
+        }
+      }
     }
-    if (typeof telegram.webhookSecret === "string" && telegram.webhookSecret.trim()) {
-      delete telegram.webhookSecret
-      telegram.webhookSecretConfigured = true
+
+    sanitizeTelegramBinding(telegram)
+    sanitizeTelegramBinding(isPlainObject(telegram.customer) ? telegram.customer : null)
+    sanitizeTelegramBinding(isPlainObject(telegram.ops) ? telegram.ops : null)
+
+    const customer = isPlainObject(telegram.customer) ? telegram.customer : null
+    const ops = isPlainObject(telegram.ops) ? telegram.ops : null
+    if (customer) {
+      telegram.enabled = customer.enabled ?? telegram.enabled
+      telegram.botUsername = customer.botUsername ?? telegram.botUsername
+      telegram.botTokenConfigured = customer.botTokenConfigured ?? telegram.botTokenConfigured
+      telegram.webhookSecretConfigured = customer.webhookSecretConfigured ?? telegram.webhookSecretConfigured
+      telegram.autoReply = customer.autoReply ?? telegram.autoReply
     }
-    const ownerControl = isPlainObject(telegram.ownerControl) ? telegram.ownerControl : null
-    if (ownerControl) {
-      if (typeof ownerControl.passwordHash === "string" && ownerControl.passwordHash.trim()) {
-        delete ownerControl.passwordHash
-        ownerControl.passwordConfigured = true
+    if (ops) {
+      telegram.opsBotUsername = ops.botUsername ?? null
+      telegram.opsBotTokenConfigured = ops.botTokenConfigured ?? false
+      telegram.opsWebhookSecretConfigured = ops.webhookSecretConfigured ?? false
+      if (isPlainObject(ops.ownerControl)) {
+        telegram.ownerControl = {
+          ...(isPlainObject(telegram.ownerControl) ? telegram.ownerControl : {}),
+          ...ops.ownerControl,
+        }
       }
     }
   }

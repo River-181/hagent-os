@@ -4,15 +4,7 @@ import * as schema from "@hagent/db"
 import { classifyInboundMessage } from "../lib/channel-message-heuristics.js"
 import { processChannelInbound } from "../routes/webhook.js"
 import { handleTelegramOwnerControlUpdate } from "./telegram-owner-control.js"
-
-type TelegramChannelBinding = {
-  enabled?: boolean
-  botToken?: string
-  botUsername?: string
-  webhookSecret?: string
-  transportMode?: "poll" | "webhook"
-  lastUpdateId?: number
-}
+import { getOrganizationConfig, getTelegramCustomerBinding } from "./telegram-bindings.js"
 
 type TelegramUpdate = {
   update_id?: number
@@ -36,20 +28,8 @@ function mergeJsonConfig(base: Record<string, unknown>, patch: Record<string, un
   return next
 }
 
-function getOrganizationConfig(organization: typeof schema.organizations.$inferSelect) {
-  return isPlainObject(organization.agentTeamConfig) ? organization.agentTeamConfig : {}
-}
-
-export function getTelegramBinding(organization: typeof schema.organizations.$inferSelect): TelegramChannelBinding | null {
-  const config = getOrganizationConfig(organization)
-  const integrations = isPlainObject(config.integrations) ? config.integrations : {}
-  const channels = isPlainObject(integrations.channels) ? integrations.channels : {}
-  const telegram = isPlainObject(channels.telegram)
-    ? channels.telegram
-    : isPlainObject(config.channels) && isPlainObject(config.channels.telegram)
-      ? config.channels.telegram
-      : null
-  return telegram as TelegramChannelBinding | null
+export function getTelegramBinding(organization: typeof schema.organizations.$inferSelect) {
+  return getTelegramCustomerBinding(organization)
 }
 
 function buildSenderName(message: Record<string, unknown>) {

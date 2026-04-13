@@ -82,6 +82,13 @@ function getChannelBinding(organization: typeof schema.organizations.$inferSelec
     ? (config.channels as Record<string, unknown>)
     : {}
   const binding = channels[channelKey] ?? legacyChannels[channelKey]
+  if (channelKey === "telegram" && binding && typeof binding === "object" && !Array.isArray(binding)) {
+    const telegram = binding as Record<string, unknown>
+    const customer = telegram.customer
+    if (customer && typeof customer === "object" && !Array.isArray(customer)) {
+      return customer as Record<string, unknown>
+    }
+  }
   return binding && typeof binding === "object" && !Array.isArray(binding) ? (binding as Record<string, unknown>) : null
 }
 

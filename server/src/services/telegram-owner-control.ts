@@ -9,11 +9,14 @@ import { publishEvent } from "./live-events.js"
 import { processApprovalDecision } from "./approval-decisions.js"
 import { getApprovalLevelForAgentType, inferCaseType } from "./orchestration.js"
 import { dedupePendingApprovals } from "./approval-dedupe.js"
+import { getOrganizationConfig, getTelegramOpsBinding, getTelegramSection } from "./telegram-bindings.js"
 
 type TelegramBinding = {
   enabled?: boolean
   botToken?: string
   botUsername?: string
+  webhookSecret?: string
+  transportMode?: "poll" | "webhook"
   ownerControl?: TelegramOwnerControlConfig
 }
 
@@ -136,6 +139,10 @@ export type TelegramOwnerControlConfig = {
   sessionTtlMinutes?: number
   allowNaturalLanguage?: boolean
   confirmDangerousMutations?: boolean
+  botToken?: string | null
+  botUsername?: string | null
+  webhookSecret?: string | null
+  transportMode?: "poll" | "webhook"
   authorizedChats?: TelegramOwnerAuthorizedChat[]
   pendingConfirmations?: PendingConfirmation[]
 }
@@ -146,6 +153,9 @@ type TelegramOwnerControlPublicConfig = {
   sessionTtlMinutes: number
   allowNaturalLanguage: boolean
   confirmDangerousMutations: boolean
+  botUsername: string | null
+  botTokenConfigured: boolean
+  webhookSecretConfigured: boolean
   authorizedChats: TelegramOwnerAuthorizedChat[]
   authorizedChatCount: number
   lastAuthorizedChat: TelegramOwnerAuthorizedChat | null
@@ -207,21 +217,8 @@ function mergeJsonConfig(base: Record<string, unknown>, patch: Record<string, un
   return next
 }
 
-function getOrganizationConfig(organization: typeof schema.organizations.$inferSelect) {
-  return isPlainObject(organization.agentTeamConfig) ? organization.agentTeamConfig : {}
-}
-
 function getTelegramBinding(organization: typeof schema.organizations.$inferSelect): TelegramBinding {
-  const config = getOrganizationConfig(organization)
-  const integrations = isPlainObject(config.integrations) ? config.integrations : {}
-  const channels = isPlainObject(integrations.channels) ? integrations.channels : {}
-  const telegram =
-    isPlainObject(channels.telegram)
-      ? channels.telegram
-      : isPlainObject(config.channels) && isPlainObject(config.channels.telegram)
-        ? config.channels.telegram
-        : {}
-  return telegram as TelegramBinding
+  return (getTelegramOpsBinding(organization) ?? getTelegramSection(organization) ?? {}) as TelegramBinding
 }
 
 function normalizeAuthorizedChats(chats: unknown): TelegramOwnerAuthorizedChat[] {
@@ -259,6 +256,13 @@ function getOwnerControlConfig(organization: typeof schema.organizations.$inferS
         : DEFAULT_TTL_MINUTES,
     allowNaturalLanguage: ownerControl.allowNaturalLanguage !== false,
     confirmDangerousMutations: ownerControl.confirmDangerousMutations !== false,
+    botToken: typeof ownerControl.botToken === "string" ? ownerControl.botToken : null,
+    botUsername: typeof ownerControl.botUsername === "string" ? ownerControl.botUsername : null,
+    webhookSecret: typeof ownerControl.webhookSecret === "string" ? ownerControl.webhookSecret : null,
+    transportMode:
+      ownerControl.transportMode === "webhook" || ownerControl.transportMode === "poll"
+        ? ownerControl.transportMode
+        : undefined,
     authorizedChats: normalizeAuthorizedChats(ownerControl.authorizedChats),
     pendingConfirmations: normalizePendingConfirmations(ownerControl.pendingConfirmations),
   }
@@ -272,6 +276,9 @@ function buildOwnerControlPublicConfig(config: TelegramOwnerControlConfig): Tele
     sessionTtlMinutes: config.sessionTtlMinutes ?? DEFAULT_TTL_MINUTES,
     allowNaturalLanguage: config.allowNaturalLanguage !== false,
     confirmDangerousMutations: config.confirmDangerousMutations !== false,
+    botUsername: typeof config.botUsername === "string" && config.botUsername.trim() ? config.botUsername.trim() : null,
+    botTokenConfigured: Boolean(typeof config.botToken === "string" && config.botToken.trim()),
+    webhookSecretConfigured: Boolean(typeof config.webhookSecret === "string" && config.webhookSecret.trim()),
     authorizedChatCount: authorizedChats.length,
     authorizedChats,
     lastAuthorizedChat: authorizedChats[0] ?? null,
@@ -1300,6 +1307,10 @@ export async function saveTelegramOwnerControlConfig(
     sessionTtlMinutes?: number
     allowNaturalLanguage?: boolean
     confirmDangerousMutations?: boolean
+    botToken?: string
+    botUsername?: string
+    webhookSecret?: string
+    transportMode?: "poll" | "webhook"
   },
 ) {
   const organization = await getOrganizationById(db, organizationId)
@@ -1309,6 +1320,10 @@ export async function saveTelegramOwnerControlConfig(
     ...(typeof input.sessionTtlMinutes === "number" ? { sessionTtlMinutes: input.sessionTtlMinutes } : {}),
     ...(typeof input.allowNaturalLanguage === "boolean" ? { allowNaturalLanguage: input.allowNaturalLanguage } : {}),
     ...(typeof input.confirmDangerousMutations === "boolean" ? { confirmDangerousMutations: input.confirmDangerousMutations } : {}),
+    ...(typeof input.botToken === "string" ? { botToken: input.botToken.trim() || null } : {}),
+    ...(typeof input.botUsername === "string" ? { botUsername: input.botUsername.trim() || null } : {}),
+    ...(typeof input.webhookSecret === "string" ? { webhookSecret: input.webhookSecret.trim() || null } : {}),
+    ...(input.transportMode === "webhook" || input.transportMode === "poll" ? { transportMode: input.transportMode } : {}),
     ...(typeof input.password === "string" && input.password.trim().length > 0 ? { passwordHash: hashTelegramOwnerControlPassword(input.password.trim()), authorizedChats: [] } : {}),
   }))
   await recordActivity(db, updated.id, "settings", "telegram.owner_control_updated", "organization", updated.id, updated.name, {

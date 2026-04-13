@@ -1,13 +1,7 @@
 import { eq } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
-
-type TelegramChannelBinding = {
-  enabled?: boolean
-  botToken?: string
-  botUsername?: string
-  displayName?: string
-}
+import { getTelegramCustomerBinding } from "../telegram-bindings.js"
 
 export interface TelegramOutboundResult {
   provider: "telegram_auto_send" | "telegram_operator_bridge"
@@ -36,16 +30,8 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
 }
 
-function resolveTelegramBinding(config: Record<string, unknown>): TelegramChannelBinding {
-  const integrations = isPlainObject(config.integrations) ? config.integrations : {}
-  const channels = isPlainObject(integrations.channels) ? integrations.channels : {}
-  const telegram =
-    isPlainObject(channels.telegram)
-      ? channels.telegram
-      : isPlainObject(config.channels) && isPlainObject(config.channels.telegram)
-        ? config.channels.telegram
-        : {}
-  return telegram as TelegramChannelBinding
+function resolveTelegramBinding(config: Record<string, unknown>) {
+  return getTelegramCustomerBinding(config) ?? {}
 }
 
 function getProviderConfig(botToken?: string) {
