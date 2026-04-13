@@ -630,8 +630,8 @@ export function SettingsPage() {
   }
 
   return (
-    <div ref={pageRef} className="flex h-full min-h-0 flex-col overflow-y-auto overflow-x-hidden p-6 md:p-8">
-      <div className="mx-auto flex w-full max-w-6xl min-w-0 gap-6">
+    <div ref={pageRef} className="p-6 md:p-8">
+      <div className="mx-auto flex w-full max-w-6xl min-w-0 items-start gap-6">
       <aside
         className="sticky top-20 hidden h-fit w-64 shrink-0 rounded-lg border p-4 2xl:block"
         style={{
