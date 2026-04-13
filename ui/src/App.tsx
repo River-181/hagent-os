@@ -93,6 +93,7 @@ export function App() {
         <Route path="instructors" element={<InstructorsPage />} />
       </Route>
       <Route path="/:orgPrefix/onboarding" element={<OnboardingPage />} />
+      <Route path="/demo/onboarding" element={<OnboardingPage />} />
       <Route path="/design-guide" element={<DesignGuidePage />} />
       <Route path="/" element={<RootRedirect />} />
     </Routes>

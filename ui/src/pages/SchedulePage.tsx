@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/dialog"
 import { WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
 import { ChevronDown, ChevronLeft, ChevronRight, Loader2, Plus, Pencil, Trash2, CalendarDays } from "lucide-react"
+import { useToast } from "@/components/ToastContext"
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -350,12 +351,19 @@ function ScheduleDetailDialog({
     },
   })
 
+  const { success: toastSuccess, error: toastError } = useToast()
+
   const deleteMutation = useMutation({
     mutationFn: () => schedulesApi.remove(selectedOrgId!, schedule!.id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(selectedOrgId ?? "") })
+      toastSuccess("일정이 삭제되었습니다")
       setConfirmDelete(false)
       onClose()
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : "일정 삭제에 실패했습니다"
+      toastError(msg)
     },
   })
 

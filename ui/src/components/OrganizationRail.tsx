@@ -5,7 +5,7 @@ import { useOrganization } from "@/context/OrganizationContext"
 import { api } from "@/api/client"
 import { queryKeys } from "@/lib/queryKeys"
 import { cn } from "@/lib/utils"
-import { Plus, Loader2, Trash2 } from "lucide-react"
+import { Plus, Loader2, Trash2, GraduationCap } from "lucide-react"
 
 export function OrganizationRail() {
   const { organizations, selectedOrgId, setSelectedOrgId } = useOrganization()
@@ -79,6 +79,21 @@ export function OrganizationRail() {
 
         {/* Org avatars */}
         <div className="flex flex-col items-center gap-2 mt-2">
+          {/* 온보딩 체험 진입점 */}
+          <button
+            onClick={() => navigate("/demo/onboarding")}
+            title="새 학원 온보딩"
+            className="flex items-center justify-center rounded-xl transition-all opacity-50 hover:opacity-100 hover:scale-105"
+            style={{
+              width: 36,
+              height: 36,
+              background: "var(--color-teal-500, #14b8a6)",
+              color: "#fff",
+            }}
+          >
+            <GraduationCap size={16} />
+          </button>
+
           {organizations.map((org) => {
             const isSelected = org.id === selectedOrgId
             const initials = (org.name as string)

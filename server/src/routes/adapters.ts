@@ -127,7 +127,10 @@ export function adapterRoutes(db: Db): Router {
       }
 
       if (key === "korean-law-mcp") {
-        const result = await lookupKoreanLaw("학원 수강료 환불 기준과 학원법 관련 규정")
+        const testQuery = typeof req.body?.query === "string" && req.body.query.trim().length > 0
+          ? req.body.query.trim()
+          : "학원 수강료 환불 기준과 학원법 관련 규정"
+        const result = await lookupKoreanLaw(testQuery)
         res.json({
           key,
           ok: true,
@@ -138,6 +141,14 @@ export function adapterRoutes(db: Db): Router {
           missingEnv: result.missingEnv,
           preview: result.summary ?? result.error ?? null,
           lastResult: result.connected && !result.degraded ? "connected" : "degraded",
+          source: result.source,
+          statusSummary: result.source === "cached-excerpt"
+            ? "cached fallback (law.go.kr 연결 불안정 시 내장 요약본)"
+            : result.connected && !result.degraded
+              ? "law.go.kr 실시간 연결"
+              : result.connected
+                ? "law.go.kr 연결 불안정"
+                : "LAW_GO_KR_OC 미설정",
         })
         return
       }

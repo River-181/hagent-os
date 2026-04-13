@@ -114,25 +114,25 @@ function SectionCard({
   return (
     <section
       id={id}
-      className="rounded-lg border p-6"
+      className="min-w-0 overflow-hidden rounded-lg border p-6"
       style={{
         backgroundColor: "var(--bg-elevated)",
         borderColor: "var(--border-default)",
         boxShadow: "var(--shadow-xs)",
       }}
     >
-      <div className="mb-5">
+      <div className="mb-5 min-w-0">
         <div className="flex items-center gap-2">
           <span style={{ color: "var(--color-primary)" }}>{icon}</span>
           <h2 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
             {title}
           </h2>
         </div>
-        <p className="mt-1 text-sm" style={{ color: "var(--text-secondary)" }}>
+        <p className="mt-1 break-words text-sm" style={{ color: "var(--text-secondary)" }}>
           {description}
         </p>
       </div>
-      <div className="space-y-4">{children}</div>
+      <div className="min-w-0 space-y-4">{children}</div>
     </section>
   )
 }
@@ -529,7 +529,7 @@ export function SettingsPage() {
   }
 
   return (
-    <div ref={pageRef} className="overflow-x-hidden p-6 md:p-8">
+    <div ref={pageRef} className="flex h-full min-h-0 flex-col overflow-y-auto overflow-x-hidden p-6 md:p-8">
       <div className="mx-auto flex w-full max-w-6xl min-w-0 gap-6">
       <aside
         className="sticky top-20 hidden h-fit w-64 shrink-0 rounded-lg border p-4 2xl:block"
@@ -1202,21 +1202,21 @@ export function SettingsPage() {
             ].map((channel) => (
               <div
                 key={channel.key}
-              className="rounded-lg border px-4 py-4"
+              className="min-w-0 rounded-lg border px-4 py-4"
               style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}
             >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                  <div className="min-w-0 truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                     {channel.label}
                   </div>
                   <StatusPill tone={/가능|활성/.test(channel.status) ? "good" : "warn"}>
                     {channel.status}
                   </StatusPill>
                 </div>
-                <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
+                <div className="mt-2 break-words text-sm" style={{ color: "var(--text-secondary)" }}>
                   {channel.description}
                 </div>
-                <div className="mt-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                <div className="mt-2 break-words text-xs" style={{ color: "var(--text-tertiary)" }}>
                   출처:{" "}
                   {channel.key === "telegram-outbound"
                     ? describeIntegrationStatusSource(
@@ -1226,7 +1226,7 @@ export function SettingsPage() {
                       ? "process env 기반"
                       : "기관 설정 기반"}
                 </div>
-                <div className="mt-3 text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
+                <div className="mt-3 break-words text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
                   {channel.detail}
                 </div>
               </div>

@@ -1,5 +1,6 @@
 // Korean national law API integration (국가법령정보센터 Open API)
 // Docs: https://open.law.go.kr/LSO/openApi/guide.do
+import { findLawFallback } from "../../data/law-fallback-excerpts.js"
 
 // HTTPS primary (Railway containers prefer TLS), HTTP fallback
 const LAW_SEARCH_URLS = [
@@ -21,7 +22,7 @@ interface CacheEntry {
 const cache = new Map<string, CacheEntry>()
 
 export interface KoreanLawLookupResult {
-  source: "korean-law-mcp"
+  source: "korean-law-mcp" | "cached-excerpt"
   query: string
   installed: boolean
   connected: boolean
@@ -247,6 +248,34 @@ export async function lookupKoreanLaw(query: string): Promise<KoreanLawLookupRes
       errRaw?.code ? `[${errRaw.code}]` : "",
       errRaw?.message ? `cause: ${errRaw.message}` : "",
     ].filter(Boolean).join(" ")
+
+    // 네트워크 실패(ECONNRESET/ETIMEDOUT/ECONNREFUSED/ENOTFOUND) 시 정적 fallback 매칭 시도
+    // Railway asia-southeast1 ↔ law.go.kr 간 해외 IP 제한 대응
+    const isNetworkError =
+      /ECONNRESET|ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|fetch failed/i.test(errorMsg) ||
+      /ECONNRESET|ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EAI_AGAIN/i.test(errRaw?.code ?? "")
+
+    if (isNetworkError) {
+      const fallback = findLawFallback(query)
+      if (fallback) {
+        const detail = `[${fallback.title}]\n\n${fallback.summary}\n\n(출처: ${fallback.source})\n\n⚠ 네트워크 제약으로 국가법령정보센터 실시간 조회가 불가하여 내장 요약본을 제공합니다. 원문은 law.go.kr 에서 확인해주세요.`
+        const result: KoreanLawLookupResult = {
+          source: "cached-excerpt",
+          query,
+          installed: true,
+          connected: true,
+          degraded: false,
+          missingEnv: [],
+          routeTool: "law-fallback-excerpts",
+          summary: truncate(fallback.summary, 420),
+          detail: truncate(detail, 1_400),
+          error: null,
+        }
+        cache.set(cacheKey, { result, expiresAt: Date.now() + CACHE_TTL_MS })
+        return result
+      }
+    }
+
     return {
       source: "korean-law-mcp",
       query,
