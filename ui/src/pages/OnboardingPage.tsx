@@ -221,6 +221,9 @@ export function OnboardingPage() {
   const [telegramEnabled, setTelegramEnabled] = useState(true)
   const [telegramBotToken, setTelegramBotToken] = useState("telegram-demo-token")
   const [telegramBotUsername, setTelegramBotUsername] = useState("tanzania_ops_bot")
+  const [telegramOwnerControlEnabled, setTelegramOwnerControlEnabled] = useState(true)
+  const [telegramOwnerControlPassword, setTelegramOwnerControlPassword] = useState("")
+  const [telegramOwnerControlSessionTtl, setTelegramOwnerControlSessionTtl] = useState("240")
   const [smsEnabled, setSmsEnabled] = useState(false)
   const [naverEnabled, setNaverEnabled] = useState(false)
 
@@ -258,6 +261,7 @@ export function OnboardingPage() {
     setCounselingPolicy(DEMO_ACADEMY_PRESET.counselingPolicy)
     setRefundPolicy(DEMO_ACADEMY_PRESET.refundPolicy)
     setAttendancePolicy(DEMO_ACADEMY_PRESET.attendancePolicy)
+    setTelegramOwnerControlEnabled(true)
   }
 
   function applyScratchMode() {
@@ -338,6 +342,20 @@ export function OnboardingPage() {
             displayName: "Telegram Bot",
             inboundPurpose: "운영 알림/상담 수집",
             routingPriority: 2,
+            ownerControl: telegramEnabled && telegramOwnerControlEnabled
+              ? {
+                  enabled: true,
+                  password: telegramOwnerControlPassword.trim() || undefined,
+                  sessionTtlMinutes: Number(telegramOwnerControlSessionTtl || 240),
+                  allowNaturalLanguage: true,
+                  confirmDangerousMutations: true,
+                }
+              : {
+                  enabled: false,
+                  sessionTtlMinutes: Number(telegramOwnerControlSessionTtl || 240),
+                  allowNaturalLanguage: true,
+                  confirmDangerousMutations: true,
+                },
           },
           sms: {
             enabled: smsEnabled,
@@ -392,7 +410,11 @@ export function OnboardingPage() {
   const canAdvance = () => {
     const stepId = currentStep.id as StepId
     if (stepId === "academy") return institutionName.trim().length >= 2 && topGoal.trim().length >= 2
-    if (stepId === "channels") return (kakaoEnabled && kakaoChannelId.trim().length > 0) || (telegramEnabled && telegramBotToken.trim().length > 0) || (!kakaoEnabled && !telegramEnabled)
+    if (stepId === "channels") {
+      const hasAnyPrimaryChannel = (kakaoEnabled && kakaoChannelId.trim().length > 0) || (telegramEnabled && telegramBotToken.trim().length > 0) || (!kakaoEnabled && !telegramEnabled)
+      const ownerControlReady = !telegramEnabled || !telegramOwnerControlEnabled || telegramOwnerControlPassword.trim().length >= 4
+      return hasAnyPrimaryChannel && ownerControlReady
+    }
     if (stepId === "data") return counselingPolicy.trim().length >= 2 && refundPolicy.trim().length >= 2
     if (stepId === "team") return selectedAgents.length >= 2 && selectedAgents.some((agent) => agent.role === "orchestrator")
     if (stepId === "setup") return setupProjectName.trim().length >= 2 && initialInstruction.trim().length >= 2
@@ -528,13 +550,28 @@ export function OnboardingPage() {
             </ChannelCard>
             <ChannelCard
               title="Telegram Bot"
-              description="운영 알림, 상담 수집, 데모 인바운드 fallback"
+              description="운영 알림, 상담 수집, 원장 Telegram 제어"
               enabled={telegramEnabled}
               onToggle={setTelegramEnabled}
               status={telegramEnabled && telegramBotToken ? "connected candidate" : "inactive"}
             >
               <input value={telegramBotToken} onChange={(e) => setTelegramBotToken(e.target.value)} placeholder="bot token" className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border-default)", background: "var(--bg-base)", color: "var(--text-primary)" }} />
               <input value={telegramBotUsername} onChange={(e) => setTelegramBotUsername(e.target.value)} placeholder="bot username" className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border-default)", background: "var(--bg-base)", color: "var(--text-primary)" }} />
+              <div className="rounded-2xl border px-4 py-4" style={{ borderColor: "var(--border-default)", background: "var(--bg-secondary)" }}>
+                <label className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>원장 Telegram 제어 활성화</span>
+                  <input type="checkbox" checked={telegramOwnerControlEnabled} onChange={(e) => setTelegramOwnerControlEnabled(e.target.checked)} />
+                </label>
+                <div className="mt-2 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                  원장이 Telegram에서 `/login &lt;password&gt;` 후 케이스, 승인, 일정 조회와 변경 작업을 수행합니다.
+                </div>
+                {telegramOwnerControlEnabled ? (
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <input value={telegramOwnerControlPassword} onChange={(e) => setTelegramOwnerControlPassword(e.target.value)} placeholder="owner control password" className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border-default)", background: "var(--bg-base)", color: "var(--text-primary)" }} />
+                    <input value={telegramOwnerControlSessionTtl} onChange={(e) => setTelegramOwnerControlSessionTtl(e.target.value.replace(/[^0-9]/g, ""))} placeholder="session ttl minutes" className="w-full rounded-2xl border px-4 py-3" style={{ borderColor: "var(--border-default)", background: "var(--bg-base)", color: "var(--text-primary)" }} />
+                  </div>
+                ) : null}
+              </div>
             </ChannelCard>
             <div className="grid gap-4 md:grid-cols-2">
               <ChannelCard title="SMS" description="결제/공지 fallback" enabled={smsEnabled} onToggle={setSmsEnabled} status={smsEnabled ? "readiness only" : "inactive"} />
@@ -843,6 +880,7 @@ export function OnboardingPage() {
             <div className="mt-2 space-y-2 text-sm" style={{ color: "var(--text-secondary)" }}>
               <div>Kakao: {kakaoEnabled ? kakaoChannelId || "enabled" : "off"}</div>
               <div>Telegram: {telegramEnabled ? telegramBotUsername || "enabled" : "off"}</div>
+              <div>Telegram owner control: {telegramEnabled && telegramOwnerControlEnabled ? `on · ${telegramOwnerControlSessionTtl || "240"}m` : "off"}</div>
               <div>SMS: {smsEnabled ? "readiness" : "off"}</div>
               <div>Naver: {naverEnabled ? "readiness" : "off"}</div>
             </div>

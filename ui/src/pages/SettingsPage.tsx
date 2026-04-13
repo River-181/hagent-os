@@ -6,6 +6,7 @@ import { useActiveOrgId, useOrganization } from "@/context/OrganizationContext"
 import { usePanel } from "@/context/PanelContext"
 import { useToast } from "@/components/ToastContext"
 import { organizationsApi } from "@/api/organizations"
+import { telegramApi } from "@/api/telegram"
 import { adaptersApi } from "@/api/adapters"
 import { pluginsApi } from "@/api/plugins"
 import { skillsApi } from "@/api/skills"
@@ -320,6 +321,11 @@ export function SettingsPage() {
   const [keyboardShortcuts, setKeyboardShortcuts] = useState(true)
   const [feedbackSharing, setFeedbackSharing] = useState("prompt")
   const [adapterTestResult, setAdapterTestResult] = useState<Record<string, any>>({})
+  const [telegramOwnerControlEnabled, setTelegramOwnerControlEnabled] = useState(false)
+  const [telegramOwnerControlPassword, setTelegramOwnerControlPassword] = useState("")
+  const [telegramOwnerControlSessionTtl, setTelegramOwnerControlSessionTtl] = useState("240")
+  const [telegramOwnerControlAllowNaturalLanguage, setTelegramOwnerControlAllowNaturalLanguage] = useState(true)
+  const [telegramOwnerControlConfirmDangerous, setTelegramOwnerControlConfirmDangerous] = useState(true)
 
   useEffect(() => {
     setBreadcrumbs([{ label: "설정" }])
@@ -345,6 +351,11 @@ export function SettingsPage() {
     queryKey: queryKeys.plugins.all,
     queryFn: () => pluginsApi.list(),
   })
+  const telegramOwnerControlQuery = useQuery({
+    queryKey: [...queryKeys.organizations.detail(activeOrgId ?? ""), "telegram-owner-control"],
+    queryFn: () => telegramApi.getOwnerControl(activeOrgId!),
+    enabled: !!activeOrgId,
+  })
   const skillsQuery = useQuery({
     queryKey: [...queryKeys.skills.all, activeOrgId, "settings"],
     queryFn: () => skillsApi.list(activeOrgId ?? undefined),
@@ -355,6 +366,7 @@ export function SettingsPage() {
   const integrations = adaptersQuery.data?.integrations ?? []
   const channels = channelsQuery.data ?? {}
   const plugins = pluginsQuery.data ?? []
+  const telegramOwnerControl = telegramOwnerControlQuery.data ?? null
   const skills = skillsQuery.data ?? []
 
   useEffect(() => {
@@ -417,6 +429,15 @@ export function SettingsPage() {
       isObjectRecord(instance.connectionTests) ? (instance.connectionTests as Record<string, any>) : {},
     )
   }, [selectedOrg, integrations])
+
+  useEffect(() => {
+    if (!telegramOwnerControl) return
+    setTelegramOwnerControlEnabled(Boolean(telegramOwnerControl.enabled))
+    setTelegramOwnerControlPassword("")
+    setTelegramOwnerControlSessionTtl(String(telegramOwnerControl.sessionTtlMinutes ?? 240))
+    setTelegramOwnerControlAllowNaturalLanguage(telegramOwnerControl.allowNaturalLanguage !== false)
+    setTelegramOwnerControlConfirmDangerous(telegramOwnerControl.confirmDangerousMutations !== false)
+  }, [telegramOwnerControl])
 
   const selectedAdapter = adapters.find((adapter: any) => adapter.key === primaryAdapterType) ?? adapters[0] ?? null
   const selectedCodexAdapterKey = primaryAdapterType === "codex_qauth" ? "codex_qauth" : "codex_local"
@@ -482,6 +503,57 @@ export function SettingsPage() {
     },
     onError: (err) => {
       toastError(err instanceof Error ? err.message : "연결 테스트에 실패했습니다.")
+    },
+  })
+
+  const telegramOwnerControlSaveMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeOrgId) throw new Error("선택된 기관이 없습니다.")
+      return telegramApi.updateOwnerControl(activeOrgId, {
+        enabled: telegramOwnerControlEnabled,
+        password: telegramOwnerControlPassword.trim() || undefined,
+        sessionTtlMinutes: Number(telegramOwnerControlSessionTtl || 240),
+        allowNaturalLanguage: telegramOwnerControlAllowNaturalLanguage,
+        confirmDangerousMutations: telegramOwnerControlConfirmDangerous,
+      })
+    },
+    onSuccess: async () => {
+      setTelegramOwnerControlPassword("")
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: [...queryKeys.organizations.detail(activeOrgId ?? ""), "telegram-owner-control"] }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all }),
+      ])
+      success("Telegram 원장 제어 설정을 저장했습니다.")
+    },
+    onError: (err) => {
+      toastError(err instanceof Error ? err.message : "Telegram 원장 제어 설정 저장에 실패했습니다.")
+    },
+  })
+
+  const telegramOwnerControlRevokeMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeOrgId) throw new Error("선택된 기관이 없습니다.")
+      return telegramApi.revokeOwnerControlSessions(activeOrgId)
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: [...queryKeys.organizations.detail(activeOrgId ?? ""), "telegram-owner-control"] })
+      success("Telegram 원장 제어 세션을 모두 종료했습니다.")
+    },
+    onError: (err) => {
+      toastError(err instanceof Error ? err.message : "세션 종료에 실패했습니다.")
+    },
+  })
+
+  const telegramOwnerControlTestMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeOrgId) throw new Error("선택된 기관이 없습니다.")
+      return telegramApi.sendOwnerControlTest(activeOrgId)
+    },
+    onSuccess: () => {
+      success("최근 인증된 Telegram chat으로 테스트 메시지를 보냈습니다.")
+    },
+    onError: (err) => {
+      toastError(err instanceof Error ? err.message : "테스트 메시지 발송에 실패했습니다.")
     },
   })
 
@@ -1320,6 +1392,116 @@ export function SettingsPage() {
               </div>
             </div>
           ) : null}
+        </SectionCard>
+
+        <SectionCard
+          id="telegram-owner-control"
+          icon={<ShieldCheck size={16} />}
+          title="Telegram 원장 제어"
+          description="연결된 Telegram bot에서 원장이 직접 케이스/승인/운영 조회와 변경 작업을 수행합니다."
+        >
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+            <div className="space-y-4">
+              <ToggleRow
+                title="원장 제어 활성화"
+                description="Telegram chat에서 비밀번호 인증 후 운영 제어를 허용합니다."
+                checked={telegramOwnerControlEnabled}
+                onCheckedChange={setTelegramOwnerControlEnabled}
+              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <Field
+                  label="제어 비밀번호"
+                  hint={telegramOwnerControl?.passwordConfigured ? "비워두면 기존 비밀번호를 유지합니다." : "Telegram에서 `/login <password>`로 인증할 때 사용하는 비밀번호입니다."}
+                >
+                  <Input
+                    type="password"
+                    value={telegramOwnerControlPassword}
+                    onChange={(event) => setTelegramOwnerControlPassword(event.target.value)}
+                    placeholder={telegramOwnerControl?.passwordConfigured ? "기존 비밀번호 유지" : "demo password"}
+                  />
+                </Field>
+                <Field label="세션 유지 시간 (분)" hint="인증된 Telegram chat의 세션 유지 시간입니다.">
+                  <Input
+                    value={telegramOwnerControlSessionTtl}
+                    onChange={(event) => setTelegramOwnerControlSessionTtl(event.target.value.replace(/[^0-9]/g, ""))}
+                    placeholder="240"
+                  />
+                </Field>
+              </div>
+              <ToggleRow
+                title="자연어 해석 허용"
+                description="`케이스 C-101 상태 완료` 같은 자연어 운영 명령을 허용합니다."
+                checked={telegramOwnerControlAllowNaturalLanguage}
+                onCheckedChange={setTelegramOwnerControlAllowNaturalLanguage}
+              />
+              <ToggleRow
+                title="변경 작업 버튼 확인"
+                description="상태 변경, 승인, 다시 실행 같은 작업은 Telegram Confirm 버튼을 한 번 더 눌러야 실행합니다."
+                checked={telegramOwnerControlConfirmDangerous}
+                onCheckedChange={setTelegramOwnerControlConfirmDangerous}
+              />
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  size="sm"
+                  onClick={() => telegramOwnerControlSaveMutation.mutate()}
+                  disabled={telegramOwnerControlSaveMutation.isPending || !activeOrgId}
+                >
+                  {telegramOwnerControlSaveMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+                  원장 제어 저장
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => telegramOwnerControlTestMutation.mutate()}
+                  disabled={telegramOwnerControlTestMutation.isPending || !activeOrgId}
+                >
+                  {telegramOwnerControlTestMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+                  테스트 메시지 보내기
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => telegramOwnerControlRevokeMutation.mutate()}
+                  disabled={telegramOwnerControlRevokeMutation.isPending || !activeOrgId}
+                >
+                  {telegramOwnerControlRevokeMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+                  세션 모두 종료
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded-lg border px-4 py-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
+                  현재 상태
+                </div>
+                <StatusPill tone={telegramOwnerControl?.enabled ? "good" : "warn"}>
+                  {telegramOwnerControl?.enabled ? "활성" : "비활성"}
+                </StatusPill>
+              </div>
+              <div className="text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                <div>비밀번호: {telegramOwnerControl?.passwordConfigured ? "설정됨" : "없음"}</div>
+                <div>세션: {telegramOwnerControl?.sessionTtlMinutes ?? 240}분</div>
+                <div>자연어: {telegramOwnerControl?.allowNaturalLanguage !== false ? "허용" : "비활성"}</div>
+                <div>변경 확인: {telegramOwnerControl?.confirmDangerousMutations !== false ? "Confirm 버튼 필요" : "즉시 실행"}</div>
+                <div>인증된 chat: {telegramOwnerControl?.authorizedChatCount ?? 0}개</div>
+              </div>
+              {telegramOwnerControl?.lastAuthorizedChat ? (
+                <div className="rounded-md px-3 py-2 text-xs leading-relaxed" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-tertiary)" }}>
+                  최근 인증 chat: {telegramOwnerControl.lastAuthorizedChat.displayName ?? telegramOwnerControl.lastAuthorizedChat.username ?? telegramOwnerControl.lastAuthorizedChat.chatId}
+                  <br />
+                  만료: {new Date(telegramOwnerControl.lastAuthorizedChat.expiresAt).toLocaleString("ko-KR")}
+                </div>
+              ) : (
+                <div className="rounded-md px-3 py-2 text-xs leading-relaxed" style={{ backgroundColor: "var(--bg-elevated)", color: "var(--text-tertiary)" }}>
+                  아직 인증된 Telegram chat이 없습니다. 먼저 bot에서 `/login &lt;password&gt;`를 실행하세요.
+                </div>
+              )}
+              <div className="text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
+                지원 명령 예시: `미승인 보여줘`, `오늘 일정 보여줘`, `케이스 C-101 상태 완료`, `케이스 C-101 승인`, `케이스 C-101 다시 실행`
+              </div>
+            </div>
+          </div>
         </SectionCard>
 
         <SectionCard

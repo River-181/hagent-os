@@ -7,6 +7,7 @@ import * as schema from "@hagent/db"
 import { dispatchInstruction } from "./orchestration.js"
 import { installSkillForOrganization, updateAgentSkillMounts } from "./skills.js"
 import { createCaseWithRetry } from "../lib/case-create.js"
+import { hashTelegramOwnerControlPassword } from "./telegram-owner-control.js"
 import { inferInstructorRoleFromSubject } from "../lib/instructor-roles.js"
 import { TANZANIA_PRESET } from "../data/tanzania-preset.js"
 import { RICH_CASES, CEO_MEMORY, DEMO_DOCUMENTS } from "../data/rich-demo-seed.js"
@@ -361,6 +362,14 @@ A. 카카오톡에서 '@탄자니아영어학원'을 검색하거나, 등록 시
   },
 ]
 
+const telegramOwnerControlSchema = z.object({
+  enabled: z.boolean().default(false),
+  password: z.string().optional(),
+  sessionTtlMinutes: z.number().int().min(15).max(1440).default(240),
+  allowNaturalLanguage: z.boolean().default(true),
+  confirmDangerousMutations: z.boolean().default(true),
+})
+
 const channelBindingSchema = z.object({
   enabled: z.boolean().default(false),
   channelId: z.string().optional(),
@@ -375,6 +384,7 @@ const channelBindingSchema = z.object({
   botToken: z.string().optional(),
   botUsername: z.string().optional(),
   phoneNumber: z.string().optional(),
+  ownerControl: telegramOwnerControlSchema.optional(),
 })
 
 const selectedAgentSchema = z.object({
@@ -559,9 +569,26 @@ function resolveChannelConfig(input: z.infer<typeof bootstrapSchema>) {
           input.channels.telegram?.enabled
             ? input.channels.telegram?.botToken
               ? "connected"
-              : "missing_credentials"
+            : "missing_credentials"
             : "inactive",
         ...input.channels.telegram,
+        ...(input.channels.telegram?.ownerControl
+          ? {
+              ownerControl: {
+                enabled: input.channels.telegram.ownerControl.enabled,
+                sessionTtlMinutes: input.channels.telegram.ownerControl.sessionTtlMinutes,
+                allowNaturalLanguage: input.channels.telegram.ownerControl.allowNaturalLanguage,
+                confirmDangerousMutations: input.channels.telegram.ownerControl.confirmDangerousMutations,
+                ...(input.channels.telegram.ownerControl.password?.trim()
+                  ? {
+                      passwordHash: hashTelegramOwnerControlPassword(input.channels.telegram.ownerControl.password.trim()),
+                      authorizedChats: [],
+                      pendingConfirmations: [],
+                    }
+                  : {}),
+              },
+            }
+          : {}),
       },
       sms: {
         key: "sms",

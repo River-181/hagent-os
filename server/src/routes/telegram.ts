@@ -6,6 +6,13 @@ import { classifyInboundMessage } from "../lib/channel-message-heuristics.js"
 import { processChannelInbound } from "./webhook.js"
 import { getTelegramBinding, normalizeTelegramUpdate, syncTelegramInbound } from "../services/telegram-inbound-sync.js"
 import { sendTelegramMessage } from "../services/integrations/telegram-outbound.js"
+import {
+  getTelegramOwnerControlState,
+  handleTelegramOwnerControlUpdate,
+  revokeTelegramOwnerControlSessions,
+  saveTelegramOwnerControlConfig,
+  sendTelegramOwnerControlTest,
+} from "../services/telegram-owner-control.js"
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
@@ -74,6 +81,12 @@ export function telegramRoutes(db: Db): Router {
       }
 
       const update = isPlainObject(req.body) ? req.body : {}
+      const ownerControlResult = await handleTelegramOwnerControlUpdate(db, organization, update)
+      if (ownerControlResult.handled) {
+        res.json({ ok: true, ownerControl: true })
+        return
+      }
+
       const normalized = normalizeTelegramUpdate(update)
       if (!normalized) {
         res.json({ ok: true, ignored: true })
@@ -286,6 +299,57 @@ export function telegramRoutes(db: Db): Router {
       })
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "Failed to unregister Telegram webhook" })
+    }
+  })
+
+  router.get("/channels/telegram/owner-control/:orgId", async (req, res) => {
+    try {
+      const [organization] = await db
+        .select()
+        .from(schema.organizations)
+        .where(eq(schema.organizations.id, req.params.orgId))
+
+      if (!organization) {
+        res.status(404).json({ error: "Organization not found" })
+        return
+      }
+
+      res.json(getTelegramOwnerControlState(organization))
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to fetch Telegram owner control config" })
+    }
+  })
+
+  router.patch("/channels/telegram/owner-control/:orgId", async (req, res) => {
+    try {
+      const result = await saveTelegramOwnerControlConfig(db, req.params.orgId, {
+        enabled: typeof req.body?.enabled === "boolean" ? req.body.enabled : undefined,
+        password: typeof req.body?.password === "string" ? req.body.password : undefined,
+        sessionTtlMinutes: typeof req.body?.sessionTtlMinutes === "number" ? req.body.sessionTtlMinutes : undefined,
+        allowNaturalLanguage: typeof req.body?.allowNaturalLanguage === "boolean" ? req.body.allowNaturalLanguage : undefined,
+        confirmDangerousMutations: typeof req.body?.confirmDangerousMutations === "boolean" ? req.body.confirmDangerousMutations : undefined,
+      })
+      res.json(result)
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update Telegram owner control config" })
+    }
+  })
+
+  router.post("/channels/telegram/owner-control/:orgId/revoke", async (req, res) => {
+    try {
+      const result = await revokeTelegramOwnerControlSessions(db, req.params.orgId)
+      res.json(result)
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to revoke Telegram owner control sessions" })
+    }
+  })
+
+  router.post("/channels/telegram/owner-control/:orgId/test", async (req, res) => {
+    try {
+      const result = await sendTelegramOwnerControlTest(db, req.params.orgId)
+      res.json(result)
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Failed to send Telegram owner control test" })
     }
   })
 
