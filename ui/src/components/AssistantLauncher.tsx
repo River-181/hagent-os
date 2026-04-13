@@ -159,7 +159,7 @@ export function AssistantLauncher() {
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto px-5 py-4">
+            <div className="flex-1 overflow-y-auto px-4 py-4">
               <div className="mb-3 flex items-center justify-between">
                 <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                   최근 질문 세션
@@ -187,20 +187,17 @@ export function AssistantLauncher() {
                           setOpen(false)
                           navigate(`${assistantHref}?case=${session.id}`)
                         }}
-                        className="w-full rounded-2xl border px-4 py-3 text-left transition-colors hover:bg-[var(--bg-secondary)]"
+                        className="w-full rounded-2xl border px-3.5 py-3 text-left transition-colors hover:bg-[var(--bg-secondary)]"
                         style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-elevated)" }}
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                              {session.title}
-                            </div>
-                            <div className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                              {meta.caseKind === "legal-inquiry" ? "법률 질문" : "운영 질문"} · {session.identifier}
-                            </div>
+                        <div className="min-w-0 space-y-2">
+                          <div className="text-sm font-medium leading-5 [overflow-wrap:anywhere]" style={{ color: "var(--text-primary)" }}>
+                            {session.title}
                           </div>
-                          <div className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-                            {new Date(session.updatedAt ?? session.createdAt).toLocaleDateString("ko-KR")}
+                          <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                            <span>{meta.caseKind === "legal-inquiry" ? "법률 질문" : "운영 질문"}</span>
+                            <span>{session.identifier}</span>
+                            <span className="ml-auto">{new Date(session.updatedAt ?? session.createdAt).toLocaleDateString("ko-KR")}</span>
                           </div>
                         </div>
                       </button>

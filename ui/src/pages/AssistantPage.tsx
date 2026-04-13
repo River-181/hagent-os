@@ -283,9 +283,9 @@ export function AssistantPage() {
         }
       />
 
-      <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[280px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 gap-5 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
         <WorkspacePanel className="flex min-h-0 flex-col overflow-hidden">
-          <div className="border-b px-5 py-5" style={{ borderColor: "var(--border-default)" }}>
+          <div className="border-b px-4 py-4" style={{ borderColor: "var(--border-default)" }}>
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                 <Sparkles size={15} style={{ color: "var(--accent-primary)" }} />
@@ -295,7 +295,7 @@ export function AssistantPage() {
                 자주 쓰는 시나리오를 초안으로 불러오거나, 세션을 골라 바로 이어서 작업합니다.
               </p>
             </div>
-            <div className="mt-4 grid gap-2">
+            <div className="mt-3 grid gap-2">
               {pinnedShortcuts.map((shortcut) => {
                 const Icon = shortcut.icon
                 return (
@@ -303,7 +303,7 @@ export function AssistantPage() {
                     key={shortcut.key}
                     type="button"
                     onClick={shortcut.onClick}
-                    className="w-full rounded-xl border px-4 py-3 text-left transition-colors"
+                    className="w-full rounded-xl border px-3.5 py-3 text-left transition-colors"
                     style={{
                       borderColor: "var(--border-default)",
                       backgroundColor: "var(--bg-elevated)",
@@ -311,7 +311,7 @@ export function AssistantPage() {
                   >
                     <div className="flex items-start gap-3">
                       <span
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-lg"
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg"
                         style={{ backgroundColor: "var(--accent-primary-soft)", color: "var(--accent-primary)" }}
                       >
                         <Icon size={15} />
@@ -331,7 +331,7 @@ export function AssistantPage() {
             </div>
           </div>
 
-          <div className="border-b px-5 py-4" style={{ borderColor: "var(--border-default)" }}>
+          <div className="border-b px-4 py-3" style={{ borderColor: "var(--border-default)" }}>
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                 최근 세션
@@ -343,7 +343,7 @@ export function AssistantPage() {
           </div>
 
           <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-2 px-4 py-4">
+            <div className="space-y-2 px-3 py-3">
               {sessionsLoading ? (
                 <div className="flex items-center justify-center py-10">
                   <Loader2 size={18} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
@@ -371,31 +371,27 @@ export function AssistantPage() {
                         setQuestion("")
                         setSearchParams({ case: session.id })
                       }}
-                      className="w-full rounded-xl border px-4 py-3 text-left transition-colors"
+                      className="w-full rounded-xl border px-3.5 py-3 text-left transition-colors"
                       style={{
                         borderColor: selected ? "var(--accent-primary)" : "var(--border-default)",
                         backgroundColor: selected ? "var(--accent-primary-soft)" : "var(--bg-elevated)",
                       }}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                            {session.title}
+                      <div className="min-w-0 space-y-2">
+                        <div className="text-sm font-medium leading-5 [overflow-wrap:anywhere]" style={{ color: "var(--text-primary)" }}>
+                          {session.title}
+                        </div>
+                        {session.latestDraftSummary ? (
+                          <div className="text-xs leading-5 [overflow-wrap:anywhere]" style={{ color: "var(--text-secondary)" }}>
+                            {summarizeText(session.latestDraftSummary, 88)}
                           </div>
-                        </div>
-                        <div className="shrink-0 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                          {formatDate(session.updatedAt ?? session.createdAt)}
+                        ) : null}
+                        <div className="flex flex-wrap items-center gap-2 text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                          <Badge className="border-0 text-[11px]">{getSessionKindLabel(session)}</Badge>
+                          <span>{session.identifier}</span>
+                          <span className="ml-auto">{formatDate(session.updatedAt ?? session.createdAt)}</span>
                         </div>
                       </div>
-                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                        <Badge className="border-0">{getSessionKindLabel(session)}</Badge>
-                        <span>{session.identifier}</span>
-                      </div>
-                      {session.latestDraftSummary ? (
-                        <div className="mt-2 text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
-                          {summarizeText(session.latestDraftSummary, 68)}
-                        </div>
-                      ) : null}
                     </button>
                   )
                 })
@@ -435,122 +431,126 @@ export function AssistantPage() {
             </div>
           </div>
 
-          <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-4 px-6 py-6">
-              {selectedCaseLoading ? (
-                <div className="flex items-center justify-center py-20">
-                  <Loader2 size={18} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
-                </div>
-              ) : !selectedCase ? (
-                <>
-                  <WorkspaceEmptyState
-                    icon={<MessageSquarePlus size={18} />}
-                    title={isDraftingNewThread ? "새 질문 초안을 준비했습니다." : "세션을 선택하면 대화가 열립니다."}
-                    description={isDraftingNewThread
-                      ? "하단 입력창에서 질문을 조금만 다듬고 보내면 새 세션으로 시작됩니다."
-                      : "왼쪽 세션 목록에서 기존 기록을 열거나, 자주 쓰는 시나리오를 불러와 바로 시작하세요."}
-                    action={!isDraftingNewThread ? (
-                      <Button size="sm" className="gap-1.5 border-0 text-white" style={{ backgroundColor: "var(--accent-primary)" }} onClick={() => startDraft("")}>
-                        <MessageSquarePlus size={13} />
-                        새 질문 준비
-                      </Button>
-                    ) : undefined}
-                  />
+          <div className="min-h-0 flex-1">
+            <ScrollArea className="h-full min-h-0 flex-1">
+              <div className="space-y-4 px-6 py-6">
+                {selectedCaseLoading ? (
+                  <div className="flex items-center justify-center py-20">
+                    <Loader2 size={18} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
+                  </div>
+                ) : !selectedCase ? (
+                  <>
+                    <WorkspaceEmptyState
+                      icon={<MessageSquarePlus size={18} />}
+                      title={isDraftingNewThread ? "새 질문 초안을 준비했습니다." : "세션을 선택하면 대화가 열립니다."}
+                      description={isDraftingNewThread
+                        ? "오른쪽 카드에서 질문을 다듬고 바로 보내면 새 세션으로 시작됩니다."
+                        : "왼쪽 세션 목록에서 기존 기록을 열거나, 자주 쓰는 시나리오를 불러와 바로 시작하세요."}
+                      action={!isDraftingNewThread ? (
+                        <Button size="sm" className="gap-1.5 border-0 text-white" style={{ backgroundColor: "var(--accent-primary)" }} onClick={() => startDraft("")}>
+                          <MessageSquarePlus size={13} />
+                          새 질문 준비
+                        </Button>
+                      ) : undefined}
+                    />
 
-                  {question ? (
-                    <WorkspaceSubtle className="p-4">
-                      <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                        <FileText size={14} style={{ color: "var(--accent-primary)" }} />
-                        작성 중인 질문
-                      </div>
-                      <p className="mt-2 whitespace-pre-wrap text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-                        {question}
-                      </p>
-                    </WorkspaceSubtle>
-                  ) : null}
-                </>
-              ) : (
-                <>
-                  {latestDocument ? (
-                    <article
-                      className="rounded-xl border px-5 py-5"
-                      style={{
-                        borderColor: "var(--border-default)",
-                        backgroundColor: "var(--bg-elevated)",
-                      }}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="text-xs font-medium uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
-                            최신 답변
+                    {question ? (
+                      <WorkspaceSubtle className="p-4">
+                        <div className="flex items-center gap-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                          <FileText size={14} style={{ color: "var(--accent-primary)" }} />
+                          작성 중인 질문
+                        </div>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+                          {question}
+                        </p>
+                      </WorkspaceSubtle>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    {latestDocument ? (
+                      <article
+                        className="rounded-xl border px-5 py-5"
+                        style={{
+                          borderColor: "var(--border-default)",
+                          backgroundColor: "var(--bg-elevated)",
+                        }}
+                      >
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-xs font-medium uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
+                              최신 답변
+                            </div>
+                            <div className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                              {latestDocument.title}
+                            </div>
                           </div>
-                          <div className="mt-1 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                            {latestDocument.title}
+                          <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+                            {formatDate(latestDocument.updatedAt ?? latestDocument.createdAt, true)}
                           </div>
                         </div>
-                        <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                          {formatDate(latestDocument.updatedAt ?? latestDocument.createdAt, true)}
+                        <div className="mt-4 whitespace-pre-wrap text-sm leading-7" style={{ color: "var(--text-primary)" }}>
+                          {latestAnswer || "아직 생성된 문서가 없습니다."}
                         </div>
-                      </div>
-                      <div className="mt-4 whitespace-pre-wrap text-sm leading-7" style={{ color: "var(--text-primary)" }}>
-                        {latestAnswer || "아직 생성된 문서가 없습니다."}
-                      </div>
-                      {legalSummary ? (
-                        <div
-                          className="mt-4 border-t pt-4 text-sm leading-6"
-                          style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}
-                        >
-                          <span className="font-medium" style={{ color: "var(--text-primary)" }}>법령 근거 요약.</span>{" "}
-                          {legalSummary}
-                        </div>
-                      ) : null}
-                    </article>
-                  ) : (
-                    <WorkspaceSubtle className="p-4">
-                      <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                        최신 답변
-                      </div>
-                      <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-                        아직 생성된 문서가 없습니다.
-                      </p>
-                    </WorkspaceSubtle>
-                  )}
-
-                  {sortedComments.length > 0 ? (
-                    <div className="space-y-3">
-                      <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                        질문 기록
-                      </div>
-                      {sortedComments.map((comment: any) => {
-                        const body = String(comment.content ?? comment.body ?? "").trim()
-                        const isAgent = String(comment.authorType ?? "").includes("agent")
-                        return (
+                        {legalSummary ? (
                           <div
-                            key={comment.id}
-                            className="rounded-xl border px-4 py-4"
-                            style={{
-                              borderColor: isAgent ? "var(--accent-primary)" : "var(--border-default)",
-                              backgroundColor: isAgent ? "var(--accent-primary-soft)" : "var(--bg-subtle)",
-                            }}
+                            className="mt-4 border-t pt-4 text-sm leading-6"
+                            style={{ borderColor: "var(--border-default)", color: "var(--text-secondary)" }}
                           >
-                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                              <span>{isAgent ? "AI 팀" : "운영자"}</span>
-                              <span>{formatDate(comment.createdAt ?? comment.created_at, true)}</span>
-                            </div>
-                            <div className="mt-2 whitespace-pre-wrap text-sm leading-6" style={{ color: "var(--text-primary)" }}>
-                              {body}
-                            </div>
+                            <span className="font-medium" style={{ color: "var(--text-primary)" }}>법령 근거 요약.</span>{" "}
+                            {legalSummary}
                           </div>
-                        )
-                      })}
-                    </div>
-                  ) : null}
-                </>
-              )}
-            </div>
-          </ScrollArea>
+                        ) : null}
+                      </article>
+                    ) : (
+                      <WorkspaceSubtle className="p-4">
+                        <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                          최신 답변
+                        </div>
+                        <p className="mt-2 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+                          아직 생성된 문서가 없습니다.
+                        </p>
+                      </WorkspaceSubtle>
+                    )}
 
-          <div className="border-t px-6 py-4" style={{ borderColor: "var(--border-default)" }}>
+                    {sortedComments.length > 0 ? (
+                      <div className="space-y-3">
+                        <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                          질문 기록
+                        </div>
+                        {sortedComments.map((comment: any) => {
+                          const body = String(comment.content ?? comment.body ?? "").trim()
+                          const isAgent = String(comment.authorType ?? "").includes("agent")
+                          return (
+                            <div
+                              key={comment.id}
+                              className="rounded-xl border px-4 py-4"
+                              style={{
+                                borderColor: isAgent ? "var(--accent-primary)" : "var(--border-default)",
+                                backgroundColor: isAgent ? "var(--accent-primary-soft)" : "var(--bg-subtle)",
+                              }}
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-2 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                                <span>{isAgent ? "AI 팀" : "운영자"}</span>
+                                <span>{formatDate(comment.createdAt ?? comment.created_at, true)}</span>
+                              </div>
+                              <div className="mt-2 whitespace-pre-wrap text-sm leading-6" style={{ color: "var(--text-primary)" }}>
+                                {body}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                  </>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        </WorkspacePanel>
+
+        <WorkspacePanel className="flex min-h-0 flex-col overflow-hidden">
+          <div className="border-b px-5 py-4" style={{ borderColor: "var(--border-default)" }}>
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
@@ -566,53 +566,74 @@ export function AssistantPage() {
                 </div>
               ) : null}
             </div>
+          </div>
 
-            <div className="mt-3 flex flex-wrap gap-2">
-              {followUpSuggestions.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  className="rounded-full border px-3 py-1.5 text-xs transition-colors"
-                  style={{
-                    borderColor: "var(--border-default)",
-                    backgroundColor: "var(--bg-elevated)",
-                    color: "var(--text-secondary)",
-                  }}
-                  onClick={() => {
-                    setQuestion((previous) => (previous.trim() ? `${previous}\n${suggestion}` : suggestion))
-                  }}
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-
-            <Textarea
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              rows={3}
-              placeholder="예: 위 답변을 학부모 안내 문안으로 바꿔줘"
-              className="mt-3 rounded-lg border px-3 py-2 shadow-none focus-visible:ring-0"
+          <div className="min-h-0 flex-1 p-5">
+            <div
+              className="flex h-full min-h-0 flex-col rounded-xl border px-4 py-4"
               style={{
                 borderColor: "var(--border-default)",
                 backgroundColor: "var(--bg-elevated)",
               }}
-            />
-
-            <div className="mt-3 flex items-center justify-between gap-3">
-              <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                질문을 보내면 새 문서와 질문 기록이 이 화면에 바로 이어집니다.
+            >
+              <div className="space-y-2">
+                <div className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
+                  답변을 바탕으로 바로 이어서 묻기
+                </div>
+                <p className="text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+                  {selectedCase
+                    ? "아래 제안을 눌러 후속 질문을 빠르게 채우거나, 직접 문안을 다듬어 새 답변과 질문 기록을 이어서 만드세요."
+                    : "초안 질문을 정리해 새 세션을 시작하거나, 자주 쓰는 후속 질문을 바로 붙여보세요."}
+                </p>
               </div>
-              <Button
-                size="sm"
-                className="gap-1.5 border-0 text-white"
-                style={{ backgroundColor: "var(--accent-primary)" }}
-                disabled={!question.trim() || submitMutation.isPending || !activeOrgId}
-                onClick={() => submitMutation.mutate(undefined)}
-              >
-                {submitMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                보내기
-              </Button>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {followUpSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    className="rounded-full border px-3 py-1.5 text-xs transition-colors"
+                    style={{
+                      borderColor: "var(--border-default)",
+                      backgroundColor: "var(--bg-base)",
+                      color: "var(--text-secondary)",
+                    }}
+                    onClick={() => {
+                      setQuestion((previous) => (previous.trim() ? `${previous}\n${suggestion}` : suggestion))
+                    }}
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+
+              <Textarea
+                value={question}
+                onChange={(event) => setQuestion(event.target.value)}
+                rows={6}
+                placeholder="예: 위 답변을 학부모 안내 문안으로 바꿔줘"
+                className="mt-4 min-h-[140px] resize-none rounded-lg border px-3 py-2 shadow-none focus-visible:ring-0"
+                style={{
+                  borderColor: "var(--border-default)",
+                  backgroundColor: "var(--bg-base)",
+                }}
+              />
+
+              <div className="mt-auto flex items-center justify-between gap-3 pt-4">
+                <div className="text-xs leading-5" style={{ color: "var(--text-tertiary)" }}>
+                  질문을 보내면 새 문서와 질문 기록이 이 화면에 바로 이어집니다.
+                </div>
+                <Button
+                  size="sm"
+                  className="gap-1.5 border-0 text-white"
+                  style={{ backgroundColor: "var(--accent-primary)" }}
+                  disabled={!question.trim() || submitMutation.isPending || !activeOrgId}
+                  onClick={() => submitMutation.mutate(undefined)}
+                >
+                  {submitMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                  보내기
+                </Button>
+              </div>
             </div>
           </div>
         </WorkspacePanel>
