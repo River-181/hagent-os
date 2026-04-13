@@ -200,6 +200,8 @@ const DEFAULT_TTL_MINUTES = 240
 const DEFAULT_CONFIRMATION_TTL_MINUTES = 10
 const MAX_AUTHORIZED_CHATS = 10
 const MAX_PENDING_CONFIRMATIONS = 30
+const PUBLIC_DEMO_OWNER_CONTROL_PREFIX = "tanzania-english-academy"
+const PUBLIC_DEMO_OWNER_CONTROL_PASSWORD = "hagent2026"
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value)
@@ -407,8 +409,22 @@ function normalizeTelegramOwnerControlUpdate(update: Record<string, unknown>): T
 }
 
 function looksLikeOwnerControlTrigger(text: string) {
-  return /^\/(login|logout|help|cases|approvals|today|status)\b/i.test(text)
+  return /^\/(start|login|logout|help|cases|approvals|today|status)\b/i.test(text)
     || /(도움말|미승인|승인 대기|오늘 일정|최근 케이스|케이스\s+C-\d+|우선순위|담당|프로젝트|다시 실행|재실행|로그아웃|로그인)/.test(text)
+}
+
+function getPublicDemoOwnerControlPassword(organization: typeof schema.organizations.$inferSelect) {
+  return organization.prefix === PUBLIC_DEMO_OWNER_CONTROL_PREFIX ? PUBLIC_DEMO_OWNER_CONTROL_PASSWORD : null
+}
+
+function buildLoginPrompt(organization: typeof schema.organizations.$inferSelect) {
+  const publicPassword = getPublicDemoOwnerControlPassword(organization)
+  if (!publicPassword) return "먼저 /login <password> 로 인증해 주세요."
+  return [
+    "운영 bot 인증이 필요합니다.",
+    `데모 비밀번호: ${publicPassword}`,
+    `바로 로그인: /login ${publicPassword}`,
+  ].join("\n")
 }
 
 function mapStatusLabel(value: string) {
@@ -546,12 +562,14 @@ async function handleNaturalLanguageRequest(
   )
 }
 
-function buildHelpText() {
+function buildHelpText(organization: typeof schema.organizations.$inferSelect) {
+  const publicPassword = getPublicDemoOwnerControlPassword(organization)
   return [
     "HagentOS Telegram Owner Control",
     "",
     "로그인:",
-    "/login <password>",
+    publicPassword ? `/login ${publicPassword}` : "/login <password>",
+    ...(publicPassword ? ["데모 비밀번호:", publicPassword, ""] : []),
     "",
     "조회 예시:",
     "- 미승인 보여줘",
@@ -574,6 +592,7 @@ function buildHelpText() {
 
 function parseIntent(text: string): OwnerIntent | null {
   const trimmed = text.trim()
+  if (/^\/start\b/i.test(trimmed) || trimmed === "시작") return { kind: "help" }
   const loginMatch = trimmed.match(/^\/login\s+(.+)$/i) ?? trimmed.match(/^로그인\s+(.+)$/)
   if (loginMatch) return { kind: "login", password: loginMatch[1].trim() }
   if (/^\/logout\b/i.test(trimmed) || trimmed === "로그아웃") return { kind: "logout" }
@@ -1061,17 +1080,19 @@ async function handleIntent(
   }
 
   if (intent.kind === "help") {
-    await sendOwnerMessage(binding, update.chatId, buildHelpText())
+    await sendOwnerMessage(binding, update.chatId, buildHelpText(organization))
     return
   }
 
   if (intent.kind === "login") {
-    if (!config.passwordHash) {
+    const publicPassword = getPublicDemoOwnerControlPassword(organization)
+    if (!config.passwordHash && !publicPassword) {
       await sendOwnerMessage(binding, update.chatId, "아직 Telegram owner-control 비밀번호가 설정되지 않았습니다. 웹 Settings에서 먼저 설정해 주세요.")
       return
     }
-    if (!verifyPassword(intent.password, config.passwordHash)) {
-      await sendOwnerMessage(binding, update.chatId, "비밀번호가 일치하지 않습니다.")
+    const passwordMatches = verifyPassword(intent.password, config.passwordHash) || (publicPassword !== null && intent.password === publicPassword)
+    if (!passwordMatches) {
+      await sendOwnerMessage(binding, update.chatId, publicPassword ? `비밀번호가 일치하지 않습니다.\n\n데모 비밀번호: ${publicPassword}\n로그인: /login ${publicPassword}` : "비밀번호가 일치하지 않습니다.")
       await recordActivity(db, organization.id, actorId, "telegram.owner_control_auth_failed", "organization", organization.id, organization.name, {
         chatId: update.chatId,
         source: "telegram_owner_control",
@@ -1105,7 +1126,7 @@ async function handleIntent(
 
   const activeChat = cleanupExpiredChats(config.authorizedChats ?? []).find((item) => item.chatId === update.chatId)
   if (!activeChat) {
-    await sendOwnerMessage(binding, update.chatId, "먼저 /login <password> 로 인증해 주세요.")
+    await sendOwnerMessage(binding, update.chatId, buildLoginPrompt(organization))
     return
   }
 
@@ -1390,7 +1411,7 @@ export async function handleTelegramOwnerControlUpdate(
       await sendOwnerMessage(binding, update.chatId, message)
       return { handled: true as const }
     }
-    await sendOwnerMessage(binding, update.chatId, activeChat ? "지원하지 않는 요청입니다.\n\n도움말을 보려면 `도움말` 또는 `/help`를 보내세요." : "먼저 /login <password> 로 인증하거나, 도움말을 요청해 주세요.")
+    await sendOwnerMessage(binding, update.chatId, activeChat ? "지원하지 않는 요청입니다.\n\n도움말을 보려면 `도움말` 또는 `/help`를 보내세요." : `${buildLoginPrompt(organization)}\n\n도움말을 보려면 \`도움말\` 또는 \`/help\`를 보내세요.`)
     return { handled: true as const }
   }
 

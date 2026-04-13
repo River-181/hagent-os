@@ -1,128 +1,222 @@
-# HagentOS — AI Agent Instructions
+# HagentOS — Repo Operating Guide For AI Agents
 
-> **모든 AI 에이전트(Claude Code, Codex, Cursor 등)가 작업 시작 전에 읽는 파일.**
+> 이 저장소는 일반 개발 저장소가 아니라, **GitHub URL 자체가 심사 진입점** 인 제출 저장소다.
+> 따라서 모든 변경은 "심사자가 무엇을 먼저 보고 무엇을 이해하는가"를 기준으로 판단한다.
 
----
+## What Matters Most
 
-## 시작 전 체크
+이 저장소에서 우선순위가 가장 높은 파일은 아래 다섯 개다.
 
-1. `README.md` 로 제품 개요와 실행 흐름을 먼저 확인한다.
-2. UI 작업이면 `docs/design/ui-harness.md`, `docs/design/design-system-rules.md` 를 먼저 읽는다.
-3. 심사 데모 흐름을 건드리면 `JUDGE_DEMO.md` 도 함께 확인한다.
+1. `README.md`
+2. `JUDGE_DEMO.md`
+3. `docs/JUDGE_EVIDENCE.md`
+4. `ROADMAP.md`
+5. `AGENTS.md`
 
----
+이유:
 
-## 스택 & 포트
+- `README.md` 는 심사자와 첫 방문자가 가장 먼저 보는 공개 문서다.
+- `JUDGE_DEMO.md` 는 심사 시연의 정본이다.
+- `docs/JUDGE_EVIDENCE.md` 는 우리가 실제로 어떻게 만들고 검증했는지 보여주는 증빙 문서다.
+- `ROADMAP.md` 는 지금 무엇을 보여줬고 다음에 무엇을 강화할지 설명하는 공개 계획 문서다.
+- `AGENTS.md` 는 이후 작업자가 위 문서를 일관되게 유지하게 만드는 운영 규칙이다.
+- `PRIVACY.md` 와 `LICENSE` 는 공개 데모 저장소로서의 기본 신뢰 장치다.
+
+`CONTRIBUTING.md`, `SECURITY.md`, `LICENSE` 같은 파일은 중요하지만, 현재 목표인 **심사 + 배포 + 첫인상** 에서는 2순위다.
+
+## Source Of Truth Order
+
+문서와 제품 메시지가 충돌하면 아래 순서를 따른다.
+
+1. `README.md`
+   공개 포지셔닝, 라이브 URL, 스크린샷, 로컬 실행
+2. `JUDGE_DEMO.md`
+   심사 클릭 순서, 데모 문구, fallback
+3. `docs/JUDGE_EVIDENCE.md`
+   도구 사용, 검증, 작업 방식
+4. `ROADMAP.md`
+   공개용 방향성과 다음 단계
+5. `docs/design/ui-harness.md`
+   UI 화면 규칙
+6. 실제 코드
+   검증 가능한 사실과 현재 구현 상태
+
+확인되지 않은 문구는 README에 넣지 않는다.
+
+## Judge-First Method
+
+문서를 수정할 때는 항상 아래 질문에 답해야 한다.
+
+1. 이 제품은 무엇인가
+2. 왜 필요한가
+3. 심사자는 어디를 클릭해야 하는가
+4. 가장 강한 증거 화면은 무엇인가
+5. 라이브가 불안정할 때 fallback은 무엇인가
+6. 우리가 이 제품을 어떻게 만들고 검증했는가
+
+좋은 방법론:
+
+- 설명보다 **흐름** 을 먼저 보여준다.
+- 과장보다 **검증 가능한 주장** 을 쓴다.
+- 기능 나열보다 **문제 -> 구조 -> 증거** 순서를 따른다.
+- 최종 내러티브는 항상 **Pain -> Workflow -> Proof** 로 읽히게 만든다.
+- 첫 화면, 첫 링크, 첫 이미지의 품질에 가장 민감하게 반응한다.
+
+## README Rules
+
+README는 항상 아래 구조를 유지한다.
+
+1. Hero image 또는 핵심 화면
+2. 빠른 링크
+3. 제품 한 줄 정의
+4. Judge in 90 seconds
+5. 제품이 해결하는 문제
+6. 작동 흐름
+7. 핵심 화면
+8. 우리가 어떻게 일했는가
+9. 라이브 URL / 채널 / 도구
+10. 로컬 실행
+11. 로드맵
+12. 현재 한계
+
+README에 반드시 포함할 것:
+
+- Live URL
+- Judge Guide 링크
+- Build & Evidence 링크
+- Roadmap 링크
+- Privacy 링크
+- License 링크
+- 핵심 스크린샷
+- 고객 채널과 운영 채널 정보
+- 실제 사용 도구와 기술
+- 현재 한계
+- Obsidian을 포함한 작업 방식 요약
+
+README에 넣지 말 것:
+
+- 확인하지 않은 수치
+- 오래된 포트
+- raw 캡처 폴더 링크
+- 로컬 전용 임시 경로
+- 대량의 작업 로그
+
+## JUDGE_DEMO Rules
+
+`JUDGE_DEMO.md` 는 설명 문서가 아니라 **시연 스크립트** 다.
+
+반드시 포함할 것:
+
+- Live URL
+- 추천 클릭 순서
+- 고객 bot / 운영 bot 구분
+- 추천 bot 메시지
+- 심사 포인트별 매핑
+- 라이브 실패 시 fallback
+
+항상 유지해야 할 핵심 흐름:
+
+`message -> case -> draft -> approval -> side effect`
+
+이 흐름이 깨지면 심사 설득력이 크게 떨어진다.
+
+## AGENTS Rules
+
+이 파일의 역할은 "앞으로 누가 수정하더라도 저장소의 방향이 흐트러지지 않게 하는 것"이다.
+
+따라서 항상 포함할 것:
+
+- 우선순위 파일
+- source of truth 순서
+- judge-first 원칙
+- Pain -> Workflow -> Proof 내러티브 규칙
+- 산출물 정리 규칙
+- 최소 검증 규칙
+
+## Artifact Hygiene
+
+심사용 저장소를 지저분하게 만드는 파일은 올리지 않는다.
+
+올리지 말아야 할 대표 항목:
+
+- `.DS_Store`
+- `.playwright-cli/`
+- `.obsidian/`
+- `.claude/`
+- 임시 캡처 폴더 전체
+- 사용자가 명시하지 않은 대형 대회 보관 폴더
+
+이미지가 필요하면:
+
+- 엄선한 파일만 `docs/assets/readme/` 에 둔다.
+- README에서 쓰는 이미지 경로는 짧고 안정적으로 유지한다.
+
+## Product Positioning Guardrails
+
+HagentOS를 아래처럼 설명하지 않는다.
+
+- 단순 챗봇
+- 범용 업무 자동화 툴
+- 학교 ERP 대체제
+- AI가 다 알아서 하는 무인 시스템
+
+HagentOS는 이렇게 설명한다.
+
+- 한국 학원 운영용 AI agent control plane
+- Case-first 운영 구조
+- Approval gate가 있는 agent team product
+- 메시지, 일정, 문서, 활동 로그를 연결하는 운영 보드
+
+## Stack And Ports
 
 | 항목 | 값 |
-|------|-----|
-| UI | React 19 + Vite + TypeScript (`ui/`) |
-| Server | Express + Drizzle ORM (`server/`) |
-| DB | PostgreSQL 17, DB명 `hagent_os`, 포트 5432 |
-| 패키지 매니저 | pnpm workspace |
-| UI 포트 | 5174 (dev) |
-| Server 포트 | 3200 |
+| --- | --- |
+| UI | React 19 + Vite + TypeScript |
+| Server | Express + Drizzle ORM |
+| DB | PostgreSQL 17 |
+| Package Manager | pnpm workspace |
+| UI Port | `5174` |
+| Server Port | `3200` |
+
+실행 명령:
 
 ```bash
-# 루트에서 전체 실행
 pnpm dev
-
-# 서버만
 pnpm dev:server
-
-# UI만
 pnpm dev:ui
-
-# 전체 타입체크
 pnpm typecheck
-
-# 전체 빌드
 pnpm build
+```
 
-# 빌드 검증 (작업 완료 후 반드시)
+## Verification Rules
+
+문서만 수정했을 때:
+
+```bash
+git diff --check
+```
+
+UI를 수정했을 때:
+
+```bash
+cd ui && npx tsc --noEmit
 cd ui && npx vite build
 ```
 
-기본 로컬 URL:
+서버, 공유 타입, 빌드 경로를 수정했을 때:
 
-- UI: `http://127.0.0.1:5174`
-- API: `http://127.0.0.1:3200`
-
----
-
-## 폴더 구조
-
-```
-ui/src/
-  pages/          ← 페이지 컴포넌트 (각 라우트 1개)
-  components/     ← 재사용 컴포넌트
-    ui/           ← shadcn + HagentOS 기본 컴포넌트
-  context/        ← React Context
-  api/            ← API 클라이언트 (서버 호출)
-  lib/            ← 유틸리티
-
-server/src/
-  routes/         ← Express 라우터 (기능별 1파일)
-  services/       ← 비즈니스 로직 (DB 접근)
-
-packages/
-  db/             ← Drizzle 스키마
-  shared/         ← 공유 타입
+```bash
+pnpm typecheck
 ```
 
----
+검증을 못 돌렸다면 반드시 명시한다.
 
-## UI 작업 전 필독
+## Commit Rules
 
-**모든 UI 코드 작성 전에 다음 파일을 읽는다:**
-
-```
-docs/design/ui-harness.md     ← 토큰, 패턴, 금지 규칙, 코드 예시
-docs/design/design-system-rules.md  ← 압축 규칙 참조
-```
-
-### 3줄 요약
-
-1. `var(--토큰명)` 인라인 스타일만. Tailwind `bg-teal-*`, `text-slate-*` 색상 유틸 금지.
-2. 페이지는 `<div className="p-6 md:p-8 space-y-6">` + `WorkspaceHeader` + `WorkspacePanel` 조합.
-3. Primary 버튼은 한 영역에 1개. 나머지는 `⋯` DropdownMenu.
-
-### 주요 컴포넌트 경로
-
-```tsx
-import { WorkspacePanel, WorkspaceHeader, WorkspaceEmptyState }
-  from "@/components/ui/workspace-surface"
-```
-
-### 기준 구현체
-
-`ui/src/pages/SkillsPage.tsx` — Phase B pilot 통과 파일. 2-col 상세 화면의 정석 구현.
-
----
-
-## 서버 작업 규칙
-
-- 새 엔드포인트: `server/src/routes/` 에 라우터 추가, `server/src/services/` 에 로직 분리.
-- DB 접근은 반드시 `services/` 레이어에서만.
-- 환경변수: `.env` 파일, `process.env.XXX` 패턴.
-- 에러 응답: `res.status(4xx).json({ error: "메시지" })`.
-
----
-
-## 커밋 규칙
-
-```
+```text
 feat: 새 기능
-fix:  버그 수정
+fix: 버그 수정
 refactor: 리팩터링
 docs: 문서
 chore: 설정/의존성
 ```
-
----
-
-## 작업 완료 기준
-
-1. `cd ui && npx vite build` 에러 없이 통과
-2. `cd ui && npx tsc --noEmit` 에러 없이 통과
-3. UI 작업이면 `docs/design/ui-harness.md` 체크리스트 확인
