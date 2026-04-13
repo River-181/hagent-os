@@ -55,7 +55,9 @@ const organizationPatchSchema = z.object({
 })
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value)
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false
+  const prototype = Object.getPrototypeOf(value)
+  return prototype === Object.prototype || prototype === null
 }
 
 function mergeJsonConfig(
@@ -77,6 +79,37 @@ function mergeJsonConfig(
 
 function getOrganizationConfig(organization: typeof schema.organizations.$inferSelect) {
   return isPlainObject(organization.agentTeamConfig) ? organization.agentTeamConfig : {}
+}
+
+const SECRET_MASK = "***"
+const SECRET_KEY_EXACT = new Set(["apikey", "password", "passwordhash", "secret", "token", "credential", "credentials"])
+const SECRET_KEY_SUFFIXES = ["apikey", "password", "token", "secret"]
+
+function isSecretFieldKey(key: string) {
+  const normalized = key.toLowerCase().replace(/[^a-z0-9]/g, "")
+  if (!normalized) return false
+  if (SECRET_KEY_EXACT.has(normalized)) return true
+  return SECRET_KEY_SUFFIXES.some((suffix) => normalized.endsWith(suffix))
+}
+
+function maskSecretsDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => maskSecretsDeep(item)) as T
+  }
+
+  if (isPlainObject(value)) {
+    const next: Record<string, unknown> = {}
+    for (const [key, item] of Object.entries(value)) {
+      if (isSecretFieldKey(key) && item !== null && item !== undefined && item !== "") {
+        next[key] = SECRET_MASK
+        continue
+      }
+      next[key] = maskSecretsDeep(item)
+    }
+    return next as T
+  }
+
+  return value
 }
 
 function sanitizeChannelsForClient(channels: Record<string, unknown>) {
@@ -209,12 +242,12 @@ export function organizationRoutes(db: Db): Router {
       const result = await runBootstrap(db, req.body)
       if (result && typeof result === "object" && "organization" in result && result.organization) {
         res.status(201).json({
-          ...result,
+          ...maskSecretsDeep(result),
           organization: sanitizeOrganizationForClient(result.organization as typeof schema.organizations.$inferSelect),
         })
         return
       }
-      res.status(201).json(result)
+      res.status(201).json(maskSecretsDeep(result))
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to bootstrap organization"
       const stack = err instanceof Error ? err.stack : undefined
@@ -534,7 +567,7 @@ export function organizationRoutes(db: Db): Router {
       const filename = `hagent-export-${safeName}-${new Date().toISOString().slice(0, 10)}.json`
       res.setHeader("Content-Disposition", `attachment; filename="${filename}"`)
       res.setHeader("Content-Type", "application/json")
-      res.json(payload)
+      res.json(maskSecretsDeep(payload))
     } catch (err) {
       res.status(500).json({ error: "Failed to export organization data" })
     }

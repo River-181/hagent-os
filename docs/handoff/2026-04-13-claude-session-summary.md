@@ -99,7 +99,7 @@ server/data/agents/{agent-id}/instructions/HEARTBEAT.md
 ```
 DATABASE_URL=        Neon PostgreSQL
 OPENAI_API_KEY=      Codex API (Anthropic API 없어서 대체)
-TELEGRAM_BOT_TOKEN=  8760061426:AAH10BKrbq0ZB6sCEimgiQ-z6Do8O2ZYnsI
+TELEGRAM_BOT_TOKEN=  ***REDACTED***
 PORT=3200
 NODE_ENV=production
 DEPLOYMENT_MODE=local_trusted
@@ -147,7 +147,7 @@ e0e0110  docs: Phase C 병렬 에이전트 오케스트레이터 프롬프트
    `https://divine-simplicity-production.up.railway.app` → "탄자니아 영어학원" 이름으로 demo mode 온보딩  
    → 케이스 25개 + 문서 12개 + 에이전트 5개 자동 시드
 2. **Telegram 봇 연결**  
-   Settings → 연결 → Telegram → 토큰 `8760061426:AAH10BKrbq0ZB6sCEimgiQ-z6Do8O2ZYnsI` 입력 → 웹훅 등록
+   Settings → 연결 → Telegram → 토큰 `***REDACTED***` 입력 → 웹훅 등록
 3. **README/JUDGE_DEMO의 조직 slug 업데이트** (라이브에서 생성된 slug 반영)
 
 **P1 — 제출 문서**:
