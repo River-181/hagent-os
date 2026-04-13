@@ -302,7 +302,7 @@ export function SettingsPage() {
   const [principalName, setPrincipalName] = useState("")
 
   const [primaryAdapterType, setPrimaryAdapterType] = useState("codex_qauth")
-  const [primaryModel, setPrimaryModel] = useState("gpt-5-codex")
+  const [primaryModel, setPrimaryModel] = useState("gpt-4o-mini")
   const [fallbackAdapterType, setFallbackAdapterType] = useState("claude_local")
   const [autoRun, setAutoRun] = useState(true)
   const [allowDegradedMode, setAllowDegradedMode] = useState(true)
@@ -380,7 +380,7 @@ export function SettingsPage() {
     setPrincipalName((general.principalName as string | undefined) ?? "원장")
 
     setPrimaryAdapterType((aiPolicy.primaryAdapterType as string | undefined) ?? (bootstrap.selectedAdapterType as string | undefined) ?? "codex_qauth")
-    setPrimaryModel((aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-5-codex")
+    setPrimaryModel((aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-4o-mini")
     setFallbackAdapterType((aiPolicy.fallbackAdapterType as string | undefined) ?? "claude_local")
     setAutoRun((aiPolicy.autoRun as boolean | undefined) ?? true)
     setAllowDegradedMode((aiPolicy.allowDegradedMode as boolean | undefined) ?? true)
@@ -389,8 +389,8 @@ export function SettingsPage() {
 
     const modelPricing =
       isObjectRecord(aiPolicy.modelPricing) ? (aiPolicy.modelPricing as Record<string, any>) : {}
-    const primaryPricing = isObjectRecord(modelPricing[(aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-5-codex"])
-      ? modelPricing[(aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-5-codex"]
+    const primaryPricing = isObjectRecord(modelPricing[(aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-4o-mini"])
+      ? modelPricing[(aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-4o-mini"]
       : {}
     const fallbackPricing = isObjectRecord(modelPricing["claude-sonnet-4-6"]) ? modelPricing["claude-sonnet-4-6"] : {}
     setPrimaryInputUnitCost(String(primaryPricing.inputPer1kKrw ?? primaryPricing.input ?? 6))
@@ -752,7 +752,7 @@ export function SettingsPage() {
             </Field>
             <Field label="기본 모델">
               <NativeSelect value={primaryModel} onChange={setPrimaryModel}>
-                  {(selectedAdapter?.availableModels ?? ["gpt-5-codex"]).map((model: string) => (
+                  {(selectedAdapter?.availableModels ?? ["gpt-4o-mini"]).map((model: string) => (
                     <option key={model} value={model}>
                       {model}
                     </option>

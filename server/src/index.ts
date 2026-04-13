@@ -8,6 +8,7 @@ import { loadConfig } from "./config.js"
 import { createApp } from "./app.js"
 import { startTelegramInboundPolling } from "./services/telegram-inbound-sync.js"
 import { autoSeedDemoOrganization } from "./services/auto-seed-demo.js"
+import { runStartupMigrations } from "./services/startup-migrations.js"
 
 const logger = pino({ level: "info" })
 
@@ -143,6 +144,8 @@ async function main() {
     }
   })()
 
+  // 기동 시 데이터 패치 마이그레이션 (gpt-5-codex → gpt-4o-mini 등)
+  void runStartupMigrations(db).catch((err) => logger.warn(err, "Startup migrations crashed"))
   // 심사위원용 "완성된 학원 OS" 자동 시드 (AUTO_SEED_DEMO=true 일 때만 동작, 멱등)
   void autoSeedDemoOrganization(db).catch((err) => logger.warn(err, "Auto-seed crashed"))
 

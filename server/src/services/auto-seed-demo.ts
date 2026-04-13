@@ -87,40 +87,40 @@ export async function autoSeedDemoOrganization(db: Db): Promise<void> {
       .where(eq(schema.organizations.prefix, DEMO_PREFIX))
 
     if (existing) {
-      // 이전 배포에서 skills/routines 없이 시드된 경우 보충
+      const agents = await db.select().from(schema.agents).where(eq(schema.agents.organizationId, existing.id))
+
+      // 스킬 백필 — 없을 때만
       const [skillCount] = await db
         .select({ n: schema.organizationSkills.organizationId })
         .from(schema.organizationSkills)
         .where(eq(schema.organizationSkills.organizationId, existing.id))
         .limit(1)
-      if (skillCount) {
-        logger.info({ orgId: existing.id }, "Demo organization fully seeded — skipping")
-        return
-      }
-
-      logger.info({ orgId: existing.id }, "Existing demo org missing skills — backfilling skills + routines")
-      const agents = await db.select().from(schema.agents).where(eq(schema.agents.organizationId, existing.id))
-      const allSlugs = Array.from(new Set(Object.values(DEMO_SKILL_SLUGS_BY_ROLE).flat()))
-      for (const slug of allSlugs) {
-        await installSkillForOrganization(db, existing.id, slug).catch(() => null)
-      }
-      for (const agent of agents) {
-        const slugs = DEMO_SKILL_SLUGS_BY_ROLE[agent.agentType] ?? []
-        if (slugs.length > 0) {
-          await updateAgentSkillMounts(
-            db,
-            agent.id,
-            slugs.map((slug, i) => ({ slug, enabled: true, mountOrder: i })),
-          ).catch(() => null)
+      if (!skillCount) {
+        logger.info({ orgId: existing.id }, "Backfilling skills for existing demo org")
+        const allSlugs = Array.from(new Set(Object.values(DEMO_SKILL_SLUGS_BY_ROLE).flat()))
+        for (const slug of allSlugs) {
+          await installSkillForOrganization(db, existing.id, slug).catch(() => null)
+        }
+        for (const agent of agents) {
+          const slugs = DEMO_SKILL_SLUGS_BY_ROLE[agent.agentType] ?? []
+          if (slugs.length > 0) {
+            await updateAgentSkillMounts(
+              db,
+              agent.id,
+              slugs.map((slug, i) => ({ slug, enabled: true, mountOrder: i })),
+            ).catch(() => null)
+          }
         }
       }
-      // 루틴은 중복 방지 — 없을 때만 삽입
-      const existingRoutines = await db
+
+      // 루틴 백필 — 없을 때만 (스킬 유무와 무관하게 독립 체크)
+      const [routineCount] = await db
         .select({ n: schema.routines.organizationId })
         .from(schema.routines)
         .where(eq(schema.routines.organizationId, existing.id))
         .limit(1)
-      if (existingRoutines.length === 0) {
+      if (!routineCount) {
+        logger.info({ orgId: existing.id }, "Backfilling routines for existing demo org")
         for (const routine of DEMO_ROUTINES) {
           const agent = routine.agentRole ? agents.find((a) => a.agentType === routine.agentRole) : null
           await db.insert(schema.routines).values({
@@ -132,7 +132,8 @@ export async function autoSeedDemoOrganization(db: Db): Promise<void> {
           }).catch(() => null)
         }
       }
-      logger.info({ orgId: existing.id }, "Backfill complete")
+
+      logger.info({ orgId: existing.id }, "Demo organization backfill check complete")
       return
     }
 
