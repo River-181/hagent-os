@@ -1,7 +1,8 @@
-import { randomBytes, scryptSync, timingSafeEqual } from "crypto"
+import { randomBytes, randomUUID, scryptSync, timingSafeEqual } from "crypto"
 import { and, desc, eq, inArray, isNull } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
+import { createCaseWithRetry } from "../lib/case-create.js"
 import { resolveCaseRunAgent } from "./case-run-routing.js"
 import { executeAgentRun } from "./execution.js"
 import { publishEvent } from "./live-events.js"
@@ -412,6 +413,130 @@ function mapStatusLabel(value: string) {
   if (["blocked", "보류", "막힘"].includes(normalized)) return "blocked"
   if (["done", "완료"].includes(normalized)) return "done"
   return normalized
+}
+
+function looksLikeScheduleQuestion(question: string) {
+  return /일정|보강|결석|상담 예약|시간표|캘린더|계획|행사|파티/.test(question)
+}
+
+function looksLikeRetentionQuestion(question: string) {
+  return /이탈|재등록|출결|결석률|지각/.test(question)
+}
+
+function looksLikeLegalQuestion(question: string) {
+  return /법|법정|학원법|환불|교습비|등록|운영 정책|정책|법령/.test(question)
+}
+
+async function pickQuickAskAgent(db: Db, organizationId: string, question: string) {
+  const agents = await db.select().from(schema.agents).where(eq(schema.agents.organizationId, organizationId))
+
+  if (looksLikeScheduleQuestion(question)) {
+    return (
+      agents.find((agent) => agent.agentType === "scheduler")
+      ?? agents.find((agent) => agent.agentType === "complaint")
+      ?? agents.find((agent) => agent.agentType === "orchestrator")
+      ?? agents[0]
+      ?? null
+    )
+  }
+
+  if (looksLikeRetentionQuestion(question)) {
+    return (
+      agents.find((agent) => agent.agentType === "retention")
+      ?? agents.find((agent) => agent.agentType === "complaint")
+      ?? agents.find((agent) => agent.agentType === "orchestrator")
+      ?? agents[0]
+      ?? null
+    )
+  }
+
+  if (looksLikeLegalQuestion(question)) {
+    return (
+      agents.find((agent) => agent.agentType === "complaint")
+      ?? agents.find((agent) => agent.agentType === "orchestrator")
+      ?? agents[0]
+      ?? null
+    )
+  }
+
+  return (
+    agents.find((agent) => agent.agentType === "complaint")
+    ?? agents.find((agent) => agent.agentType === "orchestrator")
+    ?? agents[0]
+    ?? null
+  )
+}
+
+async function handleNaturalLanguageRequest(
+  db: Db,
+  organization: typeof schema.organizations.$inferSelect,
+  actorId: string,
+  text: string,
+) {
+  const normalizedQuestion = text.trim()
+  const agent = await pickQuickAskAgent(db, organization.id, normalizedQuestion)
+  if (!agent) {
+    return "실행 가능한 에이전트를 찾지 못했습니다."
+  }
+
+  const caseKind = looksLikeLegalQuestion(normalizedQuestion) ? "legal-inquiry" : "quick-ask"
+  const createdCase = await createCaseWithRetry(db, {
+    organizationId: organization.id,
+    title: normalizedQuestion.length > 42 ? `${normalizedQuestion.slice(0, 42)}…` : normalizedQuestion,
+    description: normalizedQuestion,
+    type: "inquiry",
+    severity: "normal",
+    assigneeAgentId: agent.id,
+    priority: 3,
+    source: "telegram",
+    metadata: {
+      caseKind,
+      generatedBy: "telegram-owner-control",
+      origin: "telegram_owner_control",
+      threadId: `telegram:${actorId}`,
+      assistantSessionId: randomUUID(),
+    } as Record<string, unknown>,
+  })
+
+  await db.insert(schema.caseComments).values({
+    caseId: createdCase.id,
+    content: `${looksLikeLegalQuestion(normalizedQuestion) ? "[법률 질문 접수]" : "[운영 요청 접수]"}\n${normalizedQuestion}`,
+    authorType: "user",
+    authorId: "원장",
+  })
+
+  await db.insert(schema.activityEvents).values({
+    organizationId: organization.id,
+    actorType: "external",
+    actorId,
+    action: "case.created",
+    entityType: "case",
+    entityId: createdCase.id,
+    entityTitle: createdCase.title,
+    metadata: {
+      caseType: createdCase.type,
+      caseKind,
+      generatedBy: "telegram-owner-control",
+      agentId: agent.id,
+      source: "telegram_owner_control",
+    } as Record<string, unknown>,
+  })
+
+  await executeAgentRun(db, {
+    organizationId: organization.id,
+    agentId: agent.id,
+    caseId: createdCase.id,
+    agentType: agent.agentType,
+    approvalLevel: 0,
+  })
+
+  return buildOwnerControlResultMessage(
+    db,
+    organization.id,
+    createdCase.id,
+    `${createdCase.identifier} 요청을 접수했고 ${agent.name} 에이전트가 결과를 준비했습니다.`,
+    { includeApprovalHint: true },
+  )
 }
 
 function buildHelpText() {
@@ -1245,6 +1370,11 @@ export async function handleTelegramOwnerControlUpdate(
 
   const intent = parseIntent(update.text)
   if (!intent) {
+    if (activeChat && config.allowNaturalLanguage !== false) {
+      const message = await handleNaturalLanguageRequest(db, organization, `telegram:${update.chatId}`, update.text)
+      await sendOwnerMessage(binding, update.chatId, message)
+      return { handled: true as const }
+    }
     await sendOwnerMessage(binding, update.chatId, activeChat ? "지원하지 않는 요청입니다.\n\n도움말을 보려면 `도움말` 또는 `/help`를 보내세요." : "먼저 /login <password> 로 인증하거나, 도움말을 요청해 주세요.")
     return { handled: true as const }
   }
