@@ -1149,7 +1149,7 @@ function StudentDetailSheet({
   return (
     <>
       <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className={cn("w-full max-w-xl border-l p-0 sm:max-w-xl", themeClass.surface)}>
+        <SheetContent side="right" className={cn("min-h-0 w-full max-w-xl border-l p-0 sm:max-w-xl", themeClass.surface)}>
           {!mergedStudent ? (
             <div className={cn("flex h-full items-center justify-center", themeClass.textSecondary)}>
               학생을 선택하세요.
@@ -1187,8 +1187,8 @@ function StudentDetailSheet({
                   </SheetHeader>
                 )
               })()}
-              <ScrollArea className="h-[calc(100vh-4rem)]">
-                <div className="space-y-5 px-6 py-5">
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="space-y-5 px-6 py-5 pb-8">
                   <DetailSection icon={<User className={cn("h-4 w-4", themeClass.textSecondary)} />} title="기본 정보">
                     <div className={cn("grid gap-3 rounded-[18px] p-4 sm:grid-cols-2", themeClass.surfaceTertiary)}>
                         <div>
