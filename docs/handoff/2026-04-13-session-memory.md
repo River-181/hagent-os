@@ -11,10 +11,16 @@
 - 기준 서버:
   - API `3200`
   - UI `5174`
+- 현재 배포:
+  - platform = `Railway`
+  - build = `Dockerfile`
+  - live URL = `https://hagent-os.up.railway.app`
+  - health = `GET /api/health`
 
 ## 오늘까지 확정된 사실
 
 - `server typecheck`, `ui typecheck`는 통과 상태
+- live 배포는 `Railway` 기준으로 동작 중이며 `https://hagent-os.up.railway.app/api/health` 확인됨
 - 온보딩, Students, channel -> case, approval -> schedule, quick-ask -> document, routine trigger까지 D1 검증 완료
 - deep-link org mismatch는 수정됨
 - Dashboard recent inbound / documents는 1차 dedupe 적용됨

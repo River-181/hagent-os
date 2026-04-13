@@ -12,7 +12,7 @@
 이 세션에서 **디자인 시스템 정비 + 데모 데이터 강화 + Railway 배포**를 완료했다.  
 남은 것: **사용자가 직접 온보딩 + 텔레그램 봇 연결 + AI 리포트 docx 작성**.
 
-**라이브 URL**: `https://divine-simplicity-production.up.railway.app` ✅
+**라이브 URL**: `https://hagent-os.up.railway.app` ✅
 
 ---
 
@@ -83,7 +83,7 @@ server/data/agents/{agent-id}/instructions/HEARTBEAT.md
 
 ### 1-G. Railway 배포
 
-**URL**: `https://divine-simplicity-production.up.railway.app` ✅  
+**URL**: `https://hagent-os.up.railway.app` ✅  
 **프로젝트 ID**: `8820141d-ca2e-48a6-83ab-97ae268f0058`  
 **서비스 ID**: `c429f54d-3671-4227-b229-25fd13b099fe`
 
@@ -144,7 +144,7 @@ e0e0110  docs: Phase C 병렬 에이전트 오케스트레이터 프롬프트
 
 **P0 — 사람 직접 수행**:
 1. **라이브 URL 접속 → 온보딩**  
-   `https://divine-simplicity-production.up.railway.app` → "탄자니아 영어학원" 이름으로 demo mode 온보딩  
+   `https://hagent-os.up.railway.app` → "탄자니아 영어학원" 이름으로 demo mode 온보딩  
    → 케이스 25개 + 문서 12개 + 에이전트 5개 자동 시드
 2. **Telegram 봇 연결**  
    Settings → 연결 → Telegram → 토큰 `8760061426:AAH10BKrbq0ZB6sCEimgiQ-z6Do8O2ZYnsI` 입력 → 웹훅 등록
@@ -213,8 +213,8 @@ CSS 토큰: ui/src/index.css
 
 ## 5. 알려진 이슈 / 주의사항
 
-1. **`divine-simplicity-production.up.railway.app` URL**  
-   프로젝트 이름을 `hagent-os`로 변경해도 서비스 도메인은 그대로. 변경하려면 Railway 대시보드 → Settings → Domains → Edit.
+1. **현재 유효한 Railway URL은 `hagent-os.up.railway.app`**  
+   이전 문서에 남아 있던 `divine-simplicity-production.up.railway.app` 는 현재 `404 Application not found` 상태다. 심사/데모 기준 URL은 `https://hagent-os.up.railway.app` 로 본다.
 
 2. **AGENT_DATA_DIR 파일시스템 영속성**  
    Railway 컨테이너는 재배포마다 파일시스템 초기화. `server/data/agents/{id}/instructions/SOUL.md`는 재배포 후 사라진다.  
@@ -225,7 +225,7 @@ CSS 토큰: ui/src/index.css
 
 4. **테스트 데이터 잔재**  
    기존 탄자니아 데모 7 org(로컬): 테스트 케이스 61개 + 문서 120개 삭제 완료, 현재 깨끗함.  
-   라이브 배포본: 아직 온보딩 안 됨 → 깨끗한 상태.
+   라이브 배포본 기준 URL은 `https://hagent-os.up.railway.app`.
 
 5. **시드 데이터 중 케이스-학생 연결 미완성**  
    `rich-demo-seed.ts`의 케이스는 학생 이름을 title에 포함하지만 `studentId` 필드는 비어있음. 우선순위 낮음 (시연에선 중요하지 않음).

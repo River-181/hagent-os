@@ -132,7 +132,8 @@ corepack pnpm --filter @hagent/ui build
 - session log summary:
   - `output/session-logs/2026-04-13-students-case-session.md`
 - runtime note:
-  - `server`는 이미 `:3200`에서 listen 중이라 재기동하지 않음
+  - 초기에는 `server`가 이미 `:3200`에서 listen 중이었음
+  - 이후 법령 fallback 검증을 위해 `:3200` server를 최신 코드로 재기동함
   - `ui`는 `corepack pnpm --filter @hagent/ui dev`로 `:5174`에서 기동
 - rough token estimate:
   - input/context: `45k ~ 65k`
@@ -177,6 +178,7 @@ corepack pnpm --filter @hagent/ui build
   - `corepack pnpm --filter @hagent/server typecheck`
   - `PORT=3211 SKIP_SCHEMA_SYNC=true corepack pnpm --filter @hagent/server dev`
   - `curl -s -X POST http://localhost:3211/api/adapters/test -H 'Content-Type: application/json' -d '{"key":"korean-law-mcp"}'`
+  - 기존 `:3200` 서버를 최신 코드로 재기동 후 `curl -s -X POST http://localhost:3200/api/adapters/test -H 'Content-Type: application/json' -d '{"key":"korean-law-mcp"}'`
   - 결과 핵심:
     - `connected: true`
     - `degraded: false`

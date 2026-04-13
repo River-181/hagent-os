@@ -3,6 +3,7 @@ import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { classifyInboundMessage } from "../lib/channel-message-heuristics.js"
 import { processChannelInbound } from "../routes/webhook.js"
+import { handleTelegramOwnerControlUpdate } from "./telegram-owner-control.js"
 
 type TelegramChannelBinding = {
   enabled?: boolean
@@ -148,6 +149,13 @@ export async function syncTelegramInboundForOrganization(
   for (const update of updates) {
     if (typeof update.update_id === "number") {
       lastSeenUpdateId = update.update_id
+    }
+    if (isPlainObject(update)) {
+      const ownerControlResult = await handleTelegramOwnerControlUpdate(db, organization, update)
+      if (ownerControlResult.handled) {
+        processed += 1
+        continue
+      }
     }
     const normalized = normalizeTelegramUpdate(update)
     if (!normalized) {

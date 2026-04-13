@@ -354,9 +354,178 @@ async function scanSkillPackages(): Promise<SkillPackageRecord[]> {
   return packages.sort((a, b) => a.manifest.displayName.localeCompare(b.manifest.displayName, "ko"))
 }
 
+function scoreSkillPackage(pkg: SkillPackageRecord) {
+  let score = 0
+  if (pkg.manifest.namespace === "hagent") score += 100
+  if (pkg.manifest.packageType === "builtin") score += 20
+  if (pkg.manifest.source.kind === "local") score += 10
+  if (pkg.manifest.distribution.editable) score += 5
+  if (pkg.manifest.forkOf) score += 2
+  return score
+}
+
+function dedupeSkillPackages(packages: SkillPackageRecord[]) {
+  const bySlug = new Map<string, SkillPackageRecord>()
+
+  for (const pkg of packages) {
+    const existing = bySlug.get(pkg.manifest.slug)
+    if (!existing) {
+      bySlug.set(pkg.manifest.slug, pkg)
+      continue
+    }
+
+    const existingScore = scoreSkillPackage(existing)
+    const nextScore = scoreSkillPackage(pkg)
+    if (nextScore > existingScore) {
+      bySlug.set(pkg.manifest.slug, pkg)
+      continue
+    }
+
+    if (nextScore === existingScore && pkg.manifest.namespace.localeCompare(existing.manifest.namespace, "ko") < 0) {
+      bySlug.set(pkg.manifest.slug, pkg)
+    }
+  }
+
+  return Array.from(bySlug.values()).sort((a, b) => a.manifest.displayName.localeCompare(b.manifest.displayName, "ko"))
+}
+
+function groupSkillPackagesBySlug(packages: SkillPackageRecord[]) {
+  const bySlug = new Map<string, SkillPackageRecord[]>()
+  for (const pkg of packages) {
+    const list = bySlug.get(pkg.manifest.slug) ?? []
+    list.push(pkg)
+    bySlug.set(pkg.manifest.slug, list)
+  }
+  return bySlug
+}
+
+function isNonEmptyObject(value: unknown) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value) && Object.keys(value as Record<string, unknown>).length > 0)
+}
+
+async function cleanupDuplicateSkillPackageRows(db: Db, packages: SkillPackageRecord[]) {
+  const grouped = groupSkillPackagesBySlug(packages)
+
+  for (const [slug, group] of grouped) {
+    if (group.length <= 1) continue
+
+    const canonical = dedupeSkillPackages(group)[0]
+    if (!canonical) continue
+
+    const dbRows = await db
+      .select({
+        id: schema.skillPackages.id,
+        namespace: schema.skillPackages.namespace,
+        slug: schema.skillPackages.slug,
+      })
+      .from(schema.skillPackages)
+      .where(eq(schema.skillPackages.slug, slug))
+
+    if (dbRows.length <= 1) continue
+
+    const canonicalRow = dbRows.find((row) => row.namespace === canonical.manifest.namespace)
+    if (!canonicalRow) continue
+
+    const duplicateRows = dbRows.filter((row) => row.id !== canonicalRow.id)
+    if (duplicateRows.length === 0) continue
+
+    const duplicateIds = duplicateRows.map((row) => row.id)
+
+    const orgRows = await db
+      .select()
+      .from(schema.organizationSkills)
+      .where(inArray(schema.organizationSkills.skillPackageId, duplicateIds))
+
+    for (const row of orgRows) {
+      const [existing] = await db
+        .select()
+        .from(schema.organizationSkills)
+        .where(
+          and(
+            eq(schema.organizationSkills.organizationId, row.organizationId),
+            eq(schema.organizationSkills.skillPackageId, canonicalRow.id),
+          ),
+        )
+
+      if (existing) {
+        await db
+          .update(schema.organizationSkills)
+          .set({
+            status: existing.status === "installed" || row.status === "installed" ? "installed" : existing.status,
+            configJson: isNonEmptyObject(existing.configJson) ? existing.configJson : row.configJson,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.organizationSkills.id, existing.id))
+
+        await db.delete(schema.organizationSkills).where(eq(schema.organizationSkills.id, row.id))
+        continue
+      }
+
+      await db
+        .update(schema.organizationSkills)
+        .set({
+          skillPackageId: canonicalRow.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.organizationSkills.id, row.id))
+    }
+
+    const agentRows = await db
+      .select()
+      .from(schema.agentSkills)
+      .where(inArray(schema.agentSkills.skillPackageId, duplicateIds))
+
+    for (const row of agentRows) {
+      const [existing] = await db
+        .select()
+        .from(schema.agentSkills)
+        .where(
+          and(
+            eq(schema.agentSkills.agentId, row.agentId),
+            eq(schema.agentSkills.skillPackageId, canonicalRow.id),
+          ),
+        )
+
+      if (existing) {
+        await db
+          .update(schema.agentSkills)
+          .set({
+            enabled: existing.enabled || row.enabled,
+            mountOrder: Math.min(existing.mountOrder, row.mountOrder),
+            overrideJson: isNonEmptyObject(existing.overrideJson) ? existing.overrideJson : row.overrideJson,
+            updatedAt: new Date(),
+          })
+          .where(eq(schema.agentSkills.id, existing.id))
+
+        await db.delete(schema.agentSkills).where(eq(schema.agentSkills.id, row.id))
+        continue
+      }
+
+      await db
+        .update(schema.agentSkills)
+        .set({
+          skillPackageId: canonicalRow.id,
+          updatedAt: new Date(),
+        })
+        .where(eq(schema.agentSkills.id, row.id))
+    }
+
+    await db
+      .update(schema.skillSyncJobs)
+      .set({
+        skillPackageId: canonicalRow.id,
+        updatedAt: new Date(),
+      })
+      .where(inArray(schema.skillSyncJobs.skillPackageId, duplicateIds))
+
+    await db.delete(schema.skillPackages).where(inArray(schema.skillPackages.id, duplicateIds))
+  }
+}
+
 async function syncRegistryToDb(db: Db, packages: SkillPackageRecord[]) {
   try {
-    for (const pkg of packages) {
+    const canonicalPackages = dedupeSkillPackages(packages)
+    for (const pkg of canonicalPackages) {
       await db
         .insert(schema.skillPackages)
         .values(packageDbPayload(pkg.manifest))
@@ -365,6 +534,7 @@ async function syncRegistryToDb(db: Db, packages: SkillPackageRecord[]) {
           set: packageDbPayload(pkg.manifest),
         })
     }
+    await cleanupDuplicateSkillPackageRows(db, packages)
   } catch {
     // DB migration may not be applied yet. Filesystem remains source of truth.
   }
@@ -483,8 +653,9 @@ function computeRuntimeHealth(manifest: SkillPackageManifest): RuntimeHealthItem
 }
 
 async function getPackagesWithMeta(db: Db, orgId?: string) {
-  const packages = await scanSkillPackages()
-  await syncRegistryToDb(db, packages)
+  const scannedPackages = await scanSkillPackages()
+  await syncRegistryToDb(db, scannedPackages)
+  const packages = dedupeSkillPackages(scannedPackages)
   const installMap = await fetchInstalledMap(db, orgId)
   const mountMap = await fetchAgentMountsForOrg(db, orgId)
 
@@ -793,12 +964,16 @@ function inferLanguage(filePath: string) {
   return "text"
 }
 
-async function resolveSkillPackageId(db: Db, slug: string) {
+async function resolveSkillPackageId(db: Db, input: { slug: string; namespace?: string }) {
   try {
+    const conditions = [eq(schema.skillPackages.slug, input.slug)]
+    if (input.namespace) {
+      conditions.push(eq(schema.skillPackages.namespace, input.namespace))
+    }
     const [record] = await db
       .select()
       .from(schema.skillPackages)
-      .where(eq(schema.skillPackages.slug, slug))
+      .where(and(...conditions))
     return record?.id ?? null
   } catch {
     return null
@@ -807,7 +982,10 @@ async function resolveSkillPackageId(db: Db, slug: string) {
 
 export async function installSkillForOrganization(db: Db, orgId: string, slug: string) {
   const pkg = await resolvePackage(db, slug, orgId)
-  const packageId = await resolveSkillPackageId(db, slug)
+  const packageId = await resolveSkillPackageId(db, {
+    slug: pkg.manifest.slug,
+    namespace: pkg.manifest.namespace,
+  })
   if (!packageId) {
     return { installed: false, reason: "DB migration not applied" }
   }
@@ -833,7 +1011,11 @@ export async function installSkillForOrganization(db: Db, orgId: string, slug: s
 }
 
 export async function uninstallSkillForOrganization(db: Db, orgId: string, slug: string) {
-  const packageId = await resolveSkillPackageId(db, slug)
+  const pkg = await resolvePackage(db, slug, orgId)
+  const packageId = await resolveSkillPackageId(db, {
+    slug: pkg.manifest.slug,
+    namespace: pkg.manifest.namespace,
+  })
   if (!packageId) return
 
   await db
@@ -852,7 +1034,11 @@ export async function updateOrganizationSkillConfig(
   slug: string,
   config: Record<string, unknown>,
 ) {
-  const packageId = await resolveSkillPackageId(db, slug)
+  const pkg = await resolvePackage(db, slug, orgId)
+  const packageId = await resolveSkillPackageId(db, {
+    slug: pkg.manifest.slug,
+    namespace: pkg.manifest.namespace,
+  })
   if (!packageId) throw new Error("Skill package is not indexed yet")
 
   await db
@@ -887,7 +1073,16 @@ export async function updateAgentSkillMounts(
   }
 
   const packageIds = await Promise.all(
-    slugs.map(async (slug) => ({ slug, id: await resolveSkillPackageId(db, slug) })),
+    slugs.map(async (slug) => {
+      const pkg = await resolvePackage(db, slug)
+      return {
+        slug,
+        id: await resolveSkillPackageId(db, {
+          slug: pkg.manifest.slug,
+          namespace: pkg.manifest.namespace,
+        }),
+      }
+    }),
   )
   const validPackages = packageIds.filter((entry): entry is { slug: string; id: string } => Boolean(entry.id))
 
@@ -1091,7 +1286,10 @@ export async function runSkillSyncCheck(db: Db, slug: string) {
   const pkg = await resolvePackage(db, slug)
   try {
     await db.insert(schema.skillSyncJobs).values({
-      skillPackageId: await resolveSkillPackageId(db, slug),
+      skillPackageId: await resolveSkillPackageId(db, {
+        slug: pkg.manifest.slug,
+        namespace: pkg.manifest.namespace,
+      }),
       jobType: "sync-check",
       sourceKind: pkg.manifest.source.kind,
       sourceLocator: pkg.manifest.source.repo ?? pkg.manifest.source.url ?? pkg.manifest.source.path ?? pkg.manifest.id,

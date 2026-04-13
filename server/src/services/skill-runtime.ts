@@ -1,5 +1,7 @@
 import type { Db } from "@hagent/db"
-import { getAgentMountedSkills } from "./skills.js"
+import { eq } from "drizzle-orm"
+import * as schema from "@hagent/db"
+import { getAgentMountedSkills, getSkillDetail } from "./skills.js"
 
 export interface RuntimeSkillBundle {
   slug: string
@@ -34,12 +36,15 @@ function collectSection(markdown: string, headingPatterns: RegExp[]) {
 }
 
 function summarizeSkillMarkdown(markdown: string) {
-  const purpose = collectSection(markdown, [/목적/, /Purpose/i])
-  const checklist = collectSection(markdown, [/체크리스트/, /실행 가이드/, /usage/i, /guide/i])
-  const output = collectSection(markdown, [/출력/, /output/i])
-  const integrations = collectSection(markdown, [/연동 의존성/, /integration/i, /dependency/i])
+  const useWhen = collectSection(markdown, [/Use This Skill When/i, /사용할 때/i, /목적/, /Purpose/i])
+  const inputs = collectSection(markdown, [/Required Inputs/i, /입력/i])
+  const source = collectSection(markdown, [/Source of Truth/i, /정본/i])
+  const workflow = collectSection(markdown, [/Workflow/i, /실행 가이드/i, /체크리스트/i])
+  const rules = collectSection(markdown, [/Decision Rules/i, /Guardrails/i, /규칙/i])
+  const failure = collectSection(markdown, [/Failure Handling/i, /실패/i, /fallback/i])
+  const done = collectSection(markdown, [/Done When/i, /완료/i])
 
-  const parts = [purpose, checklist, output, integrations].filter(Boolean)
+  const parts = [useWhen, inputs, source, workflow, rules, failure, done].filter(Boolean)
   if (parts.length > 0) return parts.join("\n\n")
 
   return markdown
@@ -50,22 +55,32 @@ function summarizeSkillMarkdown(markdown: string) {
 }
 
 export async function buildAgentSkillRuntimeContext(db: Db, agentId: string) {
+  const [agent] = await db.select().from(schema.agents).where(eq(schema.agents.id, agentId))
   const mounted = await getAgentMountedSkills(db, agentId)
-  const bundles: RuntimeSkillBundle[] = mounted
+  const bundles: RuntimeSkillBundle[] = await Promise.all(
+    mounted
     .filter((item) => item.enabled !== false)
     .sort((a, b) => (a.mountOrder ?? 0) - (b.mountOrder ?? 0))
-    .map((item) => ({
-      slug: item.slug,
-      displayName: item.displayName ?? item.slug,
-      summary: item.summary ?? "",
-      mountOrder: item.mountOrder ?? 0,
-      requiredIntegrations: [],
-      requiredEnv: Array.isArray(item.runtimeHealth)
-        ? item.runtimeHealth.flatMap((health: { requiredEnv?: string[] }) => health.requiredEnv ?? [])
-        : [],
-      ready: Array.isArray(item.runtimeHealth) ? item.runtimeHealth.every((health: { ready?: boolean }) => health.ready !== false) : true,
-      excerpt: summarizeSkillMarkdown(String(item.summary ?? "")),
-    }))
+    .map(async (item) => {
+      const detail = agent ? await getSkillDetail(db, item.slug, agent.organizationId).catch(() => null) : null
+      const runtimeHealth = Array.isArray(item.runtimeHealth) ? item.runtimeHealth : []
+      const requiredIntegrations = detail?.runtime?.requiredIntegrations
+        ?? runtimeHealth.flatMap((health: { key?: string }) => (typeof health.key === "string" ? [health.key] : []))
+      const requiredEnv = detail?.runtime?.requiredEnv
+        ?? runtimeHealth.flatMap((health: { requiredEnv?: string[] }) => health.requiredEnv ?? [])
+      const skillMarkdown = detail?.skillMarkdown ?? ""
+      return {
+        slug: item.slug,
+        displayName: item.displayName ?? item.slug,
+        summary: item.summary ?? "",
+        mountOrder: item.mountOrder ?? 0,
+        requiredIntegrations,
+        requiredEnv,
+        ready: runtimeHealth.length > 0 ? runtimeHealth.every((health: { ready?: boolean }) => health.ready !== false) : true,
+        excerpt: summarizeSkillMarkdown(skillMarkdown || String(item.summary ?? "")),
+      }
+    }),
+  )
 
   const text =
     bundles.length === 0

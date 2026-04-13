@@ -5,25 +5,63 @@ description: 한글(HWPX) 문서 처리와 산출물 연결 흐름을 케이스/
 
 # HWPX 문서 자동화 Pack
 
-## 목적
+## Use This Skill When
 
-- 한글(HWPX) 문서 초안, 정책 문서, 안내문 산출물을 실제 파일 처리 흐름과 연결합니다.
-- case/project 결과물을 문서 작업으로 이어주는 운영 pack입니다.
+- HWPX 문서 처리와 산출물 연결을 케이스/프로젝트 흐름에 붙여야 할 때
 
-## 구성
+## Required Inputs
 
-- hwpx-document-processor
-- message-template-pack
-- hwpx-cli
+- 문서 종류
+- 템플릿 경로
+- 필수 필드
+- 출력 위치
+- 승인 여부
 
-## 실행 가이드
+## Preflight
 
-- 먼저 HWPX 처리 경로와 출력 디렉터리를 확인합니다.
-- 산출물은 원문, 요약, 배포용 초안으로 분리합니다.
-- 결과는 case/project 문서와 연결 가능한 형태로 반환합니다.
+- 대상 조직과 현재 작업 컨텍스트를 먼저 확인합니다.
+- 기존 케이스, 문서, 학생, 일정 중 무엇이 정본인지 확인합니다.
+- Required integrations: `hwpx-cli`
 
-## 추천 진입점
+## Source of Truth
 
-- Project detail
-- Document-heavy case
-- Onboarding document setup
+- 원본 템플릿과 입력 필드가 정본입니다.
+
+## Workflow
+
+- 읽기/쓰기/변환 중 어떤 작업인지 먼저 정합니다.
+- 템플릿 필드와 실제 입력값을 매핑합니다.
+- 문서 생성 후 연결할 Case/Project/Approval 위치를 정합니다.
+- 수동 검토가 필요한 부분을 표시합니다.
+
+## Decision Rules
+
+- 서식이 깨질 수 있는 구간은 미검증으로 남깁니다.
+
+## Output Contract
+
+- 실행 순서
+- 하위 스킬 구성
+- 승인 필요 단계
+- 미준비 의존성
+
+## Failure Handling
+
+- 템플릿 필드가 모자라면 임의 채우기보다 누락값을 반환합니다.
+
+## Guardrails
+
+- 확인되지 않은 사실을 실행 완료처럼 말하지 않습니다.
+- 외부 발송, 환불, 일정 변경처럼 운영 영향이 큰 작업은 approval 필요 여부를 먼저 표시합니다.
+- integration이 없거나 degraded면 수동 fallback과 다음 조치를 같이 적습니다.
+
+## Done When
+
+- 생성 경로와 수동 검토 포인트가 함께 남습니다.
+
+## Runtime Fit
+
+- Recommended agents: `staff`, `orchestrator`, `compliance`
+- Common entrypoints: `case`, `project`, `onboarding`
+- Adapter compatibility: `codex_local`, `claude_local`
+- Locale: `ko-KR`
