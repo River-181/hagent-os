@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { Outlet, useParams } from "react-router-dom"
+import { Outlet, useNavigate, useParams } from "react-router-dom"
 import { OrganizationRail } from "./OrganizationRail"
 import { Sidebar } from "./Sidebar"
 import { BreadcrumbBar } from "./BreadcrumbBar"
@@ -14,15 +14,32 @@ import { useSSE } from "@/hooks/useSSE"
 export function Layout() {
   const { sidebarOpen, isMobile, closeSidebar } = useSidebar()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
-  const { setSelectedOrgByPrefix, isLoading, selectedOrgId } = useOrganization()
+  const navigate = useNavigate()
+  const { setSelectedOrgByPrefix, isLoading, selectedOrgId, organizations } = useOrganization()
 
   useSSE(selectedOrgId)
 
   useEffect(() => {
-    if (orgPrefix && !isLoading) {
+    if (!orgPrefix || isLoading) return
+
+    const matchedOrganization = organizations.find(
+      (organization) => organization.prefix === orgPrefix || organization.slug === orgPrefix,
+    )
+
+    if (matchedOrganization) {
       setSelectedOrgByPrefix(orgPrefix)
+      return
     }
-  }, [orgPrefix, isLoading, setSelectedOrgByPrefix])
+
+    if (organizations.length === 0) return
+
+    const fallbackOrganization =
+      organizations.find((organization) => organization.id === selectedOrgId) ?? organizations[0]
+
+    if (fallbackOrganization?.prefix && fallbackOrganization.prefix !== orgPrefix) {
+      navigate(`/${fallbackOrganization.prefix}/dashboard`, { replace: true })
+    }
+  }, [orgPrefix, isLoading, navigate, organizations, selectedOrgId, setSelectedOrgByPrefix])
 
   return (
     <div

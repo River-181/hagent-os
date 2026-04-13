@@ -461,6 +461,14 @@ const STARTER_SKILLS: Record<string, string[]> = {
   scheduler: ["google-calendar-mcp", "schedule-manager", "schedule-optimizer"],
 }
 
+const DEMO_ROUTINES: Array<{ role: string | null; name: string; schedule: string }> = [
+  { role: "orchestrator", name: "매일 오전 9시 브리핑", schedule: "0 9 * * *" },
+  { role: "complaint", name: "민원 답변 초안 자동 생성", schedule: "*/15 * * * *" },
+  { role: "retention", name: "주 1회 이탈 위험 학생 리포트", schedule: "0 10 * * MON" },
+  { role: "scheduler", name: "내일 수업 리마인더 발송", schedule: "0 20 * * *" },
+  { role: null, name: "월 1회 수강료 미납 알림", schedule: "0 9 1 * *" },
+]
+
 const ROLE_PRESETS: Record<
   string,
   {
@@ -1384,6 +1392,20 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
     // demo 모드: 풍부한 케이스 이력 + CEO 메모리 시드
     if (input.mode === "demo") {
       await seedRichDemoData(db, organization.id, createdAgents)
+
+      for (const routine of DEMO_ROUTINES) {
+        const agent = routine.role
+          ? createdAgents.find((candidate) => candidate.slug === routine.role)
+          : null
+
+        await db.insert(schema.routines).values({
+          organizationId: organization.id,
+          agentId: agent?.id ?? null,
+          name: routine.name,
+          schedule: routine.schedule,
+          enabled: true,
+        }).catch(() => null)
+      }
     }
 
     return {

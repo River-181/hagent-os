@@ -241,7 +241,11 @@ export function DashboardPage() {
 
   // ── derived ────────────────────────────────────────────────────────────────
   const activeCases = (cases as any[]).filter(
-    (c: any) => c.status === "open" || c.status === "in_progress"
+    (c: any) =>
+      c.status === "open" ||
+      c.status === "todo" ||
+      c.status === "in_progress" ||
+      c.status === "in_review"
   )
   const pendingApprovals = (approvals as any[]).filter(
     (a: any) => a.status === "pending" && !isDoneCaseApproval(a)

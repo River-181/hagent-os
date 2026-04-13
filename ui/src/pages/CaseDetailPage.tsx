@@ -2,7 +2,7 @@ import React, { useEffect, useState, useContext, useMemo } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
-import { useOrganization } from "@/context/OrganizationContext"
+import { useActiveOrgId } from "@/context/OrganizationContext"
 import { casesApi } from "@/api/cases"
 import { agentsApi } from "@/api/agents"
 import { approvalsApi } from "@/api/approvals"
@@ -309,14 +309,15 @@ function AgentDraftSection({
   caseId,
   draft,
   approvalId,
+  orgId,
 }: {
   caseId: string
   draft: string
   approvalId?: string
+  orgId?: string | null
 }) {
   const toast = useContext(ToastContext)
   const queryClient = useQueryClient()
-  const { selectedOrgId } = useOrganization()
 
   const approve = useMutation({
     mutationFn: () => approvalsApi.approve(approvalId!),
@@ -324,7 +325,7 @@ function AgentDraftSection({
       toast?.success("초안이 승인되었습니다.")
       queryClient.invalidateQueries({ queryKey: queryKeys.cases.detail(caseId) })
       queryClient.invalidateQueries({
-        queryKey: queryKeys.approvals.list(selectedOrgId ?? ""),
+        queryKey: queryKeys.approvals.list(orgId ?? ""),
       })
     },
     onError: () => toast?.error("승인 중 오류가 발생했습니다."),
@@ -336,7 +337,7 @@ function AgentDraftSection({
       toast?.info("초안이 반려되었습니다.")
       queryClient.invalidateQueries({ queryKey: queryKeys.cases.detail(caseId) })
       queryClient.invalidateQueries({
-        queryKey: queryKeys.approvals.list(selectedOrgId ?? ""),
+        queryKey: queryKeys.approvals.list(orgId ?? ""),
       })
     },
     onError: () => toast?.error("반려 중 오류가 발생했습니다."),
@@ -611,8 +612,8 @@ function ChatThread({
 
 export function CaseDetailPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
-  const { selectedOrgId } = useOrganization()
   const { orgPrefix, id } = useParams<{ orgPrefix: string; id: string }>()
+  const activeOrgId = useActiveOrgId(orgPrefix)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const toast = useContext(ToastContext)
@@ -635,19 +636,19 @@ export function CaseDetailPage() {
     enabled: !!id,
   })
   const { data: orgActivity = [] } = useQuery({
-    queryKey: [...queryKeys.activity.list(selectedOrgId ?? ""), "case-detail", id],
-    queryFn: () => activityApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: [...queryKeys.activity.list(activeOrgId ?? ""), "case-detail", id],
+    queryFn: () => activityApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
   const { data: organizationAgents = [] } = useQuery<any[]>({
-    queryKey: queryKeys.agents.list(selectedOrgId ?? ""),
-    queryFn: () => agentsApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.agents.list(activeOrgId ?? ""),
+    queryFn: () => agentsApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
   const { data: organizationProjects = [] } = useQuery<any[]>({
-    queryKey: queryKeys.projects.list(selectedOrgId ?? ""),
-    queryFn: () => projectsApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.projects.list(activeOrgId ?? ""),
+    queryFn: () => projectsApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
 
   // ── breadcrumbs ────────────────────────────────────────────────────────────
@@ -668,7 +669,7 @@ export function CaseDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.cases.detail(id!) })
       queryClient.invalidateQueries({
-        queryKey: queryKeys.cases.list(selectedOrgId ?? ""),
+        queryKey: queryKeys.cases.list(activeOrgId ?? ""),
       })
     },
     onError: () => toast?.error("변경에 실패했습니다."),
@@ -679,7 +680,7 @@ export function CaseDetailPage() {
     mutationFn: async () => {
       return api.post("/orchestrator/dispatch", {
         instruction: `케이스 "${caseData?.title}" (${caseData?.type}) 처리. 설명: ${caseData?.description ?? '없음'}`,
-        organizationId: selectedOrgId!,
+        organizationId: activeOrgId!,
       })
     },
     onSuccess: () => {
@@ -699,8 +700,8 @@ export function CaseDetailPage() {
     onSuccess: () => {
       toast?.success("승인 상태를 갱신했습니다.")
       void queryClient.invalidateQueries({ queryKey: queryKeys.cases.detail(id!) })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(selectedOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(activeOrgId ?? "") })
     },
     onError: () => toast?.error("승인 처리에 실패했습니다."),
   })
@@ -734,8 +735,8 @@ export function CaseDetailPage() {
                 : `${channelLabel} 회신 상태를 갱신했습니다.`,
       )
       void queryClient.invalidateQueries({ queryKey: queryKeys.cases.detail(id!) })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(selectedOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(activeOrgId ?? "") })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(activeOrgId ?? "") })
     },
     onError: () => toast?.error(`${resolveChannelLabel(caseData?.source)} 회신 처리에 실패했습니다.`),
   })
@@ -776,10 +777,10 @@ export function CaseDetailPage() {
     mutationFn: () => casesApi.delete(id!),
     onSuccess: async () => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(selectedOrgId ?? "") }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(selectedOrgId ?? "") }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.documents.list(selectedOrgId ?? "") }),
-        queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(selectedOrgId ?? "") }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.cases.list(activeOrgId ?? "") }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.approvals.list(activeOrgId ?? "") }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.documents.list(activeOrgId ?? "") }),
+        queryClient.invalidateQueries({ queryKey: queryKeys.activity.list(activeOrgId ?? "") }),
       ])
       toast?.success("케이스를 삭제했습니다.")
       if (orgPrefix) navigate(`/${orgPrefix}/cases`)
@@ -990,7 +991,7 @@ export function CaseDetailPage() {
             <CapabilityWorkspacePanel
               title="스킬 관리"
               description="현재 케이스에 맞는 스킬 묶음과 최근 사용된 스킬을 같은 패널에서 설치, 장착, 제거까지 처리합니다."
-              orgId={selectedOrgId}
+              orgId={activeOrgId}
               orgPrefix={orgPrefix}
               availableAgents={organizationAgents}
               lockedAgentId={caseData?.assigneeAgentId ?? caseData?.assignee_agent_id ?? caseData?.assignee?.id ?? caseData?.agent?.id ?? null}
@@ -1036,7 +1037,7 @@ export function CaseDetailPage() {
     recommendedCapabilities,
     organizationAgents,
     organizationProjects,
-    selectedOrgId,
+    activeOrgId,
     setPanelContent,
     status,
     usedSkills,
@@ -1181,7 +1182,7 @@ export function CaseDetailPage() {
               variant="outline"
               className="h-8 gap-1.5 text-xs"
               onClick={() => {
-                if (selectedOrgId) {
+                if (activeOrgId) {
                   dispatchForCase.mutate()
                 }
               }}
@@ -1296,6 +1297,7 @@ export function CaseDetailPage() {
             caseId={caseData.id}
             draft={agentDraft}
             approvalId={pendingApproval?.id}
+            orgId={activeOrgId}
           />
         )}
 
@@ -1528,12 +1530,12 @@ export function CaseDetailPage() {
 
             {activeTab === "activity" ? (
               <div className="space-y-6">
-                {hasActiveRun && selectedOrgId ? (
+                {hasActiveRun && activeOrgId ? (
                   <div>
                     <h2 className="mb-3 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
                       Live runs
                     </h2>
-                    <LiveRunWidget caseId={caseData.id} organizationId={selectedOrgId} />
+                    <LiveRunWidget caseId={caseData.id} organizationId={activeOrgId} />
                   </div>
                 ) : null}
 

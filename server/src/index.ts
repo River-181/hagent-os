@@ -13,14 +13,14 @@ import { runStartupMigrations } from "./services/startup-migrations.js"
 const logger = pino({ level: "info" })
 
 /**
- * 외부 DATABASE_URL(Neon 등) 사용 시, 서버 부팅 직전에 drizzle-kit push --force 를 실행해
+ * 서버가 사용할 DB connectionString 기준으로 drizzle-kit push --force 를 실행해
  * 스키마 drift 를 자동 보정한다.
  * - 실패해도 서버는 계속 기동 (non-fatal)
- * - 로컬 embedded-postgres 모드에서는 스킵
+ * - embedded-postgres 첫 실행에서도 초기 테이블을 자동 생성한다.
  * - SKIP_SCHEMA_SYNC=true 면 스킵
  */
-async function syncSchemaIfNeeded(databaseUrl: string | null | undefined): Promise<void> {
-  if (!databaseUrl) return
+async function syncSchemaIfNeeded(connectionString: string | null | undefined): Promise<void> {
+  if (!connectionString) return
   if (process.env.SKIP_SCHEMA_SYNC === "true") {
     logger.info("Schema sync skipped (SKIP_SCHEMA_SYNC=true)")
     return
@@ -47,7 +47,7 @@ async function syncSchemaIfNeeded(databaseUrl: string | null | undefined): Promi
   await new Promise<void>((resolve) => {
     const child = spawn(bin, ["push", "--force"], {
       cwd: dbPkgDir,
-      env: { ...process.env, DATABASE_URL: databaseUrl },
+      env: { ...process.env, DATABASE_URL: connectionString },
       stdio: ["ignore", "pipe", "pipe"],
     })
     child.stdout?.on("data", (chunk) => logger.info({ phase: "schema-sync" }, chunk.toString().trim()))
@@ -77,7 +77,7 @@ async function main() {
     const pgPort = await detectPort(5432)
 
     const dataDir = path.resolve(config.embeddedPostgresDataDir)
-    const alreadyInitialised = fs.existsSync(path.join(dataDir, "data", "PG_VERSION"))
+    const alreadyInitialised = fs.existsSync(path.join(dataDir, "PG_VERSION"))
 
     // 동적 import — DATABASE_URL 있을 때는 로드하지 않음 (바이너리 없어도 안전)
     const { default: EmbeddedPostgres } = await import("embedded-postgres")
@@ -115,8 +115,8 @@ async function main() {
     }
   }
 
-  // 스키마 drift 자동 보정 (외부 DATABASE_URL 한정)
-  await syncSchemaIfNeeded(config.databaseUrl)
+  // 스키마 drift 자동 보정 (외부 DB + embedded 첫 실행 공통)
+  await syncSchemaIfNeeded(connectionString)
 
   const db = createDb(connectionString)
   logger.info("Database connection established")
@@ -144,7 +144,7 @@ async function main() {
     }
   })()
 
-  // 기동 시 데이터 패치 마이그레이션 (gpt-5-codex → gpt-4o-mini 등)
+  // 기동 시 데이터 패치 마이그레이션 (현재는 autoRun 기본값 보정만 수행)
   void runStartupMigrations(db).catch((err) => logger.warn(err, "Startup migrations crashed"))
   // 심사위원용 "완성된 학원 OS" 자동 시드 (AUTO_SEED_DEMO=true 일 때만 동작, 멱등)
   void autoSeedDemoOrganization(db).catch((err) => logger.warn(err, "Auto-seed crashed"))

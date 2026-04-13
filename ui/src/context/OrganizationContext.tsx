@@ -1,4 +1,5 @@
 import {
+  useCallback,
   createContext,
   useContext,
   useEffect,
@@ -33,22 +34,30 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
   })
 
   useEffect(() => {
-    if (!selectedOrgId && organizations.length > 0) {
-      setSelectedOrgIdState(organizations[0].id)
+    if (organizations.length === 0) return
+
+    const hasSelectedOrganization = selectedOrgId
+      ? organizations.some((organization) => organization.id === selectedOrgId)
+      : false
+
+    if (!hasSelectedOrganization) {
+      const fallbackId = organizations[0].id
+      setSelectedOrgIdState(fallbackId)
+      localStorage.setItem(STORAGE_KEY, fallbackId)
     }
   }, [organizations, selectedOrgId])
 
-  const setSelectedOrgId = (id: string) => {
+  const setSelectedOrgId = useCallback((id: string) => {
     setSelectedOrgIdState(id)
     localStorage.setItem(STORAGE_KEY, id)
-  }
+  }, [])
 
-  const setSelectedOrgByPrefix = (prefix: string) => {
+  const setSelectedOrgByPrefix = useCallback((prefix: string) => {
     const match = organizations.find((o) => o.prefix === prefix || o.slug === prefix)
     if (match && match.id !== selectedOrgId) {
       setSelectedOrgId(match.id)
     }
-  }
+  }, [organizations, selectedOrgId, setSelectedOrgId])
 
   return (
     <OrganizationContext.Provider

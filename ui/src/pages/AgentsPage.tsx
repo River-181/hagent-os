@@ -2,7 +2,7 @@ import { useEffect, useMemo } from "react"
 import { Link, useParams } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
-import { useOrganization } from "@/context/OrganizationContext"
+import { useActiveOrgId } from "@/context/OrganizationContext"
 import { usePanel } from "@/context/PanelContext"
 import { agentsApi } from "@/api/agents"
 import { queryKeys } from "@/lib/queryKeys"
@@ -68,7 +68,7 @@ function timeAgo(iso: string | null | undefined): string {
 export function AgentsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
   const { orgPrefix } = useParams<{ orgPrefix: string }>()
-  const { selectedOrgId } = useOrganization()
+  const activeOrgId = useActiveOrgId(orgPrefix)
   const { closePanel, setPanelContent } = usePanel()
 
   useEffect(() => {
@@ -81,9 +81,9 @@ export function AgentsPage() {
   }, [closePanel, setPanelContent])
 
   const { data: agents = [], isLoading, isError } = useQuery({
-    queryKey: queryKeys.agents.list(selectedOrgId ?? ""),
-    queryFn: () => agentsApi.list(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: queryKeys.agents.list(activeOrgId ?? ""),
+    queryFn: () => agentsApi.list(activeOrgId!),
+    enabled: !!activeOrgId,
   })
 
   const runningCount = useMemo(

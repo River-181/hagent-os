@@ -1,6 +1,5 @@
 /**
  * 서버 기동 시 1회 실행되는 데이터 패치 마이그레이션.
- * - gpt-5-codex → gpt-4o-mini 에이전트 adapterConfig 교체
  * - autoRun 미설정 에이전트에 autoRun: true 추가
  * 멱등 (이미 패치된 레코드는 재처리 없음).
  */
@@ -22,17 +21,13 @@ export async function runStartupMigrations(db: Db): Promise<void> {
 
     for (const agent of agents) {
       const cfg = isPlainObject(agent.adapterConfig) ? agent.adapterConfig : {}
-      const currentModel = typeof cfg.model === "string" ? cfg.model : null
       const hasAutoRun = "autoRun" in cfg
-
-      const needsModelPatch = currentModel === "gpt-5-codex" || currentModel === null || currentModel === ""
       const needsAutoRunPatch = !hasAutoRun
 
-      if (!needsModelPatch && !needsAutoRunPatch) continue
+      if (!needsAutoRunPatch) continue
 
       const nextCfg: Record<string, unknown> = {
         ...cfg,
-        model: needsModelPatch ? "gpt-4o-mini" : currentModel,
         autoRun: needsAutoRunPatch ? true : cfg.autoRun,
       }
 

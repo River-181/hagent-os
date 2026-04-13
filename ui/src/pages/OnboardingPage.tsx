@@ -372,10 +372,20 @@ export function OnboardingPage() {
         },
         selectedAgents,
       }),
-    onSuccess: async (result) => {
+    onSuccess: (result) => {
       setSelectedOrgId(result.organization.id)
-      await queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all })
-      navigate(`/${result.organization.prefix}/projects/${result.setupProject?.id ?? result.project?.id}`, { replace: true })
+      queryClient.setQueryData<any[]>(queryKeys.organizations.all, (current = []) => {
+        const next = Array.isArray(current) ? current.filter((item) => item.id !== result.organization.id) : []
+        return [result.organization, ...next]
+      })
+
+      const projectId = result.setupProject?.id ?? result.project?.id
+      const destination = projectId
+        ? `/${result.organization.prefix}/projects/${projectId}`
+        : `/${result.organization.prefix}/dashboard`
+
+      navigate(destination, { replace: true })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all })
     },
   })
 

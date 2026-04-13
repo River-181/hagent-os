@@ -1,8 +1,8 @@
 import { useEffect, useState, useRef, type ReactNode } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { useLocation, useNavigate } from "react-router-dom"
+import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
-import { useOrganization } from "@/context/OrganizationContext"
+import { useActiveOrgId, useOrganization } from "@/context/OrganizationContext"
 import { usePanel } from "@/context/PanelContext"
 import { useToast } from "@/components/ToastContext"
 import { organizationsApi } from "@/api/organizations"
@@ -282,12 +282,14 @@ type IntegrationPreference = {
 
 export function SettingsPage() {
   const { setBreadcrumbs } = useBreadcrumbs()
-  const { selectedOrgId, organizations } = useOrganization()
+  const { organizations } = useOrganization()
   const { closePanel, setPanelContent } = usePanel()
   const { success, error: toastError } = useToast()
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
+  const { orgPrefix } = useParams<{ orgPrefix: string }>()
+  const activeOrgId = useActiveOrgId(orgPrefix)
   const pageRef = useRef<HTMLDivElement>(null)
 
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -302,7 +304,7 @@ export function SettingsPage() {
   const [principalName, setPrincipalName] = useState("")
 
   const [primaryAdapterType, setPrimaryAdapterType] = useState("codex_qauth")
-  const [primaryModel, setPrimaryModel] = useState("gpt-4o-mini")
+  const [primaryModel, setPrimaryModel] = useState("gpt-5-codex")
   const [fallbackAdapterType, setFallbackAdapterType] = useState("claude_local")
   const [autoRun, setAutoRun] = useState(true)
   const [allowDegradedMode, setAllowDegradedMode] = useState(true)
@@ -328,25 +330,25 @@ export function SettingsPage() {
     closePanel()
   }, [closePanel, setPanelContent])
 
-  const selectedOrg = organizations.find((org) => org.id === selectedOrgId) ?? null
+  const selectedOrg = organizations.find((org) => org.id === activeOrgId) ?? null
 
   const adaptersQuery = useQuery({
-    queryKey: [...queryKeys.adapters.all, selectedOrgId ?? "global"],
-    queryFn: () => adaptersApi.list(selectedOrgId ?? undefined),
+    queryKey: [...queryKeys.adapters.all, activeOrgId ?? "global"],
+    queryFn: () => adaptersApi.list(activeOrgId ?? undefined),
   })
   const channelsQuery = useQuery({
-    queryKey: [...queryKeys.organizations.detail(selectedOrgId ?? ""), "channels", "settings"],
-    queryFn: () => organizationsApi.getChannels(selectedOrgId!),
-    enabled: !!selectedOrgId,
+    queryKey: [...queryKeys.organizations.detail(activeOrgId ?? ""), "channels", "settings"],
+    queryFn: () => organizationsApi.getChannels(activeOrgId!),
+    enabled: !!activeOrgId,
   })
   const pluginsQuery = useQuery({
     queryKey: queryKeys.plugins.all,
     queryFn: () => pluginsApi.list(),
   })
   const skillsQuery = useQuery({
-    queryKey: [...queryKeys.skills.all, selectedOrgId, "settings"],
-    queryFn: () => skillsApi.list(selectedOrgId ?? undefined),
-    enabled: !!selectedOrgId,
+    queryKey: [...queryKeys.skills.all, activeOrgId, "settings"],
+    queryFn: () => skillsApi.list(activeOrgId ?? undefined),
+    enabled: !!activeOrgId,
   })
 
   const adapters = adaptersQuery.data?.adapters ?? []
@@ -380,7 +382,7 @@ export function SettingsPage() {
     setPrincipalName((general.principalName as string | undefined) ?? "원장")
 
     setPrimaryAdapterType((aiPolicy.primaryAdapterType as string | undefined) ?? (bootstrap.selectedAdapterType as string | undefined) ?? "codex_qauth")
-    setPrimaryModel((aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-4o-mini")
+    setPrimaryModel((aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-5-codex")
     setFallbackAdapterType((aiPolicy.fallbackAdapterType as string | undefined) ?? "claude_local")
     setAutoRun((aiPolicy.autoRun as boolean | undefined) ?? true)
     setAllowDegradedMode((aiPolicy.allowDegradedMode as boolean | undefined) ?? true)
@@ -389,8 +391,8 @@ export function SettingsPage() {
 
     const modelPricing =
       isObjectRecord(aiPolicy.modelPricing) ? (aiPolicy.modelPricing as Record<string, any>) : {}
-    const primaryPricing = isObjectRecord(modelPricing[(aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-4o-mini"])
-      ? modelPricing[(aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-4o-mini"]
+    const primaryPricing = isObjectRecord(modelPricing[(aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-5-codex"])
+      ? modelPricing[(aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-5-codex"]
       : {}
     const fallbackPricing = isObjectRecord(modelPricing["claude-sonnet-4-6"]) ? modelPricing["claude-sonnet-4-6"] : {}
     setPrimaryInputUnitCost(String(primaryPricing.inputPer1kKrw ?? primaryPricing.input ?? 6))
@@ -439,8 +441,8 @@ export function SettingsPage() {
       payload: Record<string, unknown>
       message: string
     }) => {
-      if (!selectedOrgId) throw new Error("선택된 기관이 없습니다.")
-      await organizationsApi.update(selectedOrgId, payload)
+      if (!activeOrgId) throw new Error("선택된 기관이 없습니다.")
+      await organizationsApi.update(activeOrgId, payload)
       return message
     },
     onSuccess: async (message) => {
@@ -457,12 +459,12 @@ export function SettingsPage() {
   })
 
   const adapterTestMutation = useMutation({
-    mutationFn: (key: string) => adaptersApi.test(key, selectedOrgId ?? undefined),
+    mutationFn: (key: string) => adaptersApi.test(key, activeOrgId ?? undefined),
     onSuccess: async (result, key) => {
       setAdapterTestResult((prev) => ({ ...prev, [key]: result }))
       try {
-        if (selectedOrgId) {
-          await organizationsApi.update(selectedOrgId, {
+        if (activeOrgId) {
+          await organizationsApi.update(activeOrgId, {
             settings: {
               instance: {
                 connectionTests: {
@@ -495,8 +497,8 @@ export function SettingsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: () => {
-      if (!selectedOrgId) throw new Error("선택된 기관이 없습니다.")
-      return organizationsApi.delete(selectedOrgId)
+      if (!activeOrgId) throw new Error("선택된 기관이 없습니다.")
+      return organizationsApi.delete(activeOrgId)
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: queryKeys.organizations.all })
@@ -510,8 +512,8 @@ export function SettingsPage() {
   })
 
   function handleExport() {
-    if (!selectedOrgId) return
-    const url = organizationsApi.exportData(selectedOrgId)
+    if (!activeOrgId) return
+    const url = organizationsApi.exportData(activeOrgId)
     const a = downloadLinkRef.current
     if (a) {
       a.href = url
@@ -727,7 +729,7 @@ export function SettingsPage() {
                   },
                 })
               }
-              disabled={!selectedOrgId || saveMutation.isPending}
+              disabled={!activeOrgId || saveMutation.isPending}
             >
               기관 설정 저장
             </Button>
@@ -752,7 +754,7 @@ export function SettingsPage() {
             </Field>
             <Field label="기본 모델">
               <NativeSelect value={primaryModel} onChange={setPrimaryModel}>
-                  {(selectedAdapter?.availableModels ?? ["gpt-4o-mini"]).map((model: string) => (
+                  {(selectedAdapter?.availableModels ?? ["gpt-5-codex"]).map((model: string) => (
                     <option key={model} value={model}>
                       {model}
                     </option>
@@ -1028,7 +1030,7 @@ export function SettingsPage() {
                   },
                 })
               }
-              disabled={!selectedOrgId || saveMutation.isPending}
+              disabled={!activeOrgId || saveMutation.isPending}
             >
               AI 정책 저장
             </Button>
@@ -1147,7 +1149,7 @@ export function SettingsPage() {
                   },
                 })
               }
-              disabled={!selectedOrgId || saveMutation.isPending}
+              disabled={!activeOrgId || saveMutation.isPending}
             >
               연동 설정 저장
             </Button>
@@ -1301,9 +1303,9 @@ export function SettingsPage() {
                   <NativeSwitch
                     checked={Boolean(channels.telegram?.autoReply)}
                     onCheckedChange={async (checked) => {
-                      if (!selectedOrgId) return
+                      if (!activeOrgId) return
                       try {
-                        await organizationsApi.updateChannel(selectedOrgId, "telegram", {
+                        await organizationsApi.updateChannel(activeOrgId, "telegram", {
                           ...(channels.telegram ?? {}),
                           autoReply: checked,
                         })
@@ -1377,7 +1379,7 @@ export function SettingsPage() {
                   },
                 })
               }
-              disabled={!selectedOrgId || saveMutation.isPending}
+              disabled={!activeOrgId || saveMutation.isPending}
             >
               인스턴스 설정 저장
             </Button>
@@ -1410,7 +1412,7 @@ export function SettingsPage() {
                 variant="outline"
                 size="sm"
                 className="shrink-0 gap-1.5"
-                disabled={!selectedOrgId}
+                disabled={!activeOrgId}
                 onClick={handleExport}
               >
                 <Download size={14} />
@@ -1433,7 +1435,7 @@ export function SettingsPage() {
                 size="sm"
                 className="shrink-0 gap-1.5"
                 style={{ color: "var(--color-danger)", borderColor: "var(--color-danger)" }}
-                disabled={!selectedOrgId}
+                disabled={!activeOrgId}
                 onClick={() => setDeleteDialogOpen(true)}
               >
                 <Trash2 size={14} />

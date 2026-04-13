@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 import { useBreadcrumbs } from "@/context/BreadcrumbContext"
-import { useActiveOrgId, useOrganization } from "@/context/OrganizationContext"
+import { useActiveOrgId } from "@/context/OrganizationContext"
 import { usePanel } from "@/context/PanelContext"
 import { schedulesApi } from "@/api/schedules"
 import { casesApi } from "@/api/cases"
@@ -303,17 +303,18 @@ interface StudentOption {
 }
 
 function ScheduleDetailDialog({
+  orgId,
   schedule,
   open,
   onClose,
   startInEditMode = false,
 }: {
+  orgId: string | null
   schedule: ScheduleItem | null
   open: boolean
   onClose: () => void
   startInEditMode?: boolean
 }) {
-  const { selectedOrgId } = useOrganization()
   const queryClient = useQueryClient()
   const [isEditing, setIsEditing] = useState(false)
   const [editTitle, setEditTitle] = useState("")
@@ -327,30 +328,30 @@ function ScheduleDetailDialog({
 
   // Instructor list for edit mode
   const { data: instructors = [] } = useQuery<InstructorOption[]>({
-    queryKey: ["instructors", selectedOrgId],
-    queryFn: () => api.get<InstructorOption[]>(`/organizations/${selectedOrgId}/instructors`),
-    enabled: !!selectedOrgId && isEditing,
+    queryKey: ["instructors", orgId, "schedule-detail"],
+    queryFn: () => api.get<InstructorOption[]>(`/organizations/${orgId}/instructors`),
+    enabled: !!orgId && isEditing,
   })
 
   // Students and enrollment rows for this schedule
   const { data: allStudents = [] } = useQuery<StudentOption[]>({
-    queryKey: ["students", selectedOrgId, "schedule-detail"],
-    queryFn: () => api.get<StudentOption[]>(`/organizations/${selectedOrgId}/students`),
-    enabled: !!selectedOrgId && !!schedule && (schedule.type === "regular" || schedule.type === "special" || schedule.type === "makeup"),
+    queryKey: ["students", orgId, "schedule-detail"],
+    queryFn: () => api.get<StudentOption[]>(`/organizations/${orgId}/students`),
+    enabled: !!orgId && !!schedule && (schedule.type === "regular" || schedule.type === "special" || schedule.type === "makeup"),
   })
 
   const { data: studentSchedules = [] } = useQuery<StudentScheduleRow[]>({
-    queryKey: ["student-schedules", selectedOrgId, schedule?.id ?? ""],
+    queryKey: ["student-schedules", orgId, schedule?.id ?? ""],
     queryFn: () =>
-      api.get<StudentScheduleRow[]>(`/organizations/${selectedOrgId}/student-schedules`),
-    enabled: !!selectedOrgId && !!schedule && (schedule.type === "regular" || schedule.type === "special" || schedule.type === "makeup"),
+      api.get<StudentScheduleRow[]>(`/organizations/${orgId}/student-schedules`),
+    enabled: !!orgId && !!schedule && (schedule.type === "regular" || schedule.type === "special" || schedule.type === "makeup"),
   })
 
   const updateMutation = useMutation({
     mutationFn: (data: Record<string, unknown>) =>
-      schedulesApi.update(selectedOrgId!, schedule!.id, data),
+      schedulesApi.update(orgId!, schedule!.id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(selectedOrgId ?? "") })
+      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(orgId ?? "") })
       setIsEditing(false)
       onClose()
     },
@@ -359,9 +360,9 @@ function ScheduleDetailDialog({
   const { success: toastSuccess, error: toastError } = useToast()
 
   const deleteMutation = useMutation({
-    mutationFn: () => schedulesApi.remove(selectedOrgId!, schedule!.id),
+    mutationFn: () => schedulesApi.remove(orgId!, schedule!.id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(selectedOrgId ?? "") })
+      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(orgId ?? "") })
       toastSuccess("일정이 삭제되었습니다")
       setConfirmDelete(false)
       onClose()
@@ -673,8 +674,7 @@ function ScheduleDetailDialog({
 
 // ─── NewScheduleDialog ─────────────────────────────────────────────────────────
 
-function NewScheduleDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { selectedOrgId } = useOrganization()
+function NewScheduleDialog({ orgId, open, onClose }: { orgId: string | null; open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient()
   const [title, setTitle] = useState("")
   const [type, setType] = useState("regular")
@@ -686,19 +686,19 @@ function NewScheduleDialog({ open, onClose }: { open: boolean; onClose: () => vo
   const [instructorId, setInstructorId] = useState<string>("")
 
   const { data: instructors = [] } = useQuery<InstructorOption[]>({
-    queryKey: ["instructors", selectedOrgId],
-    queryFn: () => api.get<InstructorOption[]>(`/organizations/${selectedOrgId}/instructors`),
-    enabled: !!selectedOrgId && open,
+    queryKey: ["instructors", orgId, "new-schedule"],
+    queryFn: () => api.get<InstructorOption[]>(`/organizations/${orgId}/instructors`),
+    enabled: !!orgId && open,
   })
 
   const createMutation = useMutation({
-    mutationFn: () => api.post(`/organizations/${selectedOrgId}/schedules`, {
+    mutationFn: () => api.post(`/organizations/${orgId}/schedules`, {
       title, type, dayOfWeek, startTime: allDay ? "00:00" : startTime,
       endTime: allDay ? "23:59" : endTime, room: room || null,
       instructorId: instructorId || null,
     }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(selectedOrgId ?? "") })
+      queryClient.invalidateQueries({ queryKey: queryKeys.schedules.list(orgId ?? "") })
       setTitle("")
       setType("regular")
       setDayOfWeek(1)
@@ -2235,10 +2235,11 @@ export function SchedulePage() {
       </WorkspacePanel>
 
       {/* New schedule dialog */}
-      <NewScheduleDialog open={newScheduleOpen} onClose={() => setNewScheduleOpen(false)} />
+      <NewScheduleDialog orgId={activeOrgId} open={newScheduleOpen} onClose={() => setNewScheduleOpen(false)} />
 
       {/* Schedule detail dialog */}
       <ScheduleDetailDialog
+        orgId={activeOrgId}
         schedule={selectedSchedule}
         open={detailOpen}
         onClose={() => {

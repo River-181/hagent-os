@@ -250,22 +250,37 @@ function SuccessRateChart({ agents }: { agents: any[] }) {
   let completed = 0
 
   for (const agent of agents) {
-    const runs: any[] = Array.isArray(agent.runs) ? agent.runs : []
+    const runs: any[] = Array.isArray(agent.runs)
+      ? agent.runs
+      : Array.isArray(agent.recentRuns)
+        ? agent.recentRuns
+        : []
     total += runs.length
-    completed += runs.filter((run: any) => run.status === "completed").length
+    completed += runs.filter(
+      (run: any) => run.status === "completed" || run.status === "pending_approval",
+    ).length
   }
 
   const rate = total > 0 ? Math.round((completed / total) * 100) : 0
   const agentBars = agents
     .map((agent: any) => {
-      const runs: any[] = Array.isArray(agent.runs) ? agent.runs : []
-      const done = runs.filter((run: any) => run.status === "completed").length
+      const runs: any[] = Array.isArray(agent.runs)
+        ? agent.runs
+        : Array.isArray(agent.recentRuns)
+          ? agent.recentRuns
+          : []
+      const done = runs.filter(
+        (run: any) => run.status === "completed" || run.status === "pending_approval",
+      ).length
       const count = runs.length
       return {
         label: compactAgentLabel(agent.name ?? agent.slug ?? "?"),
         rate: count > 0 ? Math.round((done / count) * 100) : 0,
+        count,
       }
     })
+    .filter((agent) => agent.count > 0)
+    .sort((left, right) => right.count - left.count)
     .slice(0, 5)
 
   const rateColor =
