@@ -123,6 +123,11 @@ type PendingConfirmationDraft =
       summary: string
     }
 
+type StoredConfirmationResult = {
+  token: string
+  reused: boolean
+}
+
 export type TelegramOwnerControlConfig = {
   enabled?: boolean
   passwordHash?: string | null
@@ -312,6 +317,36 @@ function cleanupExpiredConfirmations(confirmations: PendingConfirmation[]) {
   return confirmations
     .filter((entry) => new Date(entry.expiresAt).getTime() > now)
     .slice(-MAX_PENDING_CONFIRMATIONS)
+}
+
+function isSameConfirmationDraft(left: PendingConfirmation, right: PendingConfirmationDraft) {
+  if (left.kind !== right.kind) return false
+  if (left.kind === "case_status" && right.kind === "case_status") {
+    return left.caseId === right.caseId && left.nextStatus === right.nextStatus
+  }
+  if (left.kind === "case_priority" && right.kind === "case_priority") {
+    return left.caseId === right.caseId && left.nextPriority === right.nextPriority
+  }
+  if (left.kind === "case_assignee" && right.kind === "case_assignee") {
+    return left.caseId === right.caseId && left.assigneeAgentId === right.assigneeAgentId
+  }
+  if (left.kind === "case_project" && right.kind === "case_project") {
+    return left.caseId === right.caseId && left.opsGroupId === right.opsGroupId
+  }
+  if (left.kind === "approval_decision" && right.kind === "approval_decision") {
+    return left.approvalId === right.approvalId && left.decision === right.decision
+  }
+  if (left.kind === "case_rerun" && right.kind === "case_rerun") {
+    return left.caseId === right.caseId
+  }
+  return false
+}
+
+function isSameConfirmationScope(left: PendingConfirmation, right: PendingConfirmationDraft) {
+  if (left.kind !== right.kind) return false
+  if ("caseId" in left && "caseId" in right) return left.caseId === right.caseId
+  if (left.kind === "approval_decision" && right.kind === "approval_decision") return left.approvalId === right.approvalId
+  return false
 }
 
 function buildDisplayName(value: Record<string, unknown>) {
@@ -668,7 +703,14 @@ async function storeConfirmation(
   organization: typeof schema.organizations.$inferSelect,
   chatId: string,
   entry: PendingConfirmationDraft,
-) {
+) : Promise<StoredConfirmationResult> {
+  const config = getOwnerControlConfig(organization)
+  const cleaned = cleanupExpiredConfirmations(config.pendingConfirmations ?? [])
+  const existing = cleaned.find((item) => item.chatId === chatId && isSameConfirmationDraft(item, entry))
+  if (existing) {
+    return { token: existing.token, reused: true }
+  }
+
   const token = buildToken()
   const now = new Date()
   const pending: PendingConfirmation = {
@@ -681,9 +723,14 @@ async function storeConfirmation(
 
   await updateOwnerControlConfig(db, organization, (config) => ({
     ...config,
-    pendingConfirmations: [...cleanupExpiredConfirmations(config.pendingConfirmations ?? []), pending],
+    pendingConfirmations: [
+      ...cleanupExpiredConfirmations(config.pendingConfirmations ?? []).filter(
+        (item) => !(item.chatId === chatId && isSameConfirmationScope(item, entry)),
+      ),
+      pending,
+    ],
   }))
-  return token
+  return { token, reused: false }
 }
 
 function formatAmbiguousMatches(label: string, items: { id: string; name?: string | null; agentType?: string | null }[]) {
@@ -775,6 +822,13 @@ async function handleIntent(
   actorId: string,
   intent: OwnerIntent,
 ) {
+  const sendConfirmationPrompt = async (message: string, stored: StoredConfirmationResult) => {
+    const text = stored.reused
+      ? `${message}\n\n이미 같은 요청이 대기 중입니다. 아래 Confirm 또는 Cancel 버튼을 눌러 주세요.`
+      : message
+    await sendOwnerMessage(binding, update.chatId, text, buildConfirmationKeyboard(stored.token))
+  }
+
   if (intent.kind === "help") {
     await sendOwnerMessage(binding, update.chatId, buildHelpText())
     return
@@ -870,24 +924,24 @@ async function handleIntent(
   }
 
   if (intent.kind === "mutate_case_status") {
-    const token = await storeConfirmation(db, organization, update.chatId, {
+    const confirmation = await storeConfirmation(db, organization, update.chatId, {
       kind: "case_status",
       caseId: caseRecord.id,
       nextStatus: intent.status,
       summary: `${caseRecord.identifier} 상태를 ${intent.status}로 변경`,
     })
-    await sendOwnerMessage(binding, update.chatId, `${caseRecord.identifier} 상태를 ${intent.status}로 변경할까요?`, buildConfirmationKeyboard(token))
+    await sendConfirmationPrompt(`${caseRecord.identifier} 상태를 ${intent.status}로 변경할까요?`, confirmation)
     return
   }
 
   if (intent.kind === "mutate_case_priority") {
-    const token = await storeConfirmation(db, organization, update.chatId, {
+    const confirmation = await storeConfirmation(db, organization, update.chatId, {
       kind: "case_priority",
       caseId: caseRecord.id,
       nextPriority: intent.priority,
       summary: `${caseRecord.identifier} 우선순위를 P${intent.priority}로 변경`,
     })
-    await sendOwnerMessage(binding, update.chatId, `${caseRecord.identifier} 우선순위를 P${intent.priority}로 변경할까요?`, buildConfirmationKeyboard(token))
+    await sendConfirmationPrompt(`${caseRecord.identifier} 우선순위를 P${intent.priority}로 변경할까요?`, confirmation)
     return
   }
 
@@ -901,13 +955,13 @@ async function handleIntent(
       )
       return
     }
-    const token = await storeConfirmation(db, organization, update.chatId, {
+    const confirmation = await storeConfirmation(db, organization, update.chatId, {
       kind: "case_assignee",
       caseId: caseRecord.id,
       assigneeAgentId: lookup.match.id,
       summary: `${caseRecord.identifier} 담당을 ${lookup.match.name}로 변경`,
     })
-    await sendOwnerMessage(binding, update.chatId, `${caseRecord.identifier} 담당을 ${lookup.match.name}로 변경할까요?`, buildConfirmationKeyboard(token))
+    await sendConfirmationPrompt(`${caseRecord.identifier} 담당을 ${lookup.match.name}로 변경할까요?`, confirmation)
     return
   }
 
@@ -921,13 +975,13 @@ async function handleIntent(
       )
       return
     }
-    const token = await storeConfirmation(db, organization, update.chatId, {
+    const confirmation = await storeConfirmation(db, organization, update.chatId, {
       kind: "case_project",
       caseId: caseRecord.id,
       opsGroupId: lookup.match.id,
       summary: `${caseRecord.identifier} 프로젝트를 ${lookup.match.name}로 변경`,
     })
-    await sendOwnerMessage(binding, update.chatId, `${caseRecord.identifier} 프로젝트를 ${lookup.match.name}로 연결할까요?`, buildConfirmationKeyboard(token))
+    await sendConfirmationPrompt(`${caseRecord.identifier} 프로젝트를 ${lookup.match.name}로 연결할까요?`, confirmation)
     return
   }
 
@@ -942,22 +996,25 @@ async function handleIntent(
       await sendOwnerMessage(binding, update.chatId, `${caseRecord.identifier}에는 현재 승인 대기 건이 없습니다.`)
       return
     }
-    const token = await storeConfirmation(db, organization, update.chatId, {
+    const confirmation = await storeConfirmation(db, organization, update.chatId, {
       kind: "approval_decision",
       approvalId: approval.id,
       decision: intent.decision,
       summary: `${caseRecord.identifier} 승인 ${intent.decision}`,
     })
-    await sendOwnerMessage(binding, update.chatId, `${caseRecord.identifier} 승인 요청을 ${intent.decision === "approved" ? "승인" : "반려"}할까요?`, buildConfirmationKeyboard(token))
+    await sendConfirmationPrompt(
+      `${caseRecord.identifier} 승인 요청을 ${intent.decision === "approved" ? "승인" : "반려"}할까요?`,
+      confirmation,
+    )
     return
   }
 
-  const token = await storeConfirmation(db, organization, update.chatId, {
+  const confirmation = await storeConfirmation(db, organization, update.chatId, {
     kind: "case_rerun",
     caseId: caseRecord.id,
     summary: `${caseRecord.identifier} 다시 실행`,
   })
-  await sendOwnerMessage(binding, update.chatId, `${caseRecord.identifier}를 다시 실행할까요?`, buildConfirmationKeyboard(token))
+  await sendConfirmationPrompt(`${caseRecord.identifier}를 다시 실행할까요?`, confirmation)
 }
 
 async function handleCallback(
@@ -980,8 +1037,7 @@ async function handleCallback(
 
   const pending = cleanupExpiredConfirmations(config.pendingConfirmations ?? []).find((item) => item.token === token && item.chatId === update.chatId)
   if (!pending) {
-    await answerCallback(binding, update.callbackQueryId, "확인 요청이 만료되었습니다")
-    await sendOwnerMessage(binding, update.chatId, "확인 요청이 만료되었거나 이미 처리되었습니다.")
+    await answerCallback(binding, update.callbackQueryId, "이미 처리되었거나 새 요청으로 갱신되었습니다")
     return true
   }
 

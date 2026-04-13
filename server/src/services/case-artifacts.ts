@@ -1,5 +1,11 @@
+import { eq } from "drizzle-orm"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
+
+function replaceTag(tags: string[], prefix: string, next?: string | null) {
+  const kept = tags.filter((tag) => !tag.startsWith(prefix))
+  return next ? [...kept, next] : kept
+}
 
 function renderComplaintBody(output: Record<string, unknown>, mode: "complaint" | "inquiry" = "complaint") {
   const actions = Array.isArray(output.suggestedActions)
@@ -176,6 +182,73 @@ export async function createCaseDocumentArtifact(
   })
   if (!artifact || !artifact.body.trim()) return null
 
+  const allDocumentsInOrg = await db
+    .select()
+    .from(schema.documents)
+    .where(eq(schema.documents.organizationId, input.organizationId))
+
+  const matching = allDocumentsInOrg.filter((document) => {
+    const tags = Array.isArray(document.tags) ? document.tags : []
+    return tags.includes(`case:${input.caseId}`) && tags.includes(`artifact:${artifact.documentType}`)
+  })
+
+  const [existing, ...duplicates] = matching.sort(
+    (left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime(),
+  )
+
+  for (const duplicate of duplicates) {
+    await db.delete(schema.documents).where(eq(schema.documents.id, duplicate.id))
+  }
+
+  const nextTags = [
+    `case:${input.caseId}`,
+    ...(input.opsGroupId ? [`project:${input.opsGroupId}`] : []),
+    `run:${input.runId}`,
+    `artifact:${artifact.documentType}`,
+    `status:${input.status}`,
+  ]
+
+  if (existing) {
+    const currentTags = Array.isArray(existing.tags) ? existing.tags : []
+    const updatedTags = replaceTag(
+      replaceTag(
+        replaceTag(currentTags, "project:", input.opsGroupId ? `project:${input.opsGroupId}` : null),
+        "run:",
+        `run:${input.runId}`,
+      ),
+      "status:",
+      `status:${input.status}`,
+    )
+    const [updated] = await db
+      .update(schema.documents)
+      .set({
+        title: artifact.title,
+        body: artifact.body,
+        tags: Array.from(new Set([...updatedTags, `case:${input.caseId}`, `artifact:${artifact.documentType}`])),
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.documents.id, existing.id))
+      .returning()
+
+    await db.insert(schema.activityEvents).values({
+      organizationId: input.organizationId,
+      actorType: "agent",
+      actorId: input.agentType,
+      action: "document.updated",
+      entityType: "document",
+      entityId: updated.id,
+      entityTitle: updated.title,
+      metadata: {
+        caseId: input.caseId,
+        runId: input.runId,
+        documentType: artifact.documentType,
+        status: input.status,
+      } as Record<string, unknown>,
+    })
+
+    return updated
+  }
+
   const [document] = await db
     .insert(schema.documents)
     .values({
@@ -183,13 +256,7 @@ export async function createCaseDocumentArtifact(
       title: artifact.title,
       body: artifact.body,
       category: "artifact",
-      tags: [
-        `case:${input.caseId}`,
-        ...(input.opsGroupId ? [`project:${input.opsGroupId}`] : []),
-        `run:${input.runId}`,
-        `artifact:${artifact.documentType}`,
-        `status:${input.status}`,
-      ],
+      tags: nextTags,
     })
     .returning()
 
