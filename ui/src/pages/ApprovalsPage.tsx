@@ -664,6 +664,12 @@ export function ApprovalsPage() {
                 title="승인 목록을 불러오지 못했습니다."
                 description="잠시 후 다시 시도해 주세요."
                 className="min-h-[180px]"
+                action={
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={invalidateAll}>
+                    <RefreshCcw size={14} />
+                    다시 시도
+                  </Button>
+                }
               />
             ) : filteredApprovals.length === 0 ? (
               <WorkspaceEmptyState
@@ -788,7 +794,7 @@ export function ApprovalsPage() {
                 setRejectDialog((current) => (current ? { ...current, reason: value } : current))
               }}
               rows={5}
-              className="w-full rounded-lg p-3 text-sm resize-none focus:outline-none"
+              className="w-full resize-none rounded-lg p-3 text-sm transition-[border-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
               style={{
                 backgroundColor: "var(--bg-muted)",
                 border: "1px solid var(--border-default)",
@@ -796,6 +802,9 @@ export function ApprovalsPage() {
               }}
               placeholder="거절 사유를 입력하세요..."
             />
+            <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
+              사유를 남기면 케이스 후속 조치 문맥이 더 분명해집니다.
+            </p>
           </div>
 
           <DialogFooter>

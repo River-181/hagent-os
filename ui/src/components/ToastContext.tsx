@@ -36,7 +36,7 @@ const toastIconMap: Record<ToastType, React.ReactNode> = {
 const toastColorMap: Record<ToastType, string> = {
   success: "var(--color-success)",
   error: "var(--color-danger)",
-  info: "var(--color-teal-500)",
+  info: "var(--color-info)",
 }
 
 function ToastItem({
@@ -58,14 +58,18 @@ function ToastItem({
 
   return (
     <div
-      className="flex items-start gap-3 px-4 py-3 rounded-xl min-w-[260px] max-w-sm"
+      className="pointer-events-auto flex min-w-[280px] max-w-sm items-start gap-3 rounded-lg border px-4 py-3 transition-[transform,opacity]"
       style={{
-        backgroundColor: "var(--bg-base)",
-        border: `1px solid ${color}`,
+        backgroundColor: "var(--bg-elevated)",
+        borderColor: "var(--border-default)",
         boxShadow: "var(--shadow-md)",
       }}
+      role="status"
     >
-      <span style={{ color, marginTop: 1 }} className="shrink-0">
+      <span
+        style={{ color, marginTop: 1, backgroundColor: "var(--bg-subtle)" }}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+      >
         {toastIconMap[toast.type]}
       </span>
       <p className="flex-1 text-sm" style={{ color: "var(--text-primary)" }}>
@@ -73,7 +77,7 @@ function ToastItem({
       </p>
       <button
         onClick={() => onRemove(toast.id)}
-        className="shrink-0 p-0.5 rounded hover:bg-[var(--bg-tertiary)] transition-colors"
+        className="shrink-0 rounded p-0.5 transition-colors hover:bg-[var(--bg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
         aria-label="닫기"
       >
         <X size={13} style={{ color: "var(--text-tertiary)" }} />
@@ -103,8 +107,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       {toasts.length > 0 && (
         <div
-          className="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2 items-end"
+          className="pointer-events-none fixed inset-x-4 bottom-4 z-[9999] flex flex-col items-stretch gap-2 sm:inset-x-auto sm:right-5 sm:bottom-5 sm:items-end"
           aria-live="polite"
+          aria-atomic="true"
           aria-label="알림"
         >
           {toasts.map((t) => (

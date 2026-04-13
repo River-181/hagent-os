@@ -21,7 +21,7 @@ import { orchestratorApi } from "@/api/orchestrator"
 import { StatusIcon } from "@/components/StatusIcon"
 import { PriorityIcon } from "@/components/PriorityIcon"
 import { DashboardCharts } from "@/components/DashboardCharts"
-import { WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
+import { WorkspaceEmptyState, WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
 import {
   Bot,
   FileText,
@@ -83,7 +83,7 @@ function ChurnWarningCard({ c, orgPrefix }: { c: any; orgPrefix: string }) {
 
   return (
     <div
-      className="flex items-center justify-between gap-3 rounded-xl px-4 py-3"
+      className="flex items-center justify-between gap-3 rounded-lg px-4 py-3"
       style={{
         backgroundColor: "var(--status-danger-soft)",
         border: "1px solid var(--color-danger)",
@@ -141,8 +141,9 @@ function RecentCaseRow({ c, orgPrefix }: { c: any; orgPrefix: string }) {
 
   return (
     <button
+      type="button"
       onClick={() => navigate(`/${orgPrefix}/cases/${c.id}`)}
-      className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors"
+      className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left transition-colors hover:bg-[var(--bg-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
       style={{ backgroundColor: "transparent" }}
     >
       <StatusIcon status={status} size={15} />
@@ -385,8 +386,9 @@ export function DashboardPage() {
               </div>
             </div>
             <button
+              type="button"
               onClick={() => setLastDispatchResult(null)}
-              className="rounded px-2 py-1 text-xs transition-colors"
+              className="rounded px-2 py-1 text-xs transition-colors hover:bg-[var(--bg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
               style={{ color: "var(--text-tertiary)", backgroundColor: "transparent" }}
             >
               닫기
@@ -486,16 +488,18 @@ export function DashboardPage() {
             </div>
             <div className="px-2">
               {casesLoading ? (
-                <div className="flex items-center justify-center py-10">
-                  <Loader2 size={20} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
-                </div>
+                <WorkspaceEmptyState
+                  className="rounded-none border-0 bg-transparent"
+                  icon={<Loader2 size={18} className="animate-spin" />}
+                  title="최근 케이스를 불러오는 중입니다."
+                />
               ) : recentCases.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-10">
-                  <FileText size={28} style={{ color: "var(--text-tertiary)" }} />
-                  <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                    케이스가 없습니다.
-                  </p>
-                </div>
+                <WorkspaceEmptyState
+                  className="rounded-none border-0 bg-transparent"
+                  icon={<FileText size={18} />}
+                  title="케이스가 없습니다."
+                  description="새 인입이나 운영 지시가 들어오면 최근 케이스가 여기에 표시됩니다."
+                />
               ) : (
                 <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
                   {recentCases.map((c: any) => (
@@ -537,23 +541,24 @@ export function DashboardPage() {
               </h2>
             </div>
             {documentsLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 size={20} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
-              </div>
+              <WorkspaceEmptyState
+                className="rounded-none border-0 bg-transparent"
+                icon={<Loader2 size={18} className="animate-spin" />}
+                title="최근 문서를 불러오는 중입니다."
+              />
             ) : recentDocuments.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-8">
-                <FileText size={24} style={{ color: "var(--text-tertiary)" }} />
-                <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                  최근 문서가 없습니다.
-                </p>
-              </div>
+              <WorkspaceEmptyState
+                className="rounded-none border-0 bg-transparent"
+                icon={<FileText size={18} />}
+                title="최근 문서가 없습니다."
+              />
             ) : (
               <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
                 {recentDocuments.map((document: any) => (
                   <Link
                     key={document.id}
                     to={`/${orgPrefix}/documents`}
-                    className="block px-4 py-3 transition-colors"
+                    className="block px-4 py-3 transition-colors hover:bg-[var(--bg-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
                   >
                     <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                       {document.title}
@@ -574,16 +579,17 @@ export function DashboardPage() {
               </h2>
             </div>
             {activityLoading ? (
-              <div className="flex items-center justify-center py-10">
-                <Loader2 size={20} className="animate-spin" style={{ color: "var(--text-tertiary)" }} />
-              </div>
+              <WorkspaceEmptyState
+                className="rounded-none border-0 bg-transparent"
+                icon={<Loader2 size={18} className="animate-spin" />}
+                title="최근 활동을 불러오는 중입니다."
+              />
             ) : recentActivity.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-10">
-                <Clock size={28} style={{ color: "var(--text-tertiary)" }} />
-                <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                  활동 내역이 없습니다.
-                </p>
-              </div>
+              <WorkspaceEmptyState
+                className="rounded-none border-0 bg-transparent"
+                icon={<Clock size={18} />}
+                title="활동 내역이 없습니다."
+              />
             ) : (
               <div className="px-3">
                 {recentActivity.map((item: any, i: number) => (

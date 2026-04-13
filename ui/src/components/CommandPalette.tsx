@@ -71,7 +71,7 @@ interface CommandPaletteProps {
 function CategoryHeader({ label }: { label: string }) {
   return (
     <div
-      className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider"
+      className="px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.12em]"
       style={{ color: "var(--text-tertiary)" }}
     >
       {label}
@@ -168,14 +168,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         onClick={() => handleSelect(entry)}
         onMouseEnter={() => setActiveIndex(index)}
         className={cn(
-          "flex items-center gap-3 w-full px-3 py-2 text-sm text-left rounded-md transition-colors",
-          isActive ? "bg-[var(--color-primary-bg)]" : "hover:bg-[var(--bg-tertiary)]"
+          "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]",
+          isActive ? "bg-[var(--accent-primary-soft)]" : "hover:bg-[var(--bg-muted)]"
         )}
         style={{
-          color: isActive ? "var(--color-teal-500)" : "var(--text-secondary)",
+          color: isActive ? "var(--color-primary)" : "var(--text-secondary)",
         }}
       >
-        <span className="shrink-0" style={{ color: isActive ? "var(--color-teal-500)" : "var(--text-tertiary)" }}>
+        <span className="shrink-0" style={{ color: isActive ? "var(--color-primary)" : "var(--text-tertiary)" }}>
           {entry.icon}
         </span>
         <span className="flex-1 truncate">{entry.label}</span>
@@ -194,9 +194,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
         showCloseButton={false}
         className="p-0 gap-0 overflow-hidden max-w-lg"
         style={{
-          backgroundColor: "var(--bg-base)",
+          backgroundColor: "var(--bg-elevated)",
           border: "1px solid var(--border-default)",
-          borderRadius: 12,
         }}
         onKeyDown={handleKeyDown}
       >
@@ -218,8 +217,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           {query && (
             <button
               onClick={() => setQuery("")}
-              className="text-xs px-1.5 py-0.5 rounded"
-              style={{ color: "var(--text-tertiary)", background: "var(--bg-tertiary)" }}
+              className="rounded px-1.5 py-0.5 text-xs transition-colors hover:bg-[var(--bg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
+              style={{ color: "var(--text-tertiary)" }}
             >
               지우기
             </button>
@@ -260,8 +259,8 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
           className="flex items-center gap-4 px-4 py-2 border-t text-xs"
           style={{
             borderColor: "var(--border-default)",
-            color: "var(--text-disabled)",
-            backgroundColor: "var(--bg-secondary)",
+            color: "var(--text-tertiary)",
+            backgroundColor: "var(--bg-subtle)",
           }}
         >
           <span>↑↓ 이동</span>
@@ -274,13 +273,19 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 }
 
 function StatusDot({ status }: { status: string }) {
-  const cls: Record<string, string> = {
-    running: "w-2 h-2 rounded-full bg-teal-500 animate-pulse",
-    idle: "w-2 h-2 rounded-full bg-gray-400",
-    error: "w-2 h-2 rounded-full bg-red-500",
-    paused: "w-2 h-2 rounded-full bg-amber-500",
+  const styles: Record<string, { color: string; className?: string }> = {
+    running: { color: "var(--color-primary)", className: "animate-pulse" },
+    idle: { color: "var(--text-tertiary)" },
+    error: { color: "var(--color-danger)" },
+    paused: { color: "var(--color-warning)" },
   }
-  return <span className={cls[status] ?? cls.idle} />
+  const current = styles[status] ?? styles.idle
+  return (
+    <span
+      className={cn("h-2 w-2 rounded-full", current.className)}
+      style={{ backgroundColor: current.color }}
+    />
+  )
 }
 
 // Global command palette controller — used in Layout

@@ -79,6 +79,7 @@ function NewProjectDialog({
   const [error, setError] = useState<string | null>(null)
 
   const isValid = name.trim().length > 0
+  const showNameError = name.length > 0 && !isValid
 
   const handleSubmit = async () => {
     if (!isValid || submitting) return
@@ -132,12 +133,18 @@ function NewProjectDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               autoFocus
+              aria-invalid={showNameError || undefined}
               style={{
-                backgroundColor: "var(--bg-base)",
+                backgroundColor: "var(--bg-muted)",
                 borderColor: "var(--border-default)",
                 color: "var(--text-primary)",
               }}
             />
+            {showNameError ? (
+              <p className="text-xs" style={{ color: "var(--color-danger)" }}>
+                프로젝트 이름은 필수입니다.
+              </p>
+            ) : null}
           </div>
 
           {/* 설명 */}
@@ -151,7 +158,7 @@ function NewProjectDialog({
               onChange={(e) => setDescription(e.target.value)}
               rows={3}
               style={{
-                backgroundColor: "var(--bg-base)",
+                backgroundColor: "var(--bg-muted)",
                 borderColor: "var(--border-default)",
                 color: "var(--text-primary)",
                 resize: "vertical",
@@ -170,25 +177,28 @@ function NewProjectDialog({
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
-                  style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: "50%",
-                    backgroundColor: c,
-                    border: color === c ? "3px solid var(--text-primary)" : "2px solid transparent",
-                    outline: color === c ? "2px solid var(--bg-elevated)" : "none",
-                    outlineOffset: 1,
-                    cursor: "pointer",
-                    transition: "transform 0.1s",
-                  }}
-                  aria-label={c}
-                />
-              ))}
-            </div>
+                style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: "50%",
+                  backgroundColor: c,
+                  border: color === c ? "3px solid var(--text-primary)" : "2px solid transparent",
+                  outline: color === c ? "2px solid var(--bg-elevated)" : "none",
+                  outlineOffset: 1,
+                  cursor: "pointer",
+                  transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                }}
+                aria-label={c}
+              />
+            ))}
+          </div>
           </div>
 
           {error && (
-            <p className="text-sm" style={{ color: "var(--color-danger)" }}>
+            <p
+              className="rounded-lg px-3 py-2 text-sm"
+              style={{ color: "var(--color-danger)", backgroundColor: "var(--status-danger-soft)" }}
+            >
               {error}
             </p>
           )}
@@ -264,7 +274,7 @@ function CreateFromInstructionDialog({
             rows={5}
             placeholder="예: 상반기 프로모션 준비해볼까?"
             style={{
-              backgroundColor: "var(--bg-base)",
+              backgroundColor: "var(--bg-muted)",
               borderColor: "var(--border-default)",
               color: "var(--text-primary)",
             }}
@@ -272,7 +282,14 @@ function CreateFromInstructionDialog({
           <div className="text-xs" style={{ color: "var(--text-tertiary)" }}>
             project + child cases + brief document를 함께 생성합니다.
           </div>
-          {error ? <div className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</div> : null}
+          {error ? (
+            <div
+              className="rounded-lg px-3 py-2 text-sm"
+              style={{ color: "var(--color-danger)", backgroundColor: "var(--status-danger-soft)" }}
+            >
+              {error}
+            </div>
+          ) : null}
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={handleClose} disabled={submitting} style={{ color: "var(--text-secondary)" }}>
@@ -347,11 +364,12 @@ export function ProjectsPage() {
 
       <WorkspacePanel className="overflow-hidden">
         {isLoading ? (
-          <div className="flex min-h-[220px] items-center justify-center px-6 py-12">
-            <div className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-              프로젝트를 불러오는 중...
-            </div>
-          </div>
+          <WorkspaceEmptyState
+            icon={<Sparkles size={18} />}
+            title="프로젝트를 불러오는 중입니다."
+            description="케이스 묶음과 진행 상태를 정리하고 있습니다."
+            className="rounded-none border-0 bg-transparent"
+          />
         ) : projects.length === 0 ? (
           <WorkspaceEmptyState
             icon={<FolderKanban size={22} />}
@@ -368,17 +386,7 @@ export function ProjectsPage() {
                   key={project.id}
                   type="button"
                   onClick={() => navigate(`/${orgPrefix}/projects/${project.id}`)}
-                  className="w-full px-5 py-4 text-left transition-colors"
-                  style={{
-                    backgroundColor: "transparent",
-                    boxShadow: "none",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "var(--bg-subtle)"
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "transparent"
-                  }}
+                  className="w-full px-5 py-4 text-left transition-[background-color,box-shadow] hover:bg-[var(--bg-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-inset"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 space-y-2">

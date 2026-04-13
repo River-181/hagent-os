@@ -15,7 +15,7 @@ import { queryKeys } from "@/lib/queryKeys"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
+import { WorkspaceEmptyState, WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
 import { cn, timeAgo } from "@/lib/utils"
 import {
   AlertTriangle,
@@ -731,7 +731,7 @@ export function InboxPage() {
                   <button
                     key={filter.key}
                     onClick={() => setActiveFilter(filter.key)}
-                    className="rounded-full px-2.5 py-1.5 text-xs font-medium transition-colors"
+                    className="rounded-full px-2.5 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
                     style={{
                       backgroundColor:
                         activeFilter === filter.key ? "var(--color-primary)" : "var(--bg-muted)",
@@ -760,7 +760,7 @@ export function InboxPage() {
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1.1fr)_minmax(340px,0.9fr)]">
             <div className="space-y-4">
               <div
-                className="rounded-xl border p-4"
+                className="rounded-lg border p-4"
                 style={{
                   borderColor: "var(--border-default)",
                   backgroundColor: "var(--bg-elevated)",
@@ -805,7 +805,7 @@ export function InboxPage() {
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
               {replayHistory.length > 0 && (
-                <div className="rounded-lg border p-3 min-w-0" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+                <div className="min-w-0 rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
                   <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                     최근 생성 결과
                   </div>
@@ -833,7 +833,7 @@ export function InboxPage() {
                 </div>
               )}
 
-              <div className="rounded-lg border p-3 min-w-0" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+              <div className="min-w-0 rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
                 <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                   채널 상태
                 </div>
@@ -852,7 +852,7 @@ export function InboxPage() {
                 </div>
               </div>
 
-              <div className="rounded-lg border p-3 min-w-0" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+              <div className="min-w-0 rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                     마지막 생성 항목
@@ -877,7 +877,7 @@ export function InboxPage() {
                 )}
               </div>
 
-              <div className="rounded-lg border p-3 min-w-0" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+              <div className="min-w-0 rounded-lg border p-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
                 <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                   Live inbound queue
                 </div>
@@ -915,7 +915,7 @@ export function InboxPage() {
                 )}
               </div>
 
-              <div className="rounded-lg border p-3 min-w-0 md:col-span-2 xl:col-span-2" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-secondary)" }}>
+              <div className="min-w-0 rounded-lg border p-3 md:col-span-2 xl:col-span-2" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
@@ -1027,32 +1027,20 @@ export function InboxPage() {
           </div>
 
           {isLoading ? (
-            <div className="space-y-3">
-              {[0, 1, 2, 3].map((index) => (
-                <div
-                  key={index}
-                  className="h-24 rounded-xl animate-pulse"
-                  style={{ backgroundColor: "var(--bg-muted)" }}
-                />
-              ))}
-            </div>
+            <WorkspaceEmptyState
+              icon={<Loader2 size={18} className="animate-spin" />}
+              title="알림 피드를 불러오는 중입니다."
+              description="승인 요청과 운영 알림을 정리하고 있습니다."
+            />
           ) : filteredItems.length === 0 ? (
-            <div
-              className="rounded-xl p-10 flex flex-col items-center justify-center gap-3"
-              style={{
-                backgroundColor: "var(--bg-elevated)",
-                border: "1px solid var(--border-default)",
-                boxShadow: "var(--shadow-sm)",
-              }}
-            >
-              <Bell size={40} style={{ color: "var(--text-tertiary)" }} />
-              <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
-                선택한 필터에 해당하는 알림이 없습니다.
-              </p>
-            </div>
+            <WorkspaceEmptyState
+              icon={<Bell size={18} />}
+              title="선택한 필터에 해당하는 알림이 없습니다."
+              description="다른 필터를 보거나 새 인입이 들어오면 여기서 바로 확인할 수 있습니다."
+            />
           ) : (
             <div
-              className="rounded-xl overflow-hidden"
+              className="overflow-hidden rounded-lg"
               style={{
                 border: "1px solid var(--border-default)",
                 boxShadow: "var(--shadow-sm)",
@@ -1070,14 +1058,14 @@ export function InboxPage() {
                     className={cn("px-4 py-4", index > 0 && "border-t")}
                     style={{
                       borderColor: "var(--border-default)",
-                      backgroundColor: isUnread ? "var(--bg-secondary)" : "var(--bg-elevated)",
+                      backgroundColor: isUnread ? "var(--bg-subtle)" : "var(--bg-elevated)",
                     }}
                   >
                     <div className="flex items-start gap-3">
                       <button
                         type="button"
                         onClick={() => handleItemClick(item)}
-                        className="flex flex-1 items-start gap-3 text-left"
+                        className="flex flex-1 items-start gap-3 rounded-lg text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
                       >
                         <div className="mt-0.5 shrink-0">{feedIcon(item)}</div>
 

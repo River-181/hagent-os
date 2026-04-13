@@ -31,9 +31,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { EmptyState } from "@/components/EmptyState"
 import { Badge } from "@/components/ui/badge"
-import { WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
+import { WorkspaceEmptyState, WorkspaceHeader, WorkspacePanel } from "@/components/ui/workspace-surface"
 import { Clock, Plus, Loader2, Bot, Play, CalendarClock, Zap, ChevronDown, ChevronRight } from "lucide-react"
 
 type TriggerType = "매일" | "매주" | "매월" | "이벤트"
@@ -437,9 +436,17 @@ export function RoutinesPage() {
       />
 
       <WorkspacePanel className="overflow-hidden">
-        {routines.length === 0 ? (
+        {isLoading ? (
           <div className="p-6">
-            <EmptyState
+            <WorkspaceEmptyState
+              icon={<Loader2 size={18} className="animate-spin" />}
+              title="루틴을 불러오는 중입니다."
+              description="정기 자동화와 실행 이력을 정리하고 있습니다."
+            />
+          </div>
+        ) : routines.length === 0 ? (
+          <div className="p-6">
+            <WorkspaceEmptyState
               icon={<Clock size={22} />}
               title="등록된 루틴이 없습니다"
               description="정기적으로 실행할 자동화 루틴을 추가하세요."
@@ -450,7 +457,7 @@ export function RoutinesPage() {
             {routines.map((routine) => (
               <div
                 key={routine.id}
-                className="rounded-xl border p-5"
+                className="rounded-lg border p-5 transition-[background-color,border-color,box-shadow,opacity,transform] hover:-translate-y-0.5 hover:shadow-sm"
                 style={{
                   backgroundColor: "var(--bg-elevated)",
                   borderColor: "var(--border-default)",
@@ -467,7 +474,7 @@ export function RoutinesPage() {
                     className="flex min-w-0 flex-1 items-start gap-4 text-left"
                   >
                     <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg"
                       style={{
                         backgroundColor: routine.isActive
                           ? "var(--accent-primary-soft)"
@@ -540,6 +547,7 @@ export function RoutinesPage() {
                       <Switch
                         checked={routine.isActive}
                         onCheckedChange={(checked) => handleToggle(routine, checked)}
+                        aria-label={`${routine.name} 활성 상태 전환`}
                       />
                     </div>
                   </div>
@@ -566,7 +574,7 @@ export function RoutinesPage() {
                   <SheetDescription>{selectedRoutine.description}</SheetDescription>
                 </SheetHeader>
                 <div className="grid gap-5 p-4">
-                  <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--bg-subtle)", borderColor: "var(--border-default)" }}>
+                  <div className="rounded-lg border p-4" style={{ backgroundColor: "var(--bg-subtle)", borderColor: "var(--border-default)" }}>
                     <p className="mb-3 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
                       실행 조건
                     </p>
@@ -579,7 +587,7 @@ export function RoutinesPage() {
                   </div>
 
                   <div className="grid grid-cols-2 gap-3">
-                    <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--bg-subtle)", borderColor: "var(--border-default)" }}>
+                    <div className="rounded-lg border p-4" style={{ backgroundColor: "var(--bg-subtle)", borderColor: "var(--border-default)" }}>
                       <p className="mb-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
                         예상 소요 시간
                       </p>
@@ -587,7 +595,7 @@ export function RoutinesPage() {
                         {selectedRoutine.estimatedDuration}
                       </p>
                     </div>
-                    <div className="rounded-xl border p-4" style={{ backgroundColor: "var(--bg-subtle)", borderColor: "var(--border-default)" }}>
+                    <div className="rounded-lg border p-4" style={{ backgroundColor: "var(--bg-subtle)", borderColor: "var(--border-default)" }}>
                       <p className="mb-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
                         평균 비용
                       </p>
@@ -622,13 +630,14 @@ export function RoutinesPage() {
                           : "1px solid var(--border-default)"
 
                         return (
-                          <div key={history.id} className="rounded-xl overflow-hidden" style={{ border: rowBorder }}>
+                          <div key={history.id} className="overflow-hidden rounded-lg" style={{ border: rowBorder }}>
                             <button
                               type="button"
                               onClick={() =>
                                 setExpandedRunId((prev) => (prev === history.id ? null : history.id))
                               }
-                              className="flex items-center gap-3 w-full px-3 py-2.5 text-left transition-colors"
+                              className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)] focus-visible:ring-inset"
+                              aria-expanded={isExpanded}
                               style={{ backgroundColor: rowBg }}
                             >
                               <span

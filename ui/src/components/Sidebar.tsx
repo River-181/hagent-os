@@ -46,15 +46,15 @@ function NavItem({ to, icon, label, disabled, badge }: NavItemProps) {
   if (disabled) {
     return (
       <div
-        className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm cursor-not-allowed"
-        style={{ color: "var(--text-disabled)" }}
+        className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2 text-sm"
+        style={{ color: "var(--text-tertiary)" }}
       >
         <span className="shrink-0">{icon}</span>
         <span className="flex-1">{label}</span>
         {badge && (
           <span
             className="text-xs px-1.5 py-0.5 rounded"
-            style={{ background: "var(--bg-tertiary)", color: "var(--text-tertiary)" }}
+            style={{ background: "var(--bg-muted)", color: "var(--text-tertiary)" }}
           >
             준비중
           </span>
@@ -68,7 +68,7 @@ function NavItem({ to, icon, label, disabled, badge }: NavItemProps) {
       to={to}
       className={({ isActive }) =>
         cn(
-          "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors",
+          "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-[background-color,color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]",
           isActive
             ? "font-semibold"
             : "hover:bg-[var(--bg-subtle)]"
@@ -89,7 +89,7 @@ function NavItem({ to, icon, label, disabled, badge }: NavItemProps) {
 function SectionLabel({ label }: { label: string }) {
   return (
     <div
-      className="mb-1 mt-3 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.12em]"
+      className="mb-1 mt-3 px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em]"
       style={{ color: "var(--text-tertiary)" }}
     >
       {label}
@@ -127,7 +127,7 @@ export function Sidebar() {
       className="flex flex-col h-full overflow-y-auto"
       style={{
         width: 240,
-        backgroundColor: "var(--bg-page)",
+        backgroundColor: "var(--bg-canvas)",
         borderRight: "1px solid var(--border-default)",
       }}
     >
@@ -138,7 +138,7 @@ export function Sidebar() {
             {orgName}
           </span>
           <button
-            className="p-1.5 rounded-md hover:bg-[var(--bg-tertiary)] transition-colors"
+            className="rounded-md p-1.5 transition-colors hover:bg-[var(--bg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
             aria-label="검색"
           >
             <Search size={16} style={{ color: "var(--text-tertiary)" }} />
@@ -148,7 +148,7 @@ export function Sidebar() {
         <button
           type="button"
           onClick={() => setDialogOpen(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition-all duration-200 hover:brightness-105 active:scale-[0.99]"
+          className="flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold shadow-xs transition-[background-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:brightness-105 hover:shadow-sm active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
           style={{
             background: "var(--accent-primary)",
             color: "var(--text-on-primary)",
@@ -196,7 +196,7 @@ export function Sidebar() {
       <div className="px-3 pb-4 flex flex-col gap-2">
         <button
           onClick={toggleTheme}
-          className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors hover:bg-[var(--bg-subtle)]"
+          className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition-[background-color,color,box-shadow] hover:bg-[var(--bg-subtle)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
           style={{
             backgroundColor: "var(--bg-muted)",
             color: "var(--text-secondary)",
@@ -206,13 +206,13 @@ export function Sidebar() {
           {theme === "dark" ? (
             <Sun size={15} style={{ color: "#f59e0b", flexShrink: 0 }} />
           ) : (
-            <Moon size={15} style={{ color: "var(--color-teal-500)", flexShrink: 0 }} />
+            <Moon size={15} style={{ color: "var(--color-primary)", flexShrink: 0 }} />
           )}
           <span className="text-xs">
             {theme === "dark" ? "라이트 모드" : "다크 모드"}
           </span>
         </button>
-        <span className="text-xs px-1" style={{ color: "var(--text-disabled)" }}>
+        <span className="px-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
           v1.0
         </span>
       </div>

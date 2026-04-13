@@ -239,7 +239,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
           return (
             <pre
               key={index}
-              className="rounded-xl p-4 overflow-x-auto text-xs leading-relaxed"
+              className="rounded-lg p-4 overflow-x-auto text-xs leading-relaxed"
               style={{
                 backgroundColor: "var(--bg-muted)",
                 border: "1px solid var(--border-default)",
@@ -285,7 +285,7 @@ function MarkdownPreview({ markdown }: { markdown: string }) {
           return (
             <div
               key={index}
-              className="rounded-xl p-4 text-xs leading-relaxed"
+              className="rounded-lg p-4 text-xs leading-relaxed"
               style={{
                 backgroundColor: "var(--bg-muted)",
                 border: "1px solid var(--border-default)",
@@ -337,7 +337,7 @@ function FileTree({
               {node.type === "directory" ? <FolderTree size={14} /> : <FileCode2 size={14} />}
               <span className="text-xs font-medium truncate">{node.name}</span>
               {node.type === "file" && (
-                <span className="ml-auto text-[11px]" style={{ color: "var(--text-tertiary)" }}>
+                <span className="ml-auto text-xs" style={{ color: "var(--text-tertiary)" }}>
                   {humanFileSize(node.size)}
                 </span>
               )}
@@ -826,7 +826,7 @@ export function SkillsPage() {
                   <DropdownMenuTrigger asChild>
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors hover:bg-[var(--bg-muted)]"
+                      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors hover:bg-[var(--bg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
                       style={{
                         color: "var(--text-secondary)",
                         border: "1px solid var(--border-default)",
@@ -852,7 +852,7 @@ export function SkillsPage() {
                     <DropdownMenuTrigger asChild>
                       <button
                         type="button"
-                        className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors hover:bg-[var(--bg-muted)]"
+                        className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors hover:bg-[var(--bg-muted)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--border-focus)]"
                         style={{
                           color: "var(--text-secondary)",
                           border: "1px solid var(--border-default)",
@@ -877,7 +877,7 @@ export function SkillsPage() {
             </div>
 
             <ScrollArea className="h-[calc(100vh-20rem)] min-h-[540px]">
-              <div className="divide-y" style={{ borderColor: "var(--border-subtle)" }}>
+              <div className="divide-y" style={{ borderColor: "var(--border-default)" }}>
                 {skillsQuery.isLoading ? (
                   <WorkspaceEmptyState
                     className="min-h-[200px]"
@@ -917,7 +917,7 @@ export function SkillsPage() {
             {detailQuery.isLoading || (!detail && !detailQuery.isError) ? (
               <div className="p-6 md:p-8">
                 <WorkspaceEmptyState
-                  className="min-h-[720px]"
+                  className="min-h-[320px]"
                   icon={<Loader2 size={22} className="animate-spin" />}
                   title="스킬 상세 정보를 불러오는 중입니다."
                   description="SKILL.md와 연결 상태, 에이전트 장착 현황을 정리하고 있습니다."
@@ -926,7 +926,7 @@ export function SkillsPage() {
             ) : detailQuery.isError || !detail ? (
               <div className="p-6 md:p-8">
                 <WorkspaceEmptyState
-                  className="min-h-[720px]"
+                  className="min-h-[320px]"
                   icon={<CircleAlert size={22} />}
                   title="스킬 상세를 불러오지 못했습니다."
                   description={(detailQuery.error as Error | undefined)?.message ?? "선택한 스킬의 메타데이터를 다시 확인해 주세요."}
@@ -1143,7 +1143,7 @@ export function SkillsPage() {
                                   )}
                                 </div>
                                 {!item.ready ? (
-                                  <span className="shrink-0 text-[11px]" style={{ color: "var(--status-warning)" }}>
+                                  <span className="shrink-0 text-xs" style={{ color: "var(--status-warning)" }}>
                                     설정 필요
                                   </span>
                                 ) : null}
@@ -1270,7 +1270,7 @@ export function SkillsPage() {
                             const mounted = detail.mountedAgents.find((item) => item.agentId === agent.id)
                             return (
                               <div key={agent.id} className="flex items-center gap-3 border-t pt-4 first:border-t-0 first:pt-0" style={{ borderColor: "var(--border-default)" }}>
-                                <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: "var(--accent-primary-soft)", color: "var(--accent-primary)" }}>
+                                <div className="flex h-10 w-10 items-center justify-center rounded-lg" style={{ backgroundColor: "var(--accent-primary-soft)", color: "var(--accent-primary)" }}>
                                   <Bot size={16} />
                                 </div>
                                 <div className="min-w-0 flex-1">

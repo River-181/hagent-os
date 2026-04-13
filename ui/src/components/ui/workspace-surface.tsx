@@ -9,7 +9,7 @@ export function WorkspacePanel({
   return (
     <section
       className={cn(
-        "rounded-lg border bg-[var(--bg-page)] shadow-[var(--shadow-xs)]",
+        "rounded-lg border bg-[var(--bg-elevated)] shadow-[var(--shadow-xs)] transition-[background-color,border-color,box-shadow]",
         className,
       )}
       style={{ borderColor: "var(--border-default)" }}
@@ -25,7 +25,7 @@ export function WorkspaceSubtle({
   return (
     <div
       className={cn(
-        "rounded-xl border bg-[var(--bg-subtle)]",
+        "rounded-lg border bg-[var(--bg-subtle)]",
         className,
       )}
       style={{ borderColor: "var(--border-default)" }}
@@ -64,22 +64,31 @@ export function WorkspaceEmptyState({
   title,
   description,
   icon,
+  action,
   className,
 }: {
   title: string
   description?: React.ReactNode
   icon?: React.ReactNode
+  action?: React.ReactNode
   className?: string
 }) {
   return (
     <div
       className={cn(
-        "flex min-h-[180px] flex-col items-center justify-center rounded-xl border px-6 py-10 text-center",
+        "flex min-h-[180px] flex-col items-center justify-center rounded-lg border px-6 py-10 text-center",
         className,
       )}
       style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}
     >
-      {icon ? <div className="mb-3" style={{ color: "var(--text-tertiary)" }}>{icon}</div> : null}
+      {icon ? (
+        <div
+          className="mb-3 flex h-10 w-10 items-center justify-center rounded-full"
+          style={{ color: "var(--text-tertiary)", backgroundColor: "var(--bg-muted)" }}
+        >
+          {icon}
+        </div>
+      ) : null}
       <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
         {title}
       </p>
@@ -88,6 +97,7 @@ export function WorkspaceEmptyState({
           {description}
         </p>
       ) : null}
+      {action ? <div className="mt-4">{action}</div> : null}
     </div>
   )
 }
