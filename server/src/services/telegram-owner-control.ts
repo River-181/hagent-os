@@ -637,6 +637,81 @@ function formatCaseLine(caseRecord: typeof schema.cases.$inferSelect) {
   return `${caseRecord.identifier} · ${caseRecord.title} · ${caseRecord.status} · P${caseRecord.priority}`
 }
 
+function extractArtifactExcerpt(body: string, maxLength = 1200) {
+  const normalized = body
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .trim()
+  if (!normalized) return ""
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength).trimEnd()}\n\n...` : normalized
+}
+
+async function getLatestCaseArtifact(
+  db: Db,
+  organizationId: string,
+  caseId: string,
+) {
+  const allDocuments = await db
+    .select()
+    .from(schema.documents)
+    .where(eq(schema.documents.organizationId, organizationId))
+
+  const matches = allDocuments
+    .filter((item) => {
+      const tags = Array.isArray(item.tags) ? item.tags : []
+      return item.category === "artifact" && tags.includes(`case:${caseId}`)
+    })
+    .sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime())
+
+  return matches[0] ?? null
+}
+
+async function buildOwnerControlResultMessage(
+  db: Db,
+  organizationId: string,
+  caseId: string,
+  header: string,
+  options?: {
+    includeApprovalHint?: boolean
+  },
+) {
+  const [caseRecord] = await db
+    .select()
+    .from(schema.cases)
+    .where(eq(schema.cases.id, caseId))
+
+  if (!caseRecord) return header
+
+  const latestArtifact = await getLatestCaseArtifact(db, organizationId, caseId)
+  const parts = [header]
+
+  if (latestArtifact) {
+    parts.push("")
+    parts.push(`[최신 결과] ${latestArtifact.title}`)
+    const excerpt = extractArtifactExcerpt(latestArtifact.body)
+    if (excerpt) {
+      parts.push("")
+      parts.push(excerpt)
+    }
+  }
+
+  if (options?.includeApprovalHint) {
+    const approvals = await db
+      .select()
+      .from(schema.approvals)
+      .where(and(eq(schema.approvals.organizationId, organizationId), eq(schema.approvals.caseId, caseId), eq(schema.approvals.status, "pending")))
+      .orderBy(desc(schema.approvals.createdAt))
+    if (approvals.length > 0) {
+      parts.push("")
+      parts.push("이 결과는 승인 대기 중입니다. 필요하면 `케이스 "
+        + `${caseRecord.identifier} 승인` + "`을 보내세요.")
+    }
+  }
+
+  return parts.join("\n")
+}
+
 async function listRecentCasesText(db: Db, organizationId: string) {
   const cases = await db
     .select()
@@ -758,7 +833,15 @@ async function executeCaseMutation(
   confirmation: PendingConfirmation,
 ) {
   if (confirmation.kind === "approval_decision") {
-    await processApprovalDecision(db, confirmation.approvalId, confirmation.decision)
+    const approval = await processApprovalDecision(db, confirmation.approvalId, confirmation.decision)
+    if (confirmation.decision === "approved" && approval.caseId) {
+      return buildOwnerControlResultMessage(
+        db,
+        organization.id,
+        approval.caseId,
+        "승인을 완료했습니다.",
+      )
+    }
     return confirmation.decision === "approved" ? "승인을 완료했습니다." : "반려를 완료했습니다."
   }
 
@@ -820,7 +903,13 @@ async function executeCaseMutation(
     agentId: fallback.id,
     source: "telegram_owner_control",
   })
-  return `${caseRecord.identifier}를 ${fallback.name} 에이전트로 다시 실행했습니다.`
+  return buildOwnerControlResultMessage(
+    db,
+    organization.id,
+    caseRecord.id,
+    `${caseRecord.identifier}를 ${fallback.name} 에이전트로 다시 실행했습니다.`,
+    { includeApprovalHint: true },
+  )
 }
 
 async function handleIntent(
