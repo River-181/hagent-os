@@ -359,7 +359,7 @@ export function AssistantPage() {
             </div>
           </div>
 
-          <div className="grid min-h-0 flex-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="grid min-h-0 flex-1 gap-6 overflow-hidden xl:grid-cols-[minmax(0,1fr)_320px]">
             <ScrollArea className="min-h-0">
               <div className="space-y-4 px-6 py-5">
                 {selectedCaseLoading ? (
@@ -428,7 +428,7 @@ export function AssistantPage() {
               </div>
             </ScrollArea>
 
-            <div className="border-l px-5 py-5" style={{ borderColor: "var(--border-default)" }}>
+            <div className="min-h-0 overflow-y-auto border-l px-5 py-5" style={{ borderColor: "var(--border-default)" }}>
               <div className="space-y-4">
                 <div className="rounded-xl border p-4" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
                   <div className="mb-2 text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
