@@ -489,6 +489,10 @@ async function callCodex(systemPrompt: string, userMessage: string, options: Run
   })
 
   if (!response.ok) {
+    let errBody = ""
+    try { errBody = await response.text() } catch { /* ignore */ }
+    // eslint-disable-next-line no-console
+    console.error(`[callCodex] OpenAI API error ${response.status}: ${errBody.slice(0, 200)}`)
     return {
       ...getMockResponse(systemPrompt, userMessage),
       adapterType: options.adapterType ?? "codex_local",
