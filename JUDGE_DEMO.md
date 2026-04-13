@@ -15,6 +15,29 @@
 - 개인정보 안내: [PRIVACY.md](./PRIVACY.md)
 - 라이선스: [LICENSE](./LICENSE)
 
+## 생각 없이 따라하기
+
+아래 순서만 그대로 따라가면 됩니다.
+
+1. 웹 열기
+   `https://hagent-os.up.railway.app/tanzania-english-academy/dashboard`
+2. 고객 봇 열기
+   `https://t.me/TANZANIA_ENGLISH_ACADEMY_bot`
+3. 고객 봇에 보내기
+   `이번 주 보강 필요한 학생 정리해줘`
+4. 운영 봇 열기
+   `@hagent_os_ops_bot`
+5. 운영 봇에 먼저 보내기
+   `/login hagent2026`
+6. 로그인 뒤 운영 봇에 보내기
+   `미승인 보여줘`
+
+중요:
+
+- 운영 봇은 `/start` 보다 `/login hagent2026` 를 바로 보내는 것이 가장 확실합니다.
+- 심사 중 막히면 다시 웹으로 돌아가 `Dashboard -> Cases -> Approvals` 순서로 보면 됩니다.
+- 최종 제출 GitHub URL은 `https://github.com/River-181/hagent-os` 입니다.
+
 추천 순서:
 
 1. `Dashboard`

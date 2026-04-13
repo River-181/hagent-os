@@ -42,6 +42,25 @@
   <code>Railway</code>
 </p>
 
+## 심사위원 30초 시작
+
+이 README를 길게 읽지 않아도, 아래 네 줄만 따라오면 핵심 흐름을 볼 수 있습니다.
+
+1. 웹 대시보드 열기
+   `https://hagent-os.up.railway.app/tanzania-english-academy/dashboard`
+2. 고객 봇 체험
+   `https://t.me/TANZANIA_ENGLISH_ACADEMY_bot`
+   보내기: `이번 주 보강 필요한 학생 정리해줘`
+3. 운영 봇 체험
+   `@hagent_os_ops_bot`
+   먼저 보내기: `/login hagent2026`
+   그 다음 보내기: `미승인 보여줘`
+4. 전체 시연 순서가 필요하면
+   [JUDGE_DEMO.md](./JUDGE_DEMO.md)
+
+최종 제출 GitHub URL:
+`https://github.com/River-181/hagent-os`
+
 ## HagentOS란?
 
 # 학원 운영의 비정형 예외를 승인 가능한 AI 흐름으로 바꾸는 운영 관제판
