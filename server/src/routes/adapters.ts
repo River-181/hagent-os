@@ -49,11 +49,34 @@ function resolveOrgScopedIntegrationStatuses(
   )
 }
 
+function resolveOrgScopedAdapterStatuses(
+  adapters: ReturnType<typeof getAdapterStatuses>,
+  config: unknown,
+) {
+  if (!isPlainObject(config)) return adapters
+  const aiPolicy = isPlainObject(config.aiPolicy) ? config.aiPolicy : {}
+  const orgApiKey = typeof aiPolicy.apiKey === "string" ? aiPolicy.apiKey.trim() : ""
+  if (!orgApiKey) return adapters
+
+  return adapters.map((adapter) =>
+    adapter.key === "codex_local"
+      ? {
+          ...adapter,
+          connected: true,
+          missingEnv: [],
+          statusSummary: "organization api key connected",
+          statusDetail: "this organization can call the OpenAI Responses API with its own api key",
+        }
+      : adapter,
+  )
+}
+
 export function adapterRoutes(db: Db): Router {
   const router = Router()
 
   router.get("/", async (req, res) => {
     const orgId = typeof req.query.orgId === "string" ? req.query.orgId : ""
+    let adapters = getAdapterStatuses()
     let integrations = getIntegrationStatuses()
 
     if (orgId) {
@@ -61,11 +84,12 @@ export function adapterRoutes(db: Db): Router {
         .select({ agentTeamConfig: schema.organizations.agentTeamConfig })
         .from(schema.organizations)
         .where(eq(schema.organizations.id, orgId))
+      adapters = resolveOrgScopedAdapterStatuses(adapters, organization?.agentTeamConfig)
       integrations = resolveOrgScopedIntegrationStatuses(integrations, organization?.agentTeamConfig)
     }
 
     res.json({
-      adapters: getAdapterStatuses(),
+      adapters,
       integrations,
     })
   })
@@ -76,17 +100,28 @@ export function adapterRoutes(db: Db): Router {
       const byoApiKey = typeof req.body?.apiKey === "string" && req.body.apiKey.trim().length > 0
         ? req.body.apiKey.trim()
         : undefined
+      const orgId = typeof req.body?.orgId === "string" ? req.body.orgId : ""
       const testedAt = new Date().toISOString()
 
       if (key === "codex_local" || key === "codex_qauth" || key === "claude_local") {
         const defaultModel = key === "claude_local" ? "claude-sonnet-4-6" : "gpt-4o-mini"
+        let orgApiKey: string | undefined
+        if (!byoApiKey && orgId && key === "codex_local") {
+          const [organization] = await db
+            .select({ agentTeamConfig: schema.organizations.agentTeamConfig })
+            .from(schema.organizations)
+            .where(eq(schema.organizations.id, orgId))
+          const config = isPlainObject(organization?.agentTeamConfig) ? organization.agentTeamConfig : {}
+          const aiPolicy = isPlainObject(config.aiPolicy) ? config.aiPolicy : {}
+          orgApiKey = typeof aiPolicy.apiKey === "string" && aiPolicy.apiKey.trim().length > 0 ? aiPolicy.apiKey.trim() : undefined
+        }
         const result = await runWithAdapter(
           "당신은 학원 운영 보조 AI입니다. 한 문장으로만 답하세요.",
           "환불 문의를 받았을 때 운영자가 먼저 확인해야 할 항목 1가지만 말해줘.",
           {
             adapterType: key,
             model: typeof req.body?.model === "string" ? req.body.model : defaultModel,
-            apiKey: byoApiKey,
+            apiKey: byoApiKey ?? orgApiKey,
             maxTokens: 120,
           },
         )

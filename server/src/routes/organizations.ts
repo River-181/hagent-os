@@ -31,6 +31,7 @@ const organizationPatchSchema = z.object({
         .object({
           primaryAdapterType: z.enum(["codex_qauth", "codex_local", "claude_local", "mock_local"]).optional(),
           primaryModel: z.string().optional(),
+          apiKey: z.string().optional(),
           fallbackAdapterType: z.enum(["codex_qauth", "codex_local", "claude_local", "mock_local"]).optional(),
           autoRun: z.boolean().optional(),
           allowDegradedMode: z.boolean().optional(),
@@ -78,13 +79,64 @@ function getOrganizationConfig(organization: typeof schema.organizations.$inferS
   return isPlainObject(organization.agentTeamConfig) ? organization.agentTeamConfig : {}
 }
 
+function sanitizeChannelsForClient(channels: Record<string, unknown>) {
+  const next = JSON.parse(JSON.stringify(channels)) as Record<string, unknown>
+  const telegram = isPlainObject(next.telegram) ? next.telegram : null
+  if (telegram) {
+    if (typeof telegram.botToken === "string" && telegram.botToken.trim()) {
+      delete telegram.botToken
+      telegram.botTokenConfigured = true
+    }
+    if (typeof telegram.webhookSecret === "string" && telegram.webhookSecret.trim()) {
+      delete telegram.webhookSecret
+      telegram.webhookSecretConfigured = true
+    }
+    const ownerControl = isPlainObject(telegram.ownerControl) ? telegram.ownerControl : null
+    if (ownerControl) {
+      if (typeof ownerControl.passwordHash === "string" && ownerControl.passwordHash.trim()) {
+        delete ownerControl.passwordHash
+        ownerControl.passwordConfigured = true
+      }
+    }
+  }
+  return next
+}
+
 function getChannelsFromConfig(config: Record<string, unknown>) {
   const integrations = isPlainObject(config.integrations) ? config.integrations : {}
   const integrationChannels = isPlainObject(integrations.channels) ? integrations.channels : {}
   if (Object.keys(integrationChannels).length > 0) {
-    return integrationChannels
+    return sanitizeChannelsForClient(integrationChannels)
   }
-  return isPlainObject(config.channels) ? config.channels : {}
+  return isPlainObject(config.channels) ? sanitizeChannelsForClient(config.channels) : {}
+}
+
+function sanitizeOrganizationForClient(organization: typeof schema.organizations.$inferSelect) {
+  const config = getOrganizationConfig(organization)
+  if (!Object.keys(config).length) return organization
+
+  const nextConfig = JSON.parse(JSON.stringify(config)) as Record<string, unknown>
+  const aiPolicy = isPlainObject(nextConfig.aiPolicy) ? nextConfig.aiPolicy : null
+  if (aiPolicy) {
+    if (typeof aiPolicy.apiKey === "string" && aiPolicy.apiKey.trim()) {
+      delete aiPolicy.apiKey
+      aiPolicy.apiKeyConfigured = true
+    }
+  }
+
+  const integrations = isPlainObject(nextConfig.integrations) ? nextConfig.integrations : null
+  if (integrations && isPlainObject(integrations.channels)) {
+    integrations.channels = sanitizeChannelsForClient(integrations.channels)
+  }
+
+  if (isPlainObject(nextConfig.channels)) {
+    nextConfig.channels = sanitizeChannelsForClient(nextConfig.channels)
+  }
+
+  return {
+    ...organization,
+    agentTeamConfig: nextConfig,
+  }
 }
 
 export function organizationRoutes(db: Db): Router {
@@ -93,7 +145,7 @@ export function organizationRoutes(db: Db): Router {
   router.get("/", async (_req, res) => {
     try {
       const orgs = await db.select().from(schema.organizations).orderBy(desc(schema.organizations.createdAt))
-      res.json(orgs)
+      res.json(orgs.map(sanitizeOrganizationForClient))
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch organizations" })
     }
@@ -131,7 +183,7 @@ export function organizationRoutes(db: Db): Router {
         })
         .returning()
 
-      res.status(201).json(org)
+      res.status(201).json(sanitizeOrganizationForClient(org))
     } catch (err) {
       res.status(500).json({ error: "Failed to create organization" })
     }
@@ -140,6 +192,13 @@ export function organizationRoutes(db: Db): Router {
   router.post("/bootstrap", async (req, res) => {
     try {
       const result = await runBootstrap(db, req.body)
+      if (result && typeof result === "object" && "organization" in result && result.organization) {
+        res.status(201).json({
+          ...result,
+          organization: sanitizeOrganizationForClient(result.organization as typeof schema.organizations.$inferSelect),
+        })
+        return
+      }
       res.status(201).json(result)
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to bootstrap organization"
@@ -161,7 +220,7 @@ export function organizationRoutes(db: Db): Router {
         return
       }
 
-      res.json(org)
+      res.json(sanitizeOrganizationForClient(org))
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch organization" })
     }
@@ -283,7 +342,7 @@ export function organizationRoutes(db: Db): Router {
         })
       }
 
-      res.json(updated)
+      res.json(sanitizeOrganizationForClient(updated))
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "Failed to update organization" })
     }

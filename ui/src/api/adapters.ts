@@ -5,5 +5,5 @@ export const adaptersApi = {
     api.get<{ adapters: any[]; integrations: any[] }>(
       orgId ? `/adapters?orgId=${encodeURIComponent(orgId)}` : "/adapters",
     ),
-  test: (key: string, orgId?: string) => api.post<any>("/adapters/test", { key, orgId }),
+  test: (key: string, orgId?: string, apiKey?: string) => api.post<any>("/adapters/test", { key, orgId, apiKey }),
 }

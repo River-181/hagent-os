@@ -306,6 +306,7 @@ export function SettingsPage() {
 
   const [primaryAdapterType, setPrimaryAdapterType] = useState("codex_qauth")
   const [primaryModel, setPrimaryModel] = useState("gpt-5-codex")
+  const [primaryApiKey, setPrimaryApiKey] = useState("")
   const [fallbackAdapterType, setFallbackAdapterType] = useState("claude_local")
   const [autoRun, setAutoRun] = useState(true)
   const [allowDegradedMode, setAllowDegradedMode] = useState(true)
@@ -337,6 +338,14 @@ export function SettingsPage() {
   }, [closePanel, setPanelContent])
 
   const selectedOrg = organizations.find((org) => org.id === activeOrgId) ?? null
+  const selectedOrgConfig =
+    selectedOrg && isObjectRecord(selectedOrg.agentTeamConfig)
+      ? (selectedOrg.agentTeamConfig as Record<string, any>)
+      : {}
+  const selectedOrgAiPolicy = isObjectRecord(selectedOrgConfig.aiPolicy)
+    ? (selectedOrgConfig.aiPolicy as Record<string, any>)
+    : {}
+  const primaryApiKeyConfigured = Boolean(selectedOrgAiPolicy.apiKeyConfigured)
 
   const adaptersQuery = useQuery({
     queryKey: [...queryKeys.adapters.all, activeOrgId ?? "global"],
@@ -395,6 +404,7 @@ export function SettingsPage() {
 
     setPrimaryAdapterType((aiPolicy.primaryAdapterType as string | undefined) ?? (bootstrap.selectedAdapterType as string | undefined) ?? "codex_qauth")
     setPrimaryModel((aiPolicy.primaryModel as string | undefined) ?? (bootstrap.selectedModel as string | undefined) ?? "gpt-5-codex")
+    setPrimaryApiKey("")
     setFallbackAdapterType((aiPolicy.fallbackAdapterType as string | undefined) ?? "claude_local")
     setAutoRun((aiPolicy.autoRun as boolean | undefined) ?? true)
     setAllowDegradedMode((aiPolicy.allowDegradedMode as boolean | undefined) ?? true)
@@ -442,6 +452,9 @@ export function SettingsPage() {
   const selectedAdapter = adapters.find((adapter: any) => adapter.key === primaryAdapterType) ?? adapters[0] ?? null
   const selectedCodexAdapterKey = primaryAdapterType === "codex_qauth" ? "codex_qauth" : "codex_local"
   const selectedCodexAdapterTest = adapterTestResult[selectedCodexAdapterKey]
+  const effectiveCodexConnected = Boolean(
+    primaryAdapterType === "codex_local" ? selectedAdapter?.connected || primaryApiKeyConfigured : selectedAdapter?.connected,
+  )
   const installedSkills = skills.filter((item: any) => item.installed)
   const actionRequiredSkills = skills.filter((item: any) => !item.ready)
   const connectedIntegrations = integrations.filter((item: any) => item.connected)
@@ -480,8 +493,10 @@ export function SettingsPage() {
   })
 
   const adapterTestMutation = useMutation({
-    mutationFn: (key: string) => adaptersApi.test(key, activeOrgId ?? undefined),
-    onSuccess: async (result, key) => {
+    mutationFn: ({ key, apiKey }: { key: string; apiKey?: string }) =>
+      adaptersApi.test(key, activeOrgId ?? undefined, apiKey),
+    onSuccess: async (result, variables) => {
+      const key = variables.key
       setAdapterTestResult((prev) => ({ ...prev, [key]: result }))
       try {
         if (activeOrgId) {
@@ -646,7 +661,7 @@ export function SettingsPage() {
             <StatusPill tone={selectedOrg ? "good" : "warn"}>
               {selectedOrg ? "bootstrap 완료" : "조직 선택 필요"}
             </StatusPill>
-            <StatusPill tone={selectedAdapter?.connected ? "good" : "warn"}>
+            <StatusPill tone={effectiveCodexConnected ? "good" : "warn"}>
               {selectedAdapter?.label ?? "adapter 없음"}
             </StatusPill>
           </div>
@@ -673,7 +688,7 @@ export function SettingsPage() {
             {
               label: "기본 실행",
               value: selectedAdapter?.label ?? primaryAdapterType,
-              detail: selectedAdapter?.connected ? "실행 준비됨" : "degraded 또는 연결 확인 필요",
+              detail: effectiveCodexConnected ? "실행 준비됨" : "degraded 또는 연결 확인 필요",
             },
             {
               label: "연동 준비",
@@ -844,16 +859,35 @@ export function SettingsPage() {
             </Field>
             <Field
               label="현재 실행 상태"
-              hint="연결 여부는 서버 env 기준이고, 저장값은 이 기관의 기본 정책입니다."
+              hint="연결 여부는 이 기관 저장값과 서버 런타임 상태를 함께 반영합니다."
             >
               <div className="flex h-10 items-center gap-2 rounded-lg border px-3" style={{ borderColor: "var(--border-default)", backgroundColor: "var(--bg-subtle)" }}>
-                {selectedAdapter?.connected ? <CheckCircle2 size={15} style={{ color: "var(--color-success)" }} /> : <TriangleAlert size={15} style={{ color: "var(--color-warning)" }} />}
+                {effectiveCodexConnected ? <CheckCircle2 size={15} style={{ color: "var(--color-success)" }} /> : <TriangleAlert size={15} style={{ color: "var(--color-warning)" }} />}
                 <span className="text-sm" style={{ color: "var(--text-primary)" }}>
-                  {selectedAdapter?.connected ? "실연동 가능" : "degraded mode 예정"}
+                  {effectiveCodexConnected ? "실연동 가능" : "degraded mode 예정"}
                 </span>
               </div>
             </Field>
           </div>
+
+          <Field
+            label="조직 OpenAI API Key"
+            hint="live URL에서 직접 Codex 실행 키를 연결합니다. 비워두면 기존 값을 유지합니다."
+          >
+            <Input
+              type="password"
+              value={primaryApiKey}
+              onChange={(e) => setPrimaryApiKey(e.target.value)}
+              placeholder={primaryApiKeyConfigured ? "기존 조직 API key가 저장되어 있습니다" : "sk-..."}
+              autoComplete="off"
+            />
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <StatusPill tone={primaryApiKeyConfigured ? "good" : "muted"}>
+                {primaryApiKeyConfigured ? "조직 API key 저장됨" : "조직 API key 미설정"}
+              </StatusPill>
+              {primaryApiKey.trim() ? <StatusPill tone="muted">새 key 입력됨</StatusPill> : null}
+            </div>
+          </Field>
 
           <ToggleRow
             title="기본 자동 실행"
@@ -969,19 +1003,20 @@ export function SettingsPage() {
                 Codex 연결 상태
               </div>
               <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--text-secondary)" }}>
-                `Codex qauth 로그인` 또는 `OPENAI_API_KEY`가 있으면 실제 케이스를 Codex로 처리합니다. 없으면 `mock_local` fallback이 사용됩니다.
+                `Codex qauth 로그인`, 서버 `OPENAI_API_KEY`, 또는 이 기관에 저장한 `OpenAI API Key`가 있으면 실제 케이스를 Codex로 처리합니다.
               </p>
               <p className="mt-2 text-xs leading-relaxed" style={{ color: "var(--text-tertiary)" }}>
-                연결 방법: 심사 환경에서는 `codex login`으로 ChatGPT 로그인 상태를 유지하세요. API key 방식을 쓸 경우에는 `{SETTINGS_ENV_PATH}`에 `OPENAI_API_KEY=...`를 넣고 서버를 다시 시작하면 됩니다.
+                연결 방법: 가장 빠른 방법은 이 화면에 조직 전용 API key를 저장하는 것입니다. 서버 공용 key를 쓸 경우에는 `{SETTINGS_ENV_PATH}`에 `OPENAI_API_KEY=...`를 넣고 서버를 다시 시작해야 합니다.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <StatusPill tone={selectedAdapter?.connected ? "good" : "warn"}>
-                  {selectedAdapter?.connected
+                <StatusPill tone={effectiveCodexConnected ? "good" : "warn"}>
+                  {effectiveCodexConnected
                     ? "Codex 연결됨"
                     : primaryAdapterType === "codex_qauth"
                       ? "Codex 로그인 필요"
-                      : "OPENAI_API_KEY 필요"}
+                      : "API key 필요"}
                 </StatusPill>
+                {primaryApiKeyConfigured ? <StatusPill tone="good">조직 key 사용 가능</StatusPill> : null}
                 {selectedAdapter?.missingEnv?.map((item: string) => (
                   <button
                     key={item}
@@ -1000,7 +1035,12 @@ export function SettingsPage() {
                   size="sm"
                   variant="outline"
                   disabled={adapterTestMutation.isPending}
-                  onClick={() => adapterTestMutation.mutate(selectedCodexAdapterKey)}
+                  onClick={() =>
+                    adapterTestMutation.mutate({
+                      key: selectedCodexAdapterKey,
+                      apiKey: selectedCodexAdapterKey === "codex_local" ? primaryApiKey.trim() || undefined : undefined,
+                    })
+                  }
                 >
                   {adapterTestMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
                   Codex 연결 테스트
@@ -1052,7 +1092,7 @@ export function SettingsPage() {
                   size="sm"
                   variant="outline"
                   disabled={adapterTestMutation.isPending}
-                  onClick={() => adapterTestMutation.mutate("korean-law-mcp")}
+                  onClick={() => adapterTestMutation.mutate({ key: "korean-law-mcp" })}
                 >
                   {adapterTestMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
                   법령 조회 테스트
@@ -1082,6 +1122,7 @@ export function SettingsPage() {
                       aiPolicy: {
                         primaryAdapterType,
                         primaryModel,
+                        ...(primaryApiKey.trim() ? { apiKey: primaryApiKey.trim() } : {}),
                         fallbackAdapterType,
                         autoRun,
                         allowDegradedMode,
@@ -1311,7 +1352,7 @@ export function SettingsPage() {
               size="sm"
               variant="outline"
               disabled={adapterTestMutation.isPending}
-              onClick={() => adapterTestMutation.mutate("kakao-outbound")}
+              onClick={() => adapterTestMutation.mutate({ key: "kakao-outbound" })}
             >
               {adapterTestMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
               Kakao 발송 경로 테스트
@@ -1325,7 +1366,7 @@ export function SettingsPage() {
               size="sm"
               variant="outline"
               disabled={adapterTestMutation.isPending}
-              onClick={() => adapterTestMutation.mutate("telegram-outbound")}
+              onClick={() => adapterTestMutation.mutate({ key: "telegram-outbound" })}
             >
               {adapterTestMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
               Telegram 발송 경로 테스트
