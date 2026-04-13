@@ -1,0 +1,4 @@
+display_name: 학생 데이터 가져오기
+short_description: 학생과 학부모 데이터를 정규화해 가져옵니다.
+default_prompt: |
+  Use 학생 데이터 가져오기 when importing academy records from CSV, Excel, or 상담 lists.

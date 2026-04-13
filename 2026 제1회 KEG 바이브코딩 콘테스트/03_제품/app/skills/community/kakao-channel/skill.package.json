@@ -1,0 +1,30 @@
+{
+  "id": "community/kakao-channel",
+  "slug": "kakao-channel",
+  "namespace": "community",
+  "displayName": "카카오 채널 연동",
+  "version": "0.1.0",
+  "summary": "카카오 채널 문의를 케이스, 응답 초안, 알림 흐름에 연결하는 wrapper skill입니다.",
+  "packageType": "wrapper",
+  "source": {
+    "kind": "manual",
+    "importedAt": "2026-04-11T00:00:00.000Z"
+  },
+  "compatibility": {
+    "agentTypes": ["complaint", "notification", "intake"],
+    "adapters": ["claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": ["kakao-channel"],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": false,
+    "publishable": true
+  }
+}

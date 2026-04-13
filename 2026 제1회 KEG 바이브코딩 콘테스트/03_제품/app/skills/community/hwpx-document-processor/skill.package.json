@@ -1,0 +1,45 @@
+{
+  "id": "community/hwpx-document-processor",
+  "slug": "hwpx-document-processor",
+  "namespace": "community",
+  "displayName": "HWPX 문서 처리",
+  "version": "0.1.0",
+  "summary": "한글 문서 템플릿과 문서 읽기/쓰기 절차를 제공합니다.",
+  "packageType": "wrapper",
+  "source": {
+    "kind": "github_repo",
+    "repo": "https://github.com/Canine89/hwpxskill",
+    "importedAt": "2026-04-10T15:47:15.894Z"
+  },
+  "compatibility": {
+    "agentTypes": [
+      "staff",
+      "compliance",
+      "analytics"
+    ],
+    "adapters": [
+      "claude_local"
+    ],
+    "locales": [
+      "ko-KR"
+    ]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [
+      "hwpx-cli"
+    ],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": [
+      "codex",
+      "claude-code",
+      "cursor"
+    ],
+    "editable": false,
+    "publishable": true
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "id": "hagent/korean-tone-guide",
+  "slug": "korean-tone-guide",
+  "namespace": "hagent",
+  "displayName": "학부모 응대 톤 가이드",
+  "version": "0.1.0",
+  "summary": "학부모 커뮤니케이션의 한국어 톤앤매너, 완곡 표현, 사과/설명 문장을 가이드합니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "importedAt": "2026-04-11T00:00:00.000Z"
+  },
+  "compatibility": {
+    "agentTypes": ["complaint", "retention", "notification"],
+    "adapters": ["claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  }
+}

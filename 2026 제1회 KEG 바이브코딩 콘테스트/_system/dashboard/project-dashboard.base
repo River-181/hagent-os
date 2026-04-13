@@ -1,0 +1,60 @@
+filters: file.path == "00 HOME.md" || file.inFolder("_MOC") || file.inFolder("_system/dashboard") || file.inFolder("05_제출") || file.inFolder("assets/excaildraw") || file.path == ".agent/system/ops/RALPH-LOOP-2026-04-13.md" || file.path == "03_제품/hagent-os/diagrams/99_comprehensive-architecture.md"
+formulas:
+  hub: if(file.path == "00 HOME.md", "HOME", if(file.inFolder("_MOC"), "MOC", if(file.inFolder("_system/dashboard"), "Dashboard", if(file.inFolder("05_제출"), "Submission", if(file.inFolder("assets/excaildraw"), "Excalidraw", if(file.path == ".agent/system/ops/RALPH-LOOP-2026-04-13.md", "Ops", "Product"))))))
+  status_display: if(status, status, if(file.inFolder("assets/excaildraw"), "asset", if(file.hasTag("type/moc"), "active", "")))
+  focus: if(file.path == "00 HOME.md" || file.path == "05_제출/ai-report-final.md" || file.path == "03_제품/hagent-os/diagrams/99_comprehensive-architecture.md" || file.path == ".agent/system/ops/RALPH-LOOP-2026-04-13.md", "today", "")
+properties:
+  formula.hub:
+    displayName: 허브
+  formula.status_display:
+    displayName: 상태
+  formula.focus:
+    displayName: 오늘
+  date:
+    displayName: 날짜
+  up:
+    displayName: 상위
+  file.path:
+    displayName: 경로
+  file.ext:
+    displayName: 확장자
+  file.mtime:
+    displayName: 수정시각
+views:
+  - type: table
+    name: 제출 핵심
+    filters: file.path == "00 HOME.md" || file.path == "_MOC/_05_제출_MOC.md" || file.path == "05_제출/ai-report-final.md" || file.path == "05_제출/submission-checklist.md" || file.path == "03_제품/hagent-os/diagrams/99_comprehensive-architecture.md" || file.path == ".agent/system/ops/RALPH-LOOP-2026-04-13.md"
+    order:
+      - formula.focus
+      - file.name
+      - formula.hub
+      - formula.status_display
+      - date
+      - up
+      - file.path
+  - type: table
+    name: 항법 허브
+    filters: file.ext == "md" && (file.path == "00 HOME.md" || file.inFolder("_MOC") || file.inFolder("_system/dashboard"))
+    order:
+      - file.name
+      - formula.hub
+      - date
+      - up
+      - file.path
+  - type: table
+    name: 제출 문서
+    filters: file.inFolder("05_제출") && file.ext == "md"
+    order:
+      - file.name
+      - formula.status_display
+      - date
+      - up
+      - file.path
+  - type: table
+    name: Excalidraw 자산
+    filters: file.inFolder("assets/excaildraw")
+    order:
+      - file.name
+      - file.ext
+      - file.mtime
+      - file.path

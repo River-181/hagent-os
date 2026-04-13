@@ -1,0 +1,4 @@
+interface:
+  display_name: "Wiki Candidate Harvest"
+  short_description: "Find promotable project knowledge notes"
+  default_prompt: "Use $wiki-candidate-harvest to scan this KEG workspace for files that should be promoted into the LLM wiki."

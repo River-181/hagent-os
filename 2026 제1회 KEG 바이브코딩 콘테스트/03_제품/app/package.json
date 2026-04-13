@@ -1,0 +1,20 @@
+{
+  "name": "hagent-os",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI agent orchestration platform for Korean education",
+  "scripts": {
+    "dev": "pnpm --filter @hagent/server dev",
+    "dev:ui": "pnpm --filter @hagent/ui dev",
+    "build": "pnpm -r build",
+    "db:generate": "pnpm --filter @hagent/db generate",
+    "db:migrate": "pnpm --filter @hagent/db migrate",
+    "db:seed": "pnpm --filter @hagent/db seed",
+    "typecheck": "pnpm -r typecheck",
+    "clean": "pnpm -r clean"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "id": "community/kakao-channel-complaint-automation",
+  "slug": "kakao-channel-complaint-automation",
+  "namespace": "community",
+  "displayName": "카카오 민원 자동화",
+  "version": "0.1.0",
+  "summary": "카카오 채널 민원을 수신하고 초안 응답 흐름을 연결합니다.",
+  "packageType": "wrapper",
+  "source": {
+    "kind": "github_repo",
+    "repo": "https://github.com/NomaDamas/k-skill",
+    "importedAt": "2026-04-10T15:47:15.893Z"
+  },
+  "compatibility": {
+    "agentTypes": [
+      "complaint",
+      "notification",
+      "intake"
+    ],
+    "adapters": [
+      "claude_local"
+    ],
+    "locales": [
+      "ko-KR"
+    ]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [
+      "kakao-channel"
+    ],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": [
+      "codex",
+      "claude-code",
+      "cursor"
+    ],
+    "editable": false,
+    "publishable": true
+  }
+}

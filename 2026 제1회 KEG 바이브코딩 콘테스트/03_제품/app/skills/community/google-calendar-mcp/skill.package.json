@@ -1,0 +1,31 @@
+{
+  "id": "community/google-calendar-mcp",
+  "slug": "google-calendar-mcp",
+  "namespace": "community",
+  "displayName": "Google Calendar MCP",
+  "version": "0.1.0",
+  "summary": "수업, 상담, 보강 일정을 Google Calendar와 연결하는 wrapper skill입니다.",
+  "packageType": "wrapper",
+  "source": {
+    "kind": "github_repo",
+    "repo": "https://github.com/nspady/google-calendar-mcp",
+    "importedAt": "2026-04-11T00:00:00.000Z"
+  },
+  "compatibility": {
+    "agentTypes": ["scheduler", "orchestrator", "notification"],
+    "adapters": ["claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": ["google-calendar-mcp"],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": false,
+    "publishable": true
+  }
+}

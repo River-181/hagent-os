@@ -1,0 +1,4 @@
+.env
+runtime/nlm/profiles/
+runtime/nlm/chrome-profiles/
+runtime/nlm/*.json

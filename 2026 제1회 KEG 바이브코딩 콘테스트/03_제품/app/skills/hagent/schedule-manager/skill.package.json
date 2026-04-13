@@ -1,0 +1,30 @@
+{
+  "id": "hagent/schedule-manager",
+  "slug": "schedule-manager",
+  "namespace": "hagent",
+  "displayName": "일정 관리 스킬",
+  "version": "0.1.0",
+  "summary": "수업, 상담, 보강, 법정 기한 등 학원 운영 일정을 CRUD 관점으로 정리합니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "importedAt": "2026-04-11T00:00:00.000Z"
+  },
+  "compatibility": {
+    "agentTypes": ["scheduler", "orchestrator", "notification"],
+    "adapters": ["claude_local"],
+    "locales": ["ko-KR"]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": ["codex", "claude-code", "cursor"],
+    "editable": true,
+    "publishable": true
+  }
+}

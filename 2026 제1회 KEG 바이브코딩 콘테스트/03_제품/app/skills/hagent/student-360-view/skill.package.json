@@ -1,0 +1,43 @@
+{
+  "id": "hagent/student-360-view",
+  "slug": "student-360-view",
+  "namespace": "hagent",
+  "displayName": "학생 360 뷰",
+  "version": "0.1.0",
+  "summary": "학생의 수강·상담·결제 맥락을 한 번에 정리합니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "path": "/Users/river/workspace/active/2026 제1회 KEG 바이브코딩 콘테스트/03_제품/app/skills/hagent/student-360-view",
+    "importedAt": "2026-04-10T15:47:15.887Z"
+  },
+  "compatibility": {
+    "agentTypes": [
+      "retention",
+      "complaint",
+      "orchestrator"
+    ],
+    "adapters": [
+      "claude_local"
+    ],
+    "locales": [
+      "ko-KR"
+    ]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": [
+      "codex",
+      "claude-code",
+      "cursor"
+    ],
+    "editable": true,
+    "publishable": true
+  }
+}

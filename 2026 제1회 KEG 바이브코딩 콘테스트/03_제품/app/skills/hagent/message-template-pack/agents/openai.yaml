@@ -1,0 +1,4 @@
+display_name: 메시지 템플릿 팩
+short_description: 민원·공지·리마인더 템플릿을 제공합니다.
+default_prompt: |
+  Use 메시지 템플릿 팩 when the task requires 민원·공지·리마인더 템플릿을 제공합니다..

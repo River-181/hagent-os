@@ -1,0 +1,42 @@
+{
+  "id": "hagent/lead-conversion-tracker",
+  "slug": "lead-conversion-tracker",
+  "namespace": "hagent",
+  "displayName": "상담 전환 추적기",
+  "version": "0.1.0",
+  "summary": "문의에서 등록까지의 전환 퍼널을 추적합니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "path": "/Users/river/workspace/active/2026 제1회 KEG 바이브코딩 콘테스트/03_제품/app/skills/hagent/lead-conversion-tracker",
+    "importedAt": "2026-04-10T15:47:15.888Z"
+  },
+  "compatibility": {
+    "agentTypes": [
+      "intake",
+      "notification"
+    ],
+    "adapters": [
+      "claude_local"
+    ],
+    "locales": [
+      "ko-KR"
+    ]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": [
+      "codex",
+      "claude-code",
+      "cursor"
+    ],
+    "editable": true,
+    "publishable": true
+  }
+}

@@ -1,0 +1,52 @@
+date,tool,client,model,plan,session_id,prompts,estimated_tokens,cost_usd,pricing_mode,notes
+2026-04-06,Codex,Desktop App,GPT-5,Plus,S-CODEX-001,1,10000,,flat-subscription,ai-usage-log U-013 기반 백필
+2026-04-06,Codex,Desktop App,GPT-5,Plus,S-CODEX-002,2,16000,,flat-subscription,ai-usage-log U-016~017 기반 백필
+2026-04-06,ChatGPT,Web,GPT-5.4,Pro,S-GPT-001,4,50000,,flat-subscription,엑셀 트래커 원형과 가장 가까운 초기 기획 세션
+2026-04-06,Codex,Desktop App,GPT-5,Plus,S-OPS-001,1,12000,,flat-subscription,session-log 기반
+2026-04-06,Codex,Desktop App,GPT-5,Plus,S-OPS-002,1,14000,,flat-subscription,DEC-009와 직접 연결
+2026-04-06,Codex,Desktop App,GPT-5,Plus,S-OPS-003,1,14000,,flat-subscription,DEC-010과 직접 연결
+2026-04-06,Codex,Desktop App,GPT-5,Plus,S-OPS-004,1,8000,,flat-subscription,DEC-011 맥락
+2026-04-06,Codex,Desktop App,GPT-5,Plus,S-OPS-005,1,10000,,flat-subscription,DEC-012 맥락
+2026-04-06,Codex,Desktop App,GPT-5,Plus,S-OPS-006,1,12000,,flat-subscription,DEC-013 맥락
+2026-04-06,Codex,Desktop App,GPT-5,Plus,S-OPS-007,1,10000,,flat-subscription,DEC-014 맥락
+2026-04-06,Codex,Desktop App,GPT-5,Plus,S-OPS-008,1,9000,,flat-subscription,이후 이번 턴에서 다시 intake-first로 재설계됨
+2026-04-06,Codex,Desktop App,GPT-5,Plus,S-OPS-009,1,12000,,flat-subscription,master ledger 기반 백필
+2026-04-06,Perplexity,Web,Search+AI,Pro,S-PPLX-001,2,18000,,flat-subscription,출처 품질은 별도 검증 필요
+2026-04-08,Codex,Desktop App,GPT-5.4,Plus,S-EVID-015,2,12000,,flat-subscription,이번 턴에서 기존 CSV를 보강한 세션
+2026-04-08,Codex,Desktop App,GPT-5,Plus,S-OPS-011,1,15000,,flat-subscription,master ledger와 decision log에 이미 반영된 세션
+2026-04-08,Codex,Desktop App,GPT-5,Plus,S-OPS-012,1,14000,,flat-subscription,master ledger 기반 백필
+2026-04-08,Codex,Desktop App,GPT-5.4,Plus,S-OPS-014,1,9000,,flat-subscription,master ledger 기반 백필
+2026-04-08,Codex,Desktop App,GPT-5,Plus,S-RES-013,2,22000,,flat-subscription,혼합 도구 세션이지만 intake에서는 한 row로 기록
+2026-04-08,Codex,Desktop App,GPT-5,Plus,S-STRAT-010,1,12000,,flat-subscription,master ledger 기반 백필
+2026-04-09,Codex,Desktop App,GPT-5.4,Plus,S-OPS-017,1,8000,,flat-subscription,2026-04-09 follow-up workspace sync 세션
+2026-04-09,Codex,Desktop App,GPT-5.4,Plus,S-PROD-018,1,7000,,flat-subscription,read-only learning session for current product docs
+2026-04-09,Codex,Desktop App,GPT-5.4,Plus,S-STRAT-016,1,18000,,flat-subscription,2026-04-09 reference analysis + workspace sync 세션
+2026-04-10,Codex,Desktop App,GPT-5.4,Plus,S-OPS-020,1,6000,,flat-subscription,2026-04-10 workspace sync + pre-implementation review 세션
+2026-04-12,Codex,Desktop App,GPT-5.4,App,S-EVID-024,1,10000,,flat-subscription,2026-04-12 today AI usage logging session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-EVID-027,1,12000,,flat-subscription,2026-04-13 evidence and token estimate synchronization
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-EVID-030,3,14000,,flat-subscription,logs and screenshot paths included
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-PLAN-029,4,18000,,flat-subscription,심사용은 built-in model 기본값이 canonical
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-PROD-026,24,280000,,flat-subscription,2026-04-13 Codex-driven HagentOS submission polish session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-PROD-028,11,96000,,flat-subscription,api adapter test와 inbound case 생성 검증 포함
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-PROD-031,18,90000,,flat-subscription,Claude CLI design re-review timed out; broader rollout and global visual consistency are still unverified
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH-033,1,16000,,flat-subscription,current Codex session; no code changes by scope lock
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH1-A,1,18000,,flat-subscription,Ralph loop 1차 iter 1 parallel A session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH1-B,1,17000,,flat-subscription,Ralph loop 1차 iter 1 parallel B session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH1-C,1,16000,,flat-subscription,Ralph loop 1차 iter 1 parallel C session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH1-D,1,15000,,flat-subscription,Ralph loop 1차 iter 1 parallel D session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH1-E,1,14000,,flat-subscription,Ralph loop 1차 iter 1 parallel E session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH2-CASE,2,28000,,flat-subscription,Ralph loop 2차 T-case session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH2-CASE-LEAN,1,16000,,flat-subscription,Ralph loop 2차 T-case-lean-retry session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH2-SECURITY,2,24000,,flat-subscription,Ralph loop 2차 T-security session; security-audit-2026-04-13.md generated
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH2-SEEDLOG,2,18000,,flat-subscription,Ralph loop 2차 T-seed-log session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH2-SEEDLOG-RETRY,1,12000,,flat-subscription,Ralph loop 2차 T-seed-log-retry session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH2-SETTINGS,2,20000,,flat-subscription,Ralph loop 2차 T-settings-api session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH2-SETTINGS-V2,1,14000,,flat-subscription,Ralph loop 2차 T-settings v2 session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH2-SMOKE,1,22000,,flat-subscription,Ralph loop 2차 T-smoke session; live app verification
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH2-UIPOLISH,3,32000,,flat-subscription,Ralph loop 2차 T-ui-polish session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH3-ASSISTANT,2,19000,,flat-subscription,Ralph loop 3차 T-assistant-fix session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH3-DOCX,3,35000,,flat-subscription,Ralph loop 3차 T-docx session; 05_제출/20260413_③_2026_KIT_바이브코딩_공모전_망상궤도_AI리포트.docx created
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH3-PNG,2,16000,,flat-subscription,Ralph loop 3차 T-png-export session; 6 Excalidraw PNGs exported
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH3-ROUTINE,2,20000,,flat-subscription,Ralph loop 3차 T-routine-fix session; routine-consistency-2026-04-13.md generated
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-RALPH3-SECURITY,2,18000,,flat-subscription,Ralph loop 3차 T-security-recover session
+2026-04-13,Codex,Desktop App,GPT-5.4,App,S-SUB-032,6,45000,,flat-subscription,commit 15902fc docs: pre-ralph-loop snapshot — AI report + Excalidraw diagrams + deploy fixes

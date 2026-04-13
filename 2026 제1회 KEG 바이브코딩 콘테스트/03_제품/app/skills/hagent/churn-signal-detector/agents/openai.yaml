@@ -1,0 +1,4 @@
+display_name: 이탈 신호 감지기
+short_description: 출결·결제·상담 기록으로 이탈 위험을 계산합니다.
+default_prompt: |
+  Use 이탈 신호 감지기 when the task requires 출결·결제·상담 기록으로 이탈 위험을 계산합니다..

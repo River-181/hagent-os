@@ -1,0 +1,4 @@
+display_name: 이탈 위험 계산기
+short_description: 학생 이탈 위험도를 계산하는 규칙 세트입니다.
+default_prompt: |
+  Use 이탈 위험 계산기 when triaging retention risk from attendance, payment, and 상담 context.

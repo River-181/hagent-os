@@ -1,0 +1,4 @@
+display_name: 환불 계산기
+short_description: 학원 환불 규정을 바탕으로 환불 금액 산식을 제공합니다.
+default_prompt: |
+  Use 환불 계산기 when the task requires 학원 환불 규정을 바탕으로 환불 금액 산식을 제공합니다..

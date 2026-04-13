@@ -1,0 +1,10 @@
+{
+  "attachmentFolderPath": "assets",
+  "dailyNotes": {
+    "folder": "04_증빙/03_daily",
+    "format": "YYYY-MM-DD",
+    "template": ""
+  },
+  "showUnsupportedFiles": false,
+  "alwaysUpdateLinks": true
+}

@@ -1,0 +1,4 @@
+display_name: 카카오 민원 자동화
+short_description: 카카오 채널 민원을 수신하고 초안 응답 흐름을 연결합니다.
+default_prompt: |
+  Use 카카오 민원 자동화 when the task requires 카카오 채널 민원을 수신하고 초안 응답 흐름을 연결합니다..

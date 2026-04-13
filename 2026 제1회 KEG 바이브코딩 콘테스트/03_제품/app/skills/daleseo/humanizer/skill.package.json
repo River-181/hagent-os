@@ -1,0 +1,43 @@
+{
+  "id": "daleseo/humanizer",
+  "slug": "humanizer",
+  "namespace": "daleseo",
+  "displayName": "휴머니저",
+  "version": "0.1.0",
+  "summary": "딱딱한 초안을 사람 친화적인 한국어로 다듬습니다.",
+  "packageType": "imported",
+  "source": {
+    "kind": "github_repo",
+    "repo": "https://github.com/DaleSeo/korean-skills",
+    "importedAt": "2026-04-10T15:47:15.895Z"
+  },
+  "compatibility": {
+    "agentTypes": [
+      "complaint",
+      "notification",
+      "retention"
+    ],
+    "adapters": [
+      "claude_local"
+    ],
+    "locales": [
+      "ko-KR"
+    ]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": [
+      "codex",
+      "claude-code",
+      "cursor"
+    ],
+    "editable": false,
+    "publishable": true
+  }
+}

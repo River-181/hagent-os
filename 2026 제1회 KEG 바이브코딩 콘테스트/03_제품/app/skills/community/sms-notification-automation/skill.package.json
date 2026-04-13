@@ -1,0 +1,45 @@
+{
+  "id": "community/sms-notification-automation",
+  "slug": "sms-notification-automation",
+  "namespace": "community",
+  "displayName": "SMS 자동화",
+  "version": "0.1.0",
+  "summary": "학부모 안내와 결석/일정 안내 문자 발송을 연결합니다.",
+  "packageType": "wrapper",
+  "source": {
+    "kind": "github_repo",
+    "repo": "https://github.com/NomaDamas/k-skill",
+    "importedAt": "2026-04-10T15:47:15.893Z"
+  },
+  "compatibility": {
+    "agentTypes": [
+      "notification",
+      "complaint",
+      "intake"
+    ],
+    "adapters": [
+      "claude_local"
+    ],
+    "locales": [
+      "ko-KR"
+    ]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [
+      "aligo-sms"
+    ],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": [
+      "codex",
+      "claude-code",
+      "cursor"
+    ],
+    "editable": false,
+    "publishable": true
+  }
+}

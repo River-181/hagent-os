@@ -1,0 +1,43 @@
+{
+  "id": "hagent/message-template-pack",
+  "slug": "message-template-pack",
+  "namespace": "hagent",
+  "displayName": "메시지 템플릿 팩",
+  "version": "0.1.0",
+  "summary": "민원·공지·리마인더 템플릿을 제공합니다.",
+  "packageType": "builtin",
+  "source": {
+    "kind": "local",
+    "path": "/Users/river/workspace/active/2026 제1회 KEG 바이브코딩 콘테스트/03_제품/app/skills/hagent/message-template-pack",
+    "importedAt": "2026-04-10T15:47:15.885Z"
+  },
+  "compatibility": {
+    "agentTypes": [
+      "complaint",
+      "notification",
+      "intake"
+    ],
+    "adapters": [
+      "claude_local"
+    ],
+    "locales": [
+      "ko-KR"
+    ]
+  },
+  "runtime": {
+    "injectionMode": "instructions",
+    "requiredIntegrations": [],
+    "requiredSecrets": [],
+    "requiredEnv": [],
+    "requiredFiles": []
+  },
+  "distribution": {
+    "exportTargets": [
+      "codex",
+      "claude-code",
+      "cursor"
+    ],
+    "editable": true,
+    "publishable": true
+  }
+}
