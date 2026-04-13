@@ -10,6 +10,7 @@ export const agentsApi = {
     api.post<any>(`/organizations/${orgId}/agent-hires`, data),
   update: (id: string, data: unknown) => api.patch<any>(`/agents/${id}`, data),
   delete: (id: string) => api.delete<void>(`/agents/${id}`),
+  getLatestRun: (id: string) => api.get<any>(`/agents/${id}/runs/latest`),
   wakeup: (id: string, body?: { reason?: string; caseId?: string }) =>
     api.post<any>(`/agents/${id}/wakeup`, body ?? {}),
   stop: (id: string) => api.post<any>(`/agents/${id}/stop`, {}),

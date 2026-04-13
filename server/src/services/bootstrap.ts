@@ -11,6 +11,7 @@ import { hashTelegramOwnerControlPassword } from "./telegram-owner-control.js"
 import { inferInstructorRoleFromSubject } from "../lib/instructor-roles.js"
 import { TANZANIA_PRESET } from "../data/tanzania-preset.js"
 import { RICH_CASES, CEO_MEMORY, DEMO_DOCUMENTS } from "../data/rich-demo-seed.js"
+import { ensureAcademySeedBaseline } from "./seed-academy.js"
 
 const AGENT_DATA_DIR = path.join(import.meta.dirname, "../../data/agents")
 
@@ -1434,6 +1435,8 @@ export async function bootstrapOrganization(db: Db, payload: unknown) {
         }).catch(() => null)
       }
     }
+
+    await ensureAcademySeedBaseline(db, organization.id).catch(() => null)
 
     return {
       organization: updatedOrganization,

@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm"
 import pino from "pino"
 import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
+import { ensureAcademySeedBaseline } from "./seed-academy.js"
 
 const logger = pino({ level: "info" })
 
@@ -17,6 +18,7 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
 export async function runStartupMigrations(db: Db): Promise<void> {
   try {
     const agents = await db.select().from(schema.agents)
+    const organizations = await db.select({ id: schema.organizations.id }).from(schema.organizations)
     let patched = 0
 
     for (const agent of agents) {
@@ -41,6 +43,16 @@ export async function runStartupMigrations(db: Db): Promise<void> {
 
     if (patched > 0) {
       logger.info({ patched }, "Startup migration: patched agent adapterConfig records")
+    }
+
+    const seeded = []
+    for (const organization of organizations) {
+      const baseline = await ensureAcademySeedBaseline(db, organization.id).catch(() => null)
+      if (baseline) seeded.push(baseline)
+    }
+
+    if (seeded.length > 0) {
+      logger.info({ organizations: seeded.length, seeded }, "Startup migration: academy baseline backfill complete")
     }
   } catch (err) {
     logger.warn({ err: String(err) }, "Startup migration failed (non-fatal)")

@@ -10,6 +10,7 @@ export const queryKeys = {
   agents: {
     list: (orgId: string) => ["agents", "list", orgId] as const,
     detail: (id: string) => ["agents", id] as const,
+    latestRun: (id: string) => ["agents", id, "latest-run"] as const,
   },
   approvals: {
     list: (orgId: string) => ["approvals", "list", orgId] as const,

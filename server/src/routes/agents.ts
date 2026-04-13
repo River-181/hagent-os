@@ -10,6 +10,7 @@ import { publishEvent } from "../services/live-events.js"
 import { getAgentMountedSkills, updateAgentSkillMounts } from "../services/skills.js"
 import { getApprovalLevelForAgentType, inferCaseType } from "../services/orchestration.js"
 import { recoverStaleRuns } from "../services/run-recovery.js"
+import { getLatestAgentRunLog, listAgentRunHistory } from "../services/agent-run-log.js"
 
 const AGENT_DATA_DIR = join(import.meta.dirname, "../../data/agents")
 
@@ -188,6 +189,18 @@ ${agentType} 에이전트로서 학원 운영을 지원합니다.
   return souls[agentType] ?? defaultSoul
 }
 
+function getRunDurationMs(run: typeof schema.agentRuns.$inferSelect) {
+  const startedAt = new Date(run.startedAt ?? run.createdAt).getTime()
+  const finishedAt =
+    run.completedAt
+      ? new Date(run.completedAt).getTime()
+      : run.status === "completed" || run.status === "pending_approval" || run.status === "failed"
+        ? new Date(run.updatedAt).getTime()
+        : Date.now()
+
+  return Math.max(0, finishedAt - startedAt)
+}
+
 export function agentRoutes(db: Db): Router {
   const router = Router()
 
@@ -237,6 +250,7 @@ export function agentRoutes(db: Db): Router {
         const lastCompletedRun = recentRuns.find((run) => run.status === "completed" || run.status === "pending_approval") ?? null
         return {
           ...agent,
+          status: activeRun ? "running" : agent.status,
           activeRun,
           lastRunAt: recentRuns[0]?.completedAt ?? recentRuns[0]?.startedAt ?? recentRuns[0]?.createdAt ?? null,
           recentRuns: recentRuns.map((run) => ({
@@ -247,6 +261,7 @@ export function agentRoutes(db: Db): Router {
             createdAt: run.createdAt,
             startedAt: run.startedAt,
             completedAt: run.completedAt,
+            durationMs: getRunDurationMs(run),
             tokensUsed: run.tokensUsed,
             excerpt: summarizeRunOutput(run.output) ?? summarizeRunOutput(run.input) ?? run.error ?? null,
           })),
@@ -319,9 +334,33 @@ export function agentRoutes(db: Db): Router {
         return
       }
 
-      res.json(agent)
+      const runs = await listAgentRunHistory(db, agent.id, 20)
+      res.json({
+        ...agent,
+        status: runs[0]?.status === "running" || runs[0]?.status === "queued" ? "running" : agent.status,
+        latestRun: runs[0] ?? null,
+        runs,
+      })
     } catch (err) {
       res.status(500).json({ error: "Failed to fetch agent" })
+    }
+  })
+
+  router.get("/agents/:id/runs/latest", async (req, res) => {
+    try {
+      const [agent] = await db
+        .select({ id: schema.agents.id })
+        .from(schema.agents)
+        .where(eq(schema.agents.id, req.params.id))
+
+      if (!agent) {
+        res.status(404).json({ error: "Agent not found" })
+        return
+      }
+
+      res.json(await getLatestAgentRunLog(db, agent.id))
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch latest run log" })
     }
   })
 

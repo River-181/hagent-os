@@ -16,6 +16,8 @@ import { Separator } from "@/components/ui/separator"
 import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { CapabilityWorkspacePanel } from "@/components/capabilities/CapabilityWorkspacePanel"
+import { AgentRun } from "@/components/AgentRun"
+import { RunLog } from "@/components/RunLog"
 import {
   WorkspaceHeader,
   WorkspacePanel,
@@ -410,10 +412,7 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
     const bTime = b.startedAt ?? b.started_at ?? b.createdAt ?? ""
     return bTime.localeCompare(aTime)
   })
-  const recentRuns = sortedRuns.slice(0, 5)
-  const [expandedRunId, setExpandedRunId] = useState<string | null>(
-    recentRuns.length > 0 ? (recentRuns[0].id ?? null) : null,
-  )
+  const recentRuns = sortedRuns.slice(0, 10)
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [assignInstruction, setAssignInstruction] = useState("")
   const isRunning = agent.status === "running" || !!currentRun
@@ -443,6 +442,7 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
     mutationFn: () => agentsApi.wakeup(agent.id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.agents.detail(agent.id) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.agents.latestRun(agent.id) })
     },
   })
 
@@ -450,6 +450,7 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
     mutationFn: () => agentsApi.stop(agent.id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.agents.detail(agent.id) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.agents.latestRun(agent.id) })
     },
   })
 
@@ -457,6 +458,7 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
     mutationFn: () => agentsApi.update(agent.id, { status: "paused" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.agents.detail(agent.id) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.agents.latestRun(agent.id) })
     },
   })
 
@@ -464,6 +466,7 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
     mutationFn: () => agentsApi.update(agent.id, { status: "idle" }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.agents.detail(agent.id) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.agents.latestRun(agent.id) })
     },
   })
 
@@ -510,50 +513,13 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
           <section className="space-y-3">
             <div className="flex items-end justify-between gap-3">
               <div className="space-y-1">
-                <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>
-                  현재 실행
-                </h3>
+                <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>최신 실행</h3>
                 <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                  최근 활성 run을 바로 확인합니다.
+                  최신 run 단계와 소요 시간을 1-2초 간격으로 갱신합니다.
                 </p>
               </div>
             </div>
-            {currentRun ? (
-              <WorkspaceSubtle className="p-4">
-                <div className="flex items-start gap-3">
-                  <Loader2 size={15} className="mt-0.5 shrink-0 animate-spin" style={{ color: "var(--accent-primary)" }} />
-                  <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                        {currentRun.case?.title ?? currentRun.caseTitle ?? "케이스 처리 중"}
-                      </p>
-                      <Badge
-                        className="border-0 text-xs"
-                        style={{ backgroundColor: "var(--accent-primary-soft)", color: "var(--accent-primary)" }}
-                      >
-                        실행 중
-                      </Badge>
-                    </div>
-                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
-                      {currentRun.startedAt ?? currentRun.createdAt ? (
-                        <span>시작: {new Date(currentRun.startedAt ?? currentRun.createdAt).toLocaleString("ko-KR")}</span>
-                      ) : null}
-                      {currentRun.tokensUsed ?? currentRun.tokens_used ? (
-                        <span>토큰: {(currentRun.tokensUsed ?? currentRun.tokens_used).toLocaleString()}</span>
-                      ) : null}
-                      {currentRun.durationMs ?? currentRun.duration_ms ? (
-                        <span>소요: {(((currentRun.durationMs ?? currentRun.duration_ms) as number) / 1000).toFixed(1)}초</span>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </WorkspaceSubtle>
-            ) : (
-              <WorkspaceEmptyState
-                title="현재 실행 중인 run이 없습니다."
-                description="에이전트를 깨우거나 태스크를 지시하면 여기서 상태를 바로 추적할 수 있습니다."
-              />
-            )}
+            <AgentRun agentId={agent.id} />
           </section>
 
           <section className="space-y-3">
@@ -563,34 +529,11 @@ function OverviewTab({ agent, runs, memory }: { agent: any; runs: any[]; memory:
                   최근 실행
                 </h3>
                 <p className="text-xs" style={{ color: "var(--text-tertiary)" }}>
-                  최근 5개 run만 보여줍니다.
+                  최근 run의 시각, 상태, elapsed time을 함께 보여줍니다.
                 </p>
               </div>
             </div>
-            {recentRuns.length === 0 ? (
-              <WorkspaceEmptyState
-                title="실행 이력이 없습니다."
-                description="에이전트가 동작하면 이 영역에 요약과 상세 로그가 쌓입니다."
-              />
-            ) : (
-              <WorkspaceSubtle className="overflow-hidden p-0">
-                <div className="divide-y divide-[var(--border-default)]">
-                  {recentRuns.map((run: any, i: number) => {
-                    const runId = run.id ?? String(i)
-                    const isExpanded = expandedRunId === runId
-                    return (
-                      <RunRow
-                        key={runId}
-                        run={run}
-                        expanded={isExpanded}
-                        onToggle={() => setExpandedRunId(isExpanded ? null : runId)}
-                        showRerun
-                      />
-                    )
-                  })}
-                </div>
-              </WorkspaceSubtle>
-            )}
+            <RunLog runs={recentRuns} />
           </section>
 
           <section className="space-y-3">
@@ -1919,6 +1862,10 @@ export function AgentDetailPage() {
     queryKey: queryKeys.agents.detail(id!),
     queryFn: () => agentsApi.get(id!),
     enabled: !!id,
+    refetchInterval: (query) => {
+      const latestStatus = (query.state.data as any)?.latestRun?.status
+      return latestStatus === "running" || latestStatus === "queued" ? 2000 : false
+    },
   })
 
   // ── fetch instruction files ────────────────────────────────────────────────
