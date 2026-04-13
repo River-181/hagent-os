@@ -151,7 +151,8 @@ ${legalContextBlock}
           ? {
               source: legalContext.source,
               query: legalContext.query,
-              summary: legalContext.summary ?? legalContext.error ?? null,
+              summary: legalContext.detail ?? legalContext.summary ?? legalContext.error ?? null,
+              detail: legalContext.detail ?? null,
               connected: legalContext.connected,
               degraded: legalContext.degraded,
             }
@@ -175,7 +176,8 @@ ${legalContextBlock}
           ? {
               source: legalContext.source,
               query: legalContext.query,
-              summary: legalContext.summary ?? legalContext.error ?? null,
+              summary: legalContext.detail ?? legalContext.summary ?? legalContext.error ?? null,
+              detail: legalContext.detail ?? null,
               connected: legalContext.connected,
               degraded: legalContext.degraded,
             }

@@ -139,11 +139,13 @@ export function adapterRoutes(db: Db): Router {
           degraded: result.degraded,
           installed: result.installed,
           missingEnv: result.missingEnv,
-          preview: result.summary ?? result.error ?? null,
-          lastResult: result.connected && !result.degraded ? "connected" : "degraded",
+          preview: result.summary ?? result.detail ?? result.error ?? null,
+          lastResult: result.degraded ? "degraded" : "connected",
           source: result.source,
           statusSummary: result.source === "cached-excerpt"
-            ? "cached fallback (law.go.kr 연결 불안정 시 내장 요약본)"
+            ? result.missingEnv.length > 0
+              ? "cached fallback (LAW_GO_KR_OC 미설정, 내장 발췌본 제공)"
+              : "cached fallback (law.go.kr 연결 불안정 시 내장 발췌본 제공)"
             : result.connected && !result.degraded
               ? "law.go.kr 실시간 연결"
               : result.connected

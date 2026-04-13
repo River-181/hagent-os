@@ -5,15 +5,20 @@ function renderComplaintBody(output: Record<string, unknown>, mode: "complaint" 
   const actions = Array.isArray(output.suggestedActions)
     ? output.suggestedActions.map((item) => `- ${String(item)}`).join("\n")
     : ""
+  const legalBasis =
+    output.legalBasis && typeof output.legalBasis === "object"
+      ? output.legalBasis as Record<string, unknown>
+      : null
+  const legalText = legalBasis
+    ? String(legalBasis.detail ?? legalBasis.summary ?? "관련 규정 없음")
+    : null
 
   return [
     output.summary ? `## 요약\n${String(output.summary)}` : null,
     output.suggestedReply
       ? `${mode === "inquiry" ? "## 운영자 답변" : "## 응답 초안"}\n${String(output.suggestedReply)}`
       : null,
-    output.legalBasis && typeof output.legalBasis === "object"
-      ? `## 법령 근거\n${String((output.legalBasis as Record<string, unknown>).summary ?? "관련 규정 없음")}`
-      : null,
+    legalText ? `## 법령 근거\n${legalText}` : null,
     actions ? `## 후속 조치\n${actions}` : null,
   ]
     .filter(Boolean)

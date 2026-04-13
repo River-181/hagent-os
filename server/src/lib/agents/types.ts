@@ -64,6 +64,7 @@ export interface ComplaintAnalysis {
     source: string
     query: string
     summary?: string | null
+    detail?: string | null
     connected: boolean
     degraded: boolean
   }

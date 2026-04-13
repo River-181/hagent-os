@@ -34,6 +34,35 @@ export interface KoreanLawLookupResult {
   error?: string | null
 }
 
+function buildCachedExcerptResult(
+  query: string,
+  options: {
+    fallback: ReturnType<typeof findLawFallback>
+    missingEnv?: string[]
+    error?: string | null
+  },
+): KoreanLawLookupResult {
+  const { fallback, missingEnv = [], error = null } = options
+  if (!fallback) {
+    throw new Error("Fallback entry is required")
+  }
+
+  const detail = `[${fallback.title}]\n\n${fallback.summary}\n\n(출처: ${fallback.source})\n\n⚠ 네트워크 제약 또는 환경 제약으로 국가법령정보센터 실시간 조회가 불가하여 내장 요약본을 제공합니다. 원문은 law.go.kr 에서 확인해주세요.`
+
+  return {
+    source: "cached-excerpt",
+    query,
+    installed: true,
+    connected: true,
+    degraded: false,
+    missingEnv,
+    routeTool: "law-fallback-excerpts",
+    summary: truncate(fallback.summary, 420),
+    detail: truncate(detail, 1_400),
+    error,
+  }
+}
+
 function truncate(text: string, max = 700) {
   return text.length > max ? `${text.slice(0, max).trim()}...` : text
 }
@@ -176,8 +205,16 @@ async function fetchLawDetail(oc: string, lawId: string): Promise<string | null>
 
 export async function lookupKoreanLaw(query: string): Promise<KoreanLawLookupResult> {
   const oc = getOC()
+  const fallback = findLawFallback(query)
 
   if (!oc) {
+    if (fallback) {
+      return buildCachedExcerptResult(query, {
+        fallback,
+        missingEnv: ["LAW_GO_KR_OC"],
+      })
+    }
+
     return {
       source: "korean-law-mcp",
       query,
@@ -256,21 +293,8 @@ export async function lookupKoreanLaw(query: string): Promise<KoreanLawLookupRes
       /ECONNRESET|ETIMEDOUT|ECONNREFUSED|ENOTFOUND|EAI_AGAIN/i.test(errRaw?.code ?? "")
 
     if (isNetworkError) {
-      const fallback = findLawFallback(query)
       if (fallback) {
-        const detail = `[${fallback.title}]\n\n${fallback.summary}\n\n(출처: ${fallback.source})\n\n⚠ 네트워크 제약으로 국가법령정보센터 실시간 조회가 불가하여 내장 요약본을 제공합니다. 원문은 law.go.kr 에서 확인해주세요.`
-        const result: KoreanLawLookupResult = {
-          source: "cached-excerpt",
-          query,
-          installed: true,
-          connected: true,
-          degraded: false,
-          missingEnv: [],
-          routeTool: "law-fallback-excerpts",
-          summary: truncate(fallback.summary, 420),
-          detail: truncate(detail, 1_400),
-          error: null,
-        }
+        const result = buildCachedExcerptResult(query, { fallback })
         cache.set(cacheKey, { result, expiresAt: Date.now() + CACHE_TTL_MS })
         return result
       }
