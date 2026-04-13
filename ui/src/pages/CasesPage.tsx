@@ -265,6 +265,7 @@ export function CasesPage() {
     status: "all",
     priority: "all",
     type: "all",
+    source: "all",
     assignee: "all",
   })
 
@@ -336,6 +337,8 @@ export function CasesPage() {
       const assigneeId = caseItem.assigneeId ?? caseItem.agent?.id ?? caseItem.assignee?.id
       if (assigneeId !== filters.assignee) return false
     }
+    if (filters.source === "ai" && !caseItem.agentDraft) return false
+    if (filters.source === "manual" && caseItem.agentDraft) return false
     return true
   })
 

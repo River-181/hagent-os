@@ -12,6 +12,7 @@ export interface Filters {
   priority: string
   type: string
   assignee: string
+  source: string
 }
 
 interface FilterBarProps {
@@ -25,7 +26,14 @@ const DEFAULT_FILTERS: Filters = {
   priority: "all",
   type: "all",
   assignee: "all",
+  source: "all",
 }
+
+const SOURCE_OPTIONS = [
+  { value: "all", label: "전체" },
+  { value: "ai", label: "AI 처리" },
+  { value: "manual", label: "수동 처리" },
+]
 
 const STATUS_OPTIONS = [
   { value: "all", label: "전체" },
@@ -153,6 +161,30 @@ export function FilterBar({ onFilterChange, agents, filters = DEFAULT_FILTERS }:
           {(agents as any[]).map((agent) => (
             <SelectItem key={agent.id} value={agent.id} className="text-xs">
               {agent.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      {/* Source (AI vs manual) */}
+      <Select
+        value={filters.source}
+        onValueChange={(v) => handleChange("source", v)}
+      >
+        <SelectTrigger
+          className="h-8 text-xs min-w-[100px]"
+          style={{
+            backgroundColor: "var(--bg-base)",
+            borderColor: "var(--border-default)",
+            color: "var(--text-secondary)",
+          }}
+        >
+          <SelectValue placeholder="처리 유형" />
+        </SelectTrigger>
+        <SelectContent>
+          {SOURCE_OPTIONS.map((opt) => (
+            <SelectItem key={opt.value} value={opt.value} className="text-xs">
+              {opt.label}
             </SelectItem>
           ))}
         </SelectContent>

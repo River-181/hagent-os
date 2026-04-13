@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   Loader2,
   Sparkles,
+  Scale,
 } from "lucide-react"
 
 // ─── case type labels ─────────────────────────────────────────────────────────
@@ -447,6 +448,23 @@ export function DashboardPage() {
               </div>
             </WorkspacePanel>
           )}
+
+          <WorkspacePanel className="p-4">
+            <div className="flex items-start gap-3">
+              <Scale size={14} className="mt-0.5 shrink-0" style={{ color: "var(--accent-primary)" }} />
+              <div className="min-w-0">
+                <p className="text-xs font-medium" style={{ color: "var(--text-primary)" }}>
+                  학원법 주요 규정 — 수강료 환불 기준
+                </p>
+                <p className="mt-1 text-xs leading-relaxed" style={{ color: "var(--text-secondary)" }}>
+                  교습 개시 후 1/3 경과 전: 납부 수강료의 2/3 반환 &middot; 1/3~1/2 경과: 1/2 반환 &middot; 1/2 경과 후: 반환 의무 없음
+                </p>
+                <p className="mt-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
+                  출처: 학원법 시행령 제18조 · law.go.kr
+                </p>
+              </div>
+            </div>
+          </WorkspacePanel>
 
           <WorkspacePanel className="overflow-hidden">
             <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: "var(--border-default)" }}>
