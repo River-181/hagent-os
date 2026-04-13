@@ -4,7 +4,6 @@ import type { Db } from "@hagent/db"
 import * as schema from "@hagent/db"
 import { createCaseWithRetry } from "../lib/case-create.js"
 import { executeAgentRun } from "../services/execution.js"
-import { buildRunUsageSummary } from "../services/costs.js"
 import { enrichDocuments } from "../services/document-links.js"
 import { buildAgentSkillRuntimeContext } from "../services/skill-runtime.js"
 import { getApprovalLevelForAgentType, inferCaseType } from "../services/orchestration.js"
@@ -602,32 +601,10 @@ export function caseRoutes(db: Db): Router {
       }
 
       const assigneeSkillRuntime = assignee ? await getRuntimeSkillContext(assignee.id) : { bundles: [], text: "" }
-      const runsWithContext = await Promise.all(
-        runs.map(async (run: typeof schema.agentRuns.$inferSelect) => {
-          const runAgent = agentMap.get(run.agentId) ?? null
-          const runtimeSkills = runAgent ? await getRuntimeSkillContext(runAgent.id) : { bundles: [], text: "" }
-          const usage = await buildRunUsageSummary(db, {
-            organizationId: caseRecord.organizationId,
-            runId: run.id,
-            inputTokens: run.inputTokens ?? 0,
-            outputTokens: run.outputTokens ?? 0,
-            totalTokens: run.tokensUsed ?? 0,
-            model:
-              (runAgent?.adapterConfig &&
-              typeof runAgent.adapterConfig === "object" &&
-              !Array.isArray(runAgent.adapterConfig)
-                ? (runAgent.adapterConfig as Record<string, unknown>).model
-                : null) as string | null,
-          })
-          return {
-            ...run,
-            agent: runAgent,
-            usedSkills: runtimeSkills.bundles,
-            skillContext: runtimeSkills.text,
-            usage,
-          }
-        }),
-      )
+      const runsWithContext = runs.map((run: typeof schema.agentRuns.$inferSelect) => ({
+        ...run,
+        agent: agentMap.get(run.agentId) ?? null,
+      }))
 
       const latestRun = runsWithContext[0] ?? null
       const latestApproval = approvals[0] ?? null
