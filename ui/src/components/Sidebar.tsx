@@ -213,7 +213,7 @@ export function Sidebar() {
           </span>
         </button>
         <span className="px-1 text-xs" style={{ color: "var(--text-tertiary)" }}>
-          v1.0
+          v0.5.0
         </span>
       </div>
 

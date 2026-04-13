@@ -51,15 +51,23 @@ cp .env.example .env
 # .env: DEMO_MODE=true 설정
 
 pnpm install
-pnpm build
-
-# 서버 (3200 포트)
-cd server && node dist/index.js &
-# UI (5173 포트)
-cd ../ui && npx vite preview
+pnpm dev
 ```
 
+기본 개발 URL:
+
+- UI: `http://localhost:5174`
+- API: `http://localhost:3200`
+
 `DEMO_MODE=true` → Anthropic API 키 없이 mock AI 응답으로 전체 플로우 체험.
+
+### 로컬 빌드 검증
+
+```bash
+pnpm build
+cd server && node dist/index.js
+cd ui && npx vite preview --port 5174
+```
 
 ### 실제 AI 사용
 
@@ -68,9 +76,11 @@ cd ../ui && npx vite preview
 ANTHROPIC_API_KEY=sk-ant-...
 DATABASE_URL=postgresql://...    # 미설정 시 embedded PostgreSQL 사용
 
-pnpm install && pnpm build
-node server/dist/index.js
+pnpm install
+pnpm dev
 ```
+
+프로덕션 형태로 확인하려면 `pnpm build` 후 `server/dist/index.js`와 `vite preview --port 5174`를 사용.
 
 ---
 

@@ -4,6 +4,14 @@
 
 ---
 
+## 시작 전 체크
+
+1. `README.md` 로 제품 개요와 실행 흐름을 먼저 확인한다.
+2. UI 작업이면 `docs/design/ui-harness.md`, `docs/design/design-system-rules.md` 를 먼저 읽는다.
+3. 심사 데모 흐름을 건드리면 `JUDGE_DEMO.md` 도 함께 확인한다.
+
+---
+
 ## 스택 & 포트
 
 | 항목 | 값 |
@@ -19,12 +27,26 @@
 # 루트에서 전체 실행
 pnpm dev
 
+# 서버만
+pnpm dev:server
+
 # UI만
 pnpm dev:ui
+
+# 전체 타입체크
+pnpm typecheck
+
+# 전체 빌드
+pnpm build
 
 # 빌드 검증 (작업 완료 후 반드시)
 cd ui && npx vite build
 ```
+
+기본 로컬 URL:
+
+- UI: `http://127.0.0.1:5174`
+- API: `http://127.0.0.1:3200`
 
 ---
 
