@@ -185,7 +185,13 @@ interface Instructor {
   role?: string
 }
 
-function InstructorCard({ instructor }: { instructor: Instructor }) {
+function InstructorCard({
+  instructor,
+  onClick,
+}: {
+  instructor: Instructor
+  onClick?: () => void
+}) {
   const roleLabel =
     instructor.role === "teacher"
       ? "강사"
@@ -195,8 +201,9 @@ function InstructorCard({ instructor }: { instructor: Instructor }) {
           ? "운영+강의"
           : "직원"
   return (
-    <div
-      className="flex flex-col items-center gap-2 rounded-xl"
+    <button
+      type="button"
+      className="flex flex-col items-center gap-2 rounded-xl transition-transform hover:scale-[1.02]"
       style={{
         backgroundColor: "var(--bg-subtle)",
         border: "1px solid var(--border-default)",
@@ -205,7 +212,9 @@ function InstructorCard({ instructor }: { instructor: Instructor }) {
         minWidth: 140,
         textAlign: "center",
         boxShadow: "var(--shadow-sm)",
+        cursor: onClick ? "pointer" : "default",
       }}
+      onClick={onClick}
     >
       <div
         style={{
@@ -237,7 +246,7 @@ function InstructorCard({ instructor }: { instructor: Instructor }) {
       >
         {roleLabel}
       </Badge>
-    </div>
+    </button>
   )
 }
 
@@ -380,6 +389,15 @@ export function OrgChartPage() {
     }
   }, [navigate, orgPrefix])
 
+  const handleInstructorClick = useCallback(
+    (instructor: Instructor) => {
+      if (orgPrefix) {
+        navigate(`/${orgPrefix}/instructors?detail=${instructor.id}`)
+      }
+    },
+    [navigate, orgPrefix],
+  )
+
   return (
     <div className="p-6 md:p-8 space-y-6">
       <WorkspaceHeader
@@ -486,7 +504,11 @@ export function OrgChartPage() {
             <div className="flex flex-wrap gap-4">
               {staffInstructors.length > 0 ? (
                 staffInstructors.map((instructor) => (
-                  <InstructorCard key={instructor.id} instructor={instructor} />
+                  <InstructorCard
+                    key={instructor.id}
+                    instructor={instructor}
+                    onClick={() => handleInstructorClick(instructor)}
+                  />
                 ))
               ) : (
                 <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
@@ -506,7 +528,11 @@ export function OrgChartPage() {
             <div className="flex flex-wrap gap-4">
               {teacherInstructors.length > 0 ? (
                 teacherInstructors.map((instructor) => (
-                  <InstructorCard key={instructor.id} instructor={instructor} />
+                  <InstructorCard
+                    key={instructor.id}
+                    instructor={instructor}
+                    onClick={() => handleInstructorClick(instructor)}
+                  />
                 ))
               ) : (
                 <p className="text-sm" style={{ color: "var(--text-tertiary)" }}>
