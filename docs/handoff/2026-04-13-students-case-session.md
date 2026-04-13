@@ -159,3 +159,29 @@ corepack pnpm --filter @hagent/ui build
 - `ui/src/pages/CaseDetailPage.tsx`
 - `docs/handoff/2026-04-13-full-regression.md`
 - `output/playwright/session-2026-04-13-students-case/README.md`
+
+## 8. 법령 fallback addendum
+
+- 파일:
+  - `server/src/services/integrations/korean-law.ts`
+  - `server/src/routes/adapters.ts`
+  - `server/src/lib/agents/complaint.ts`
+  - `server/src/lib/agents/types.ts`
+  - `server/src/services/case-artifacts.ts`
+- 수정 요지:
+  - `LAW_GO_KR_OC`가 없어도 fallback excerpt가 매칭되면 `cached-excerpt`를 바로 반환하도록 변경
+  - 민원/운영 질문의 `legalBasis.summary`에 조문 발췌 전문을 우선 싣도록 변경
+  - artifact 문서도 `detail` 우선으로 렌더하도록 변경
+  - adapter test의 `lastResult`와 `statusSummary`가 fallback 성공 상태를 `connected`로 보여주도록 정리
+- 실제 검증:
+  - `corepack pnpm --filter @hagent/server typecheck`
+  - `PORT=3211 SKIP_SCHEMA_SYNC=true corepack pnpm --filter @hagent/server dev`
+  - `curl -s -X POST http://localhost:3211/api/adapters/test -H 'Content-Type: application/json' -d '{"key":"korean-law-mcp"}'`
+  - 결과 핵심:
+    - `connected: true`
+    - `degraded: false`
+    - `source: "cached-excerpt"`
+    - `preview`: 환불 기준 조문 요약 반환
+- 참고:
+  - 이 검증은 `LAW_GO_KR_OC` 미설정 로컬 기준이다.
+  - Railway의 `ECONNRESET` 실환경은 이번 세션에서 직접 재현하지 못했고, 네트워크 실패 시 fallback 경로가 동작하도록 코드 기준 보강했다.

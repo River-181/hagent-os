@@ -235,6 +235,14 @@ export async function lookupKoreanLaw(query: string): Promise<KoreanLawLookupRes
   try {
     const firstResult = await searchLaw(oc, query)
     if (!firstResult) {
+      // law.go.kr 실시간 검색은 법령명(lawNm)만 매칭하므로 "환불"/"근로" 등
+      // 키워드성 질의에 대해 "검색 결과 없음"이 자주 나온다. fallback 매칭이 있으면 그것을 대신 반환.
+      if (fallback) {
+        const result = buildCachedExcerptResult(query, { fallback })
+        cache.set(cacheKey, { result, expiresAt: Date.now() + CACHE_TTL_MS })
+        return result
+      }
+
       const result: KoreanLawLookupResult = {
         source: "korean-law-mcp",
         query,
