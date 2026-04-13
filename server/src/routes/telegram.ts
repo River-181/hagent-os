@@ -211,7 +211,7 @@ export function telegramRoutes(db: Db): Router {
         body: JSON.stringify({
           url: webhookUrl,
           ...(secretToken ? { secret_token: secretToken } : {}),
-          allowed_updates: ["message", "edited_message"],
+          allowed_updates: ["message", "edited_message", "callback_query"],
         }),
       })
 
