@@ -35,9 +35,17 @@ function isInquiryCaseKind(caseKind?: string) {
   return caseKind === "legal-inquiry" || caseKind === "quick-ask" || caseKind === "inquiry"
 }
 
+function isEventPlanOutput(output: Record<string, unknown>) {
+  const recommendedFormat = typeof output.recommendedFormat === "string" ? output.recommendedFormat : ""
+  const schedule = output.suggestedSchedule as Record<string, unknown> | undefined
+  const scheduleType = typeof schedule?.type === "string" ? schedule.type : ""
+  return recommendedFormat === "event-plan" || scheduleType === "special"
+}
+
 function renderSchedulerBody(output: Record<string, unknown>) {
   const schedule = output.suggestedSchedule as Record<string, unknown> | undefined
   const calendarAction = output.calendarAction as Record<string, unknown> | undefined
+  const eventPlan = isEventPlanOutput(output)
   const planOutline = Array.isArray(output.planOutline)
     ? output.planOutline.map((item) => `- ${String(item)}`).join("\n")
     : ""
@@ -55,7 +63,7 @@ function renderSchedulerBody(output: Record<string, unknown>) {
     : ""
 
   return [
-    output.summary ? `## 일정 제안 요약\n${String(output.summary)}` : null,
+    output.summary ? `## ${eventPlan ? "운영 계획 요약" : "일정 제안 요약"}\n${String(output.summary)}` : null,
     output.objective ? `## 목표\n${String(output.objective)}` : null,
     planOutline ? `## 실행 계획\n${planOutline}` : null,
     schedule
@@ -138,8 +146,9 @@ function buildArtifact(
     }
   }
   if (agentType === "scheduler") {
+    const eventPlan = isEventPlanOutput(output)
     return {
-      title: `${caseIdentifier} 일정 제안서`,
+      title: `${caseIdentifier} ${eventPlan ? "운영 계획서" : "일정 제안서"}`,
       body: renderSchedulerBody(output),
       documentType: "schedule-proposal",
     }
