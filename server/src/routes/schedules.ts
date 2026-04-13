@@ -121,8 +121,21 @@ export function scheduleRoutes(db: Db): Router {
   // DELETE /organizations/:orgId/schedules/:id
   router.delete("/organizations/:orgId/schedules/:id", async (req, res) => {
     try {
-      const { id } = req.params
-      await db.delete(schema.schedules).where(eq(schema.schedules.id, id))
+      const { id, orgId } = req.params
+
+      await db.delete(schema.studentSchedules).where(eq(schema.studentSchedules.scheduleId, id))
+      await db.delete(schema.attendance).where(eq(schema.attendance.scheduleId, id))
+
+      const [deleted] = await db
+        .delete(schema.schedules)
+        .where(eq(schema.schedules.id, id))
+        .returning()
+
+      if (!deleted || deleted.organizationId !== orgId) {
+        res.status(404).json({ error: "Schedule not found" })
+        return
+      }
+
       res.status(204).send()
     } catch (err) {
       res.status(500).json({ error: "Failed to delete schedule" })

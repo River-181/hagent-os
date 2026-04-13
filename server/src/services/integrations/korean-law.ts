@@ -1,9 +1,16 @@
 // Korean national law API integration (국가법령정보센터 Open API)
 // Docs: https://open.law.go.kr/LSO/openApi/guide.do
 
-const LAW_SEARCH_BASE = "http://www.law.go.kr/DRF/lawSearch.do"
-const LAW_SERVICE_BASE = "http://www.law.go.kr/DRF/lawService.do"
-const REQUEST_TIMEOUT_MS = 5_000
+// HTTPS primary (Railway containers prefer TLS), HTTP fallback
+const LAW_SEARCH_URLS = [
+  "https://www.law.go.kr/DRF/lawSearch.do",
+  "http://www.law.go.kr/DRF/lawSearch.do",
+]
+const LAW_SERVICE_URLS = [
+  "https://www.law.go.kr/DRF/lawService.do",
+  "http://www.law.go.kr/DRF/lawService.do",
+]
+const REQUEST_TIMEOUT_MS = 10_000
 const CACHE_TTL_MS = 10 * 60 * 1000 // 10 minutes
 
 // In-memory result cache keyed by `${oc}:${query}`
@@ -64,11 +71,37 @@ async function fetchWithTimeout(url: string, timeoutMs: number): Promise<Respons
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const response = await fetch(url, { signal: controller.signal })
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (compatible; HagentOS/1.0; +https://hagent-os.up.railway.app)",
+        Accept: "application/json, text/html;q=0.9, */*;q=0.8",
+        "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+      },
+      redirect: "follow",
+    })
     return response
   } finally {
     clearTimeout(timer)
   }
+}
+
+/**
+ * HTTPS 우선, 실패 시 HTTP fallback. Railway outbound 환경에서
+ * http가 막혀있을 수 있어 https를 먼저 시도한다.
+ */
+async function fetchWithFallback(bases: string[], path: string): Promise<Response> {
+  let lastError: unknown = null
+  for (const base of bases) {
+    try {
+      const response = await fetchWithTimeout(`${base}${path}`, REQUEST_TIMEOUT_MS)
+      if (response.ok) return response
+      lastError = new Error(`HTTP ${response.status} ${response.statusText}`)
+    } catch (err) {
+      lastError = err
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError))
 }
 
 interface LawSearchItem {
@@ -105,11 +138,8 @@ interface LawServiceResponse {
 }
 
 async function searchLaw(oc: string, query: string): Promise<LawSearchItem | null> {
-  const url = `${LAW_SEARCH_BASE}?OC=${encodeURIComponent(oc)}&target=law&type=JSON&query=${encodeURIComponent(query)}`
-  const response = await fetchWithTimeout(url, REQUEST_TIMEOUT_MS)
-  if (!response.ok) {
-    throw new Error(`law search HTTP ${response.status}`)
-  }
+  const path = `?OC=${encodeURIComponent(oc)}&target=law&type=JSON&query=${encodeURIComponent(query)}`
+  const response = await fetchWithFallback(LAW_SEARCH_URLS, path)
   const data = (await response.json()) as LawSearchResponse
   const lawList = data?.LawSearch?.law
   if (!lawList) return null
@@ -118,8 +148,8 @@ async function searchLaw(oc: string, query: string): Promise<LawSearchItem | nul
 }
 
 async function fetchLawDetail(oc: string, lawId: string): Promise<string | null> {
-  const url = `${LAW_SERVICE_BASE}?OC=${encodeURIComponent(oc)}&target=law&type=JSON&ID=${encodeURIComponent(lawId)}`
-  const response = await fetchWithTimeout(url, REQUEST_TIMEOUT_MS)
+  const path = `?OC=${encodeURIComponent(oc)}&target=law&type=JSON&ID=${encodeURIComponent(lawId)}`
+  const response = await fetchWithFallback(LAW_SERVICE_URLS, path)
   if (!response.ok) {
     throw new Error(`law detail HTTP ${response.status}`)
   }
@@ -211,7 +241,12 @@ export async function lookupKoreanLaw(query: string): Promise<KoreanLawLookupRes
     cache.set(cacheKey, { result, expiresAt: Date.now() + CACHE_TTL_MS })
     return result
   } catch (error) {
-    const errorMsg = error instanceof Error ? error.message : "법령 API 호출 실패"
+    const errRaw = error instanceof Error ? (error.cause as { code?: string; message?: string } | undefined) : undefined
+    const errorMsg = [
+      error instanceof Error ? error.message : String(error),
+      errRaw?.code ? `[${errRaw.code}]` : "",
+      errRaw?.message ? `cause: ${errRaw.message}` : "",
+    ].filter(Boolean).join(" ")
     return {
       source: "korean-law-mcp",
       query,
