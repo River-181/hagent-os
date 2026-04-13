@@ -1,7 +1,6 @@
+import type { ReactNode } from "react"
 import { Badge } from "@/components/ui/badge"
-import { cn, timeAgo } from "@/lib/utils"
-import { StatusIcon } from "./StatusIcon"
-import { PriorityIcon, priorityLabel } from "./PriorityIcon"
+import { cn } from "@/lib/utils"
 import type { CaseStatus } from "./StatusIcon"
 
 interface CaseData {
@@ -32,6 +31,7 @@ interface CaseData {
   createdAt?: string
   created_at?: string
   updatedAt?: string
+  updated_at?: string
   dueAt?: string
   due_at?: string
 }
@@ -58,28 +58,46 @@ const statusOptions: { value: CaseStatus; label: string }[] = [
 ]
 
 const priorityOptions: { value: string; label: string; priority: number }[] = [
-  { value: "0", label: "긴급", priority: 0 },
-  { value: "1", label: "높음", priority: 1 },
-  { value: "2", label: "보통", priority: 2 },
-  { value: "3", label: "낮음", priority: 3 },
-  { value: "4", label: "없음", priority: 4 },
+  { value: "0", label: "P0 · 긴급", priority: 0 },
+  { value: "1", label: "P1 · 높음", priority: 1 },
+  { value: "2", label: "P2 · 보통", priority: 2 },
+  { value: "3", label: "P3 · 낮음", priority: 3 },
+  { value: "4", label: "미지정", priority: 4 },
 ]
 
 function PropertyField({
   label,
   children,
+  className,
 }: {
   label: string
-  children: React.ReactNode
+  children: ReactNode
+  className?: string
 }) {
   return (
-    <div className="space-y-1.5">
-      <span className="block text-[11px] font-medium uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
+    <div className={cn("space-y-2", className)}>
+      <p className="text-xs font-medium" style={{ color: "var(--text-tertiary)" }}>
         {label}
-      </span>
+      </p>
       <div>{children}</div>
     </div>
   )
+}
+
+function formatDateLabel(value?: string | null) {
+  if (!value) return "미설정"
+
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) return value
+
+  const hasExplicitTime =
+    value.includes("T") &&
+    (parsed.getHours() !== 0 || parsed.getMinutes() !== 0 || parsed.getSeconds() !== 0)
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    ...(hasExplicitTime ? { timeStyle: "short" } : {}),
+  }).format(parsed)
 }
 
 export function CaseProperties({
@@ -101,6 +119,7 @@ export function CaseProperties({
   const projectId = data.opsGroupId ?? project?.id ?? null
   const studentName = data.studentName ?? data.student_name
   const createdAt = data.createdAt ?? data.created_at
+  const updatedAt = data.updatedAt ?? data.updated_at
   const dueAt = data.dueAt ?? data.due_at
 
   const handleStatusChange = (value: string) => {
@@ -122,24 +141,37 @@ export function CaseProperties({
 
   const canEdit = !!(onStatusChange ?? onUpdate)
   const editableControlClassName =
-    "h-9 w-full rounded-lg border border-[var(--border-default)] bg-[var(--bg-base)] px-3 text-xs text-[var(--text-primary)] shadow-none transition-colors hover:bg-[var(--bg-tertiary)] focus:outline-none"
+    "h-9 w-full rounded-lg border px-3 text-sm shadow-none transition-colors focus:outline-none"
   const staticBadgeClassName = "border-0 px-2 py-1 text-xs font-medium"
+  const detailFields = [
+    data.type ? { label: "유형", value: data.type, badge: true } : null,
+    data.severity ? { label: "심각도", value: data.severity, badge: true } : null,
+    data.reporter ? { label: "보고자", value: data.reporter } : null,
+    studentName ? { label: "학생", value: studentName } : null,
+    createdAt ? { label: "생성일", value: formatDateLabel(createdAt) } : null,
+    updatedAt ? { label: "최근 수정", value: formatDateLabel(updatedAt) } : null,
+  ].filter(Boolean) as Array<{ label: string; value: string; badge?: boolean }>
 
   return (
     <div className={cn("space-y-4 text-sm", className)}>
       {canEdit ? (
-        <p className="text-[11px] leading-5" style={{ color: "var(--text-tertiary)" }}>
-          드롭다운으로 표시된 항목은 이 패널에서 바로 수정됩니다.
+        <p className="text-xs leading-5" style={{ color: "var(--text-tertiary)" }}>
+          상태, 우선순위, 담당 에이전트, 프로젝트 배정은 이 패널에서 바로 수정됩니다.
         </p>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         <PropertyField label="상태">
           <select
             value={status}
             onChange={(e) => handleStatusChange(e.target.value)}
             disabled={!canEdit}
             className={editableControlClassName}
+            style={{
+              borderColor: "var(--border-default)",
+              backgroundColor: "var(--bg-elevated)",
+              color: "var(--text-primary)",
+            }}
           >
             {statusOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -155,6 +187,11 @@ export function CaseProperties({
             onChange={(e) => handlePriorityChange(e.target.value)}
             disabled={!onUpdate}
             className={editableControlClassName}
+            style={{
+              borderColor: "var(--border-default)",
+              backgroundColor: "var(--bg-elevated)",
+              color: "var(--text-primary)",
+            }}
           >
             {priorityOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -170,6 +207,11 @@ export function CaseProperties({
             onChange={(e) => handleAssigneeChange(e.target.value)}
             disabled={!onUpdate}
             className={editableControlClassName}
+            style={{
+              borderColor: "var(--border-default)",
+              backgroundColor: "var(--bg-elevated)",
+              color: "var(--text-primary)",
+            }}
           >
             <option value="__none__">미배정</option>
             {agents.map((agent) => (
@@ -180,12 +222,17 @@ export function CaseProperties({
           </select>
         </PropertyField>
 
-        <PropertyField label="프로젝트">
+        <PropertyField label="프로젝트 배정">
           <select
             value={projectId ?? "__none__"}
             onChange={(e) => handleProjectChange(e.target.value)}
             disabled={!onUpdate}
             className={editableControlClassName}
+            style={{
+              borderColor: "var(--border-default)",
+              backgroundColor: "var(--bg-elevated)",
+              color: "var(--text-primary)",
+            }}
           >
             <option value="__none__">미연결</option>
             {projects.map((projectOption) => (
@@ -195,63 +242,55 @@ export function CaseProperties({
             ))}
           </select>
         </PropertyField>
+
+        <PropertyField label="마감일">
+          <div
+            className="flex min-h-9 items-center rounded-lg border px-3 text-sm"
+            style={{
+              borderColor: "var(--border-default)",
+              backgroundColor: "var(--bg-subtle)",
+              color: dueAt ? "var(--text-primary)" : "var(--text-tertiary)",
+            }}
+          >
+            {formatDateLabel(dueAt)}
+          </div>
+        </PropertyField>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        {data.type && (
-          <PropertyField label="유형">
-            <Badge
-              className={staticBadgeClassName}
-              style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
-            >
-              {data.type}
-            </Badge>
-          </PropertyField>
-        )}
-
-        {data.severity && (
-          <PropertyField label="심각도">
-            <Badge
-              className={staticBadgeClassName}
-              style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
-            >
-              {data.severity}
-            </Badge>
-          </PropertyField>
-        )}
-
-        {data.reporter && (
-          <PropertyField label="보고자">
-            <span className="text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
-              {data.reporter}
-            </span>
-          </PropertyField>
-        )}
-
-        {studentName && (
-          <PropertyField label="학생">
-            <span className="text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
-              {studentName}
-            </span>
-          </PropertyField>
-        )}
-
-        {createdAt && (
-          <PropertyField label="생성일">
-            <span className="text-xs leading-5" style={{ color: "var(--text-tertiary)" }}>
-              {timeAgo(createdAt)}
-            </span>
-          </PropertyField>
-        )}
-
-        {dueAt && (
-          <PropertyField label="마감일">
-            <span className="text-xs leading-5" style={{ color: "var(--text-tertiary)" }}>
-              {timeAgo(dueAt)}
-            </span>
-          </PropertyField>
-        )}
-      </div>
+      {detailFields.length > 0 ? (
+        <details
+          className="rounded-lg border px-4 py-3"
+          style={{
+            borderColor: "var(--border-default)",
+            backgroundColor: "var(--bg-subtle)",
+          }}
+        >
+          <summary
+            className="cursor-pointer text-sm font-medium"
+            style={{ color: "var(--text-primary)" }}
+          >
+            자세히
+          </summary>
+          <div className="mt-4 grid gap-4 sm:grid-cols-2">
+            {detailFields.map((field) => (
+              <PropertyField key={field.label} label={field.label}>
+                {field.badge ? (
+                  <Badge
+                    className={staticBadgeClassName}
+                    style={{ backgroundColor: "var(--bg-muted)", color: "var(--text-secondary)" }}
+                  >
+                    {field.value}
+                  </Badge>
+                ) : (
+                  <span className="text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+                    {field.value}
+                  </span>
+                )}
+              </PropertyField>
+            ))}
+          </div>
+        </details>
+      ) : null}
     </div>
   )
 }

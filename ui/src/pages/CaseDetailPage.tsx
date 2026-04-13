@@ -22,7 +22,6 @@ import { PriorityIcon } from "@/components/PriorityIcon"
 import { Identity } from "@/components/Identity"
 import { LiveRunWidget } from "@/components/LiveRunWidget"
 import { CaseProperties } from "@/components/CaseProperties"
-import { CapabilityWorkspacePanel } from "@/components/capabilities/CapabilityWorkspacePanel"
 import { ApprovalCard } from "@/components/ApprovalCard"
 import { ToastContext } from "@/components/ToastContext"
 import { usePanel } from "@/context/PanelContext"
@@ -863,67 +862,18 @@ export function CaseDetailPage() {
       return
     }
 
-    const statusLabel = statusOptions.find((item) => item.value === status)?.label ?? status
-
     setPanelContent(
       <WorkspacePanel className="overflow-hidden shadow-none">
         <div className="border-b px-4 py-4" style={{ borderColor: "var(--border-default)" }}>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <div className="text-[11px] font-medium uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
-                Properties
-              </div>
-              <p className="mt-1 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
-                케이스 상태, 담당, 연결 정보를 조용한 표면으로 정리합니다.
-              </p>
-            </div>
-            <Badge
-              className="border-0 px-2 py-1 text-xs"
-              style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)" }}
-            >
-              {channelLabel}
-            </Badge>
+          <div className="text-xs font-medium" style={{ color: "var(--text-tertiary)" }}>
+            속성
           </div>
+          <p className="mt-1 text-sm leading-6" style={{ color: "var(--text-secondary)" }}>
+            핵심 필드만 빠르게 확인하고 수정합니다.
+          </p>
         </div>
 
-        <div className="space-y-4 p-4">
-          <WorkspaceSubtle className="p-4">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
-                  상태
-                </p>
-                <p className="mt-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                  {statusLabel}
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
-                  연결 문서
-                </p>
-                <p className="mt-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                  {documents.length}건
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
-                  승인 요청
-                </p>
-                <p className="mt-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                  {approvals.length}건
-                </p>
-              </div>
-              <div>
-                <p className="text-[11px] font-medium uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
-                  서브 케이스
-                </p>
-                <p className="mt-1 text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                  {childCases.length}건
-                </p>
-              </div>
-            </div>
-          </WorkspaceSubtle>
-
+        <div className="p-4">
           <CaseProperties
             case={{
               id: caseData.id,
@@ -957,94 +907,16 @@ export function CaseDetailPage() {
             }))}
             onUpdate={handlePanelUpdate}
           />
-
-          <WorkspaceSubtle className="p-4">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="min-w-0">
-                <div className="text-xs font-medium uppercase tracking-[0.08em]" style={{ color: "var(--text-tertiary)" }}>
-                  핵심 연결
-                </div>
-                <p className="mt-1 text-xs leading-5" style={{ color: "var(--text-secondary)" }}>
-                  채널, 승인, 서브 케이스, 최근 처리를 한 번에 확인합니다.
-                </p>
-              </div>
-              <div className="grid min-w-[240px] flex-1 gap-2 text-xs sm:grid-cols-2">
-                <div className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-page)" }}>
-                  <span style={{ color: "var(--text-tertiary)" }}>채널</span>
-                  <span style={{ color: "var(--text-primary)" }}>{channelLabel}</span>
-                </div>
-                <div className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-page)" }}>
-                  <span style={{ color: "var(--text-tertiary)" }}>최근 처리</span>
-                  <span style={{ color: "var(--text-primary)" }}>{relatedActivity.length}건</span>
-                </div>
-                <div className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-page)" }}>
-                  <span style={{ color: "var(--text-tertiary)" }}>최근 런</span>
-                  <span style={{ color: "var(--text-primary)" }}>{runs.length}건</span>
-                </div>
-                <div className="flex items-center justify-between gap-3 rounded-xl px-3 py-2" style={{ border: "1px solid var(--border-default)", backgroundColor: "var(--bg-page)" }}>
-                  <span style={{ color: "var(--text-tertiary)" }}>스킬</span>
-                  <span style={{ color: "var(--text-primary)" }}>{usedSkills.length}건</span>
-                </div>
-              </div>
-            </div>
-          </WorkspaceSubtle>
-
-          {(recommendedCapabilities.length > 0 || usedSkills.length > 0) ? (
-            <CapabilityWorkspacePanel
-              title="스킬 관리"
-              description="현재 케이스에 맞는 스킬 묶음과 최근 사용된 스킬을 같은 패널에서 설치, 장착, 제거까지 처리합니다."
-              orgId={activeOrgId}
-              orgPrefix={orgPrefix}
-              availableAgents={organizationAgents}
-              lockedAgentId={caseData?.assigneeAgentId ?? caseData?.assignee_agent_id ?? caseData?.assignee?.id ?? caseData?.agent?.id ?? null}
-              suggestions={[
-                ...recommendedCapabilities.map((item) => ({
-                  slug: item.slug,
-                  kind: "pack" as const,
-                  label: item.label,
-                  reason: item.reason,
-                })),
-                ...usedSkills.slice(0, 6).map((skill: any) => ({
-                  slug: skill.slug ?? skill.name,
-                  kind: "skill" as const,
-                  label: skill.displayName ?? skill.name ?? skill.slug,
-                  reason: "최근 실행에서 사용된 스킬 번들입니다.",
-                })),
-              ]}
-            />
-          ) : null}
         </div>
       </WorkspacePanel>,
     )
 
     return () => setPanelContent(null)
   }, [
-    approvals.length,
-    caseData?.assigneeAgentId,
-    caseData?.assignee_agent_id,
-    caseData?.opsGroupId,
-    caseData?.ops_group_id,
-    caseData?.project?.id,
-    caseData?.project?.name,
-    channelLabel,
-    childCases.length,
-    dispatchForCase.isPending,
-    documents.length,
-    hasActiveRun,
-    navigate,
-    orgPrefix,
-    outboundMutation.isPending,
-    pendingApproval?.id,
-    relatedActivity.length,
-    recommendedCapabilities,
+    caseData,
     organizationAgents,
     organizationProjects,
-    activeOrgId,
     setPanelContent,
-    status,
-    usedSkills,
-    caseData?.status,
-    caseData?.priority,
     handlePanelUpdate,
   ])
 
